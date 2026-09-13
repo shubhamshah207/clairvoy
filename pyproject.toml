@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clairvoy"
+version = "0.1.0"
+description = "Local-first AI storage deduplication engine with CLI & interactive Web UI"
+readme = "README.md"
+authors = [{ name = "Shubham Shah" }]
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+keywords = ["deduplication", "computer-vision", "storage", "photos", "cli", "webapp", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Filesystems",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = [
+    "typer>=0.9.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "pillow>=10.0.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "jinja2>=3.1.0"
+]
+
+[project.optional-dependencies]
+ml = [
+    "onnxruntime>=1.17.0",
+    "numpy>=1.24.0",
+    "faiss-cpu>=1.7.4"
+]
+
+[project.scripts]
+clairvoy = "clairvoy.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/shubhamshah207/clairvoy"
+Issues = "https://github.com/shubhamshah207/clairvoy/issues"
