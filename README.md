@@ -59,9 +59,14 @@
 - ⚡ **Two-Stage Hybrid Engine**:
   - **Stage 1 (Storage Core):** Filters 80–90% of duplicates in seconds using size grouping, quick-hash (header/footer 64KB), and full SHA-256 content verification.
   - **Stage 2 (Vision AI Core):** Applies lightweight, offline Vision Transformer embeddings (DINOv2 / ONNX) to discover burst shots, resized images, and color-graded duplicates.
+- 🏷️ **Automatic Image Classification**:
+  - Automatically identifies and categorizes images into **Screenshots**, **Documents & Receipts**, **Camera Photos**, and **Graphics/Memes**.
+  - Uses multi-signal EXIF hardware analysis, screen aspect ratio detection, and color space analytics.
+  - Interactive category filter tabs directly in the Web UI.
 - 🌐 **Interactive Web App UI**:
   - Launch with `clairvoy ui` to review duplicate pairs side-by-side in your browser.
   - Adjust similarity thresholds dynamically with an interactive slider.
+  - Filter duplicates by category (e.g. view and clean only screenshots or receipts).
 - 🛡️ **Non-Destructive Quarantine**:
   - Never permanently deletes without confirmation.
   - Safely moves duplicates to a designated `_quarantine/` folder with an automated 1-click rollback manifest.

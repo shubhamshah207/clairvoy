@@ -13,6 +13,14 @@ class MatchType(str, Enum):
     VISUAL_AI_NEAR_DUPLICATE = "VISUAL_AI_NEAR_DUPLICATE"
 
 
+class ImageCategory(str, Enum):
+    PHOTO = "PHOTO"
+    SCREENSHOT = "SCREENSHOT"
+    DOCUMENT = "DOCUMENT"
+    GRAPHIC = "GRAPHIC"
+    FILE = "FILE"
+
+
 class ActionType(str, Enum):
     KEEP = "KEEP"
     DUPLICATE = "DUPLICATE"
@@ -26,6 +34,7 @@ class FileEntry(BaseModel):
     quick_hash: str | None = None
     full_sha256: str | None = None
     keeper_score: int = 100
+    category: ImageCategory = ImageCategory.FILE
 
 
 class DuplicateRecord(BaseModel):
@@ -38,6 +47,7 @@ class DuplicateRecord(BaseModel):
     size_mb: float
     path: str
     dimensions: str | None = None
+    category: ImageCategory = ImageCategory.FILE
 
 
 class DuplicateGroup(BaseModel):
@@ -66,6 +76,7 @@ class ScanSummary(BaseModel):
     summary_json: str
     quarantine_script: str
     groups: list[DuplicateRecord] = Field(default_factory=list)
+    category_breakdown: dict[str, int] = Field(default_factory=dict)
 
 
 class QuarantineItem(BaseModel):

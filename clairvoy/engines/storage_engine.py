@@ -25,10 +25,12 @@ from clairvoy.core.models import (
     ActionType,
     DuplicateRecord,
     FileEntry,
+    ImageCategory,
     MatchType,
     ScanSummary,
 )
 from clairvoy.core.security import generate_hardened_quarantine_script, resolve_safe_paths
+from clairvoy.engines.classifier_engine import ClassifierEngine
 from clairvoy.engines.vision_engine import HAS_ML, VisionEngine
 
 
@@ -228,6 +230,12 @@ class StorageEngine:
         all_files, media_files = self.scan_filesystem()
         print(f"[*] Indexed {len(all_files):,} files ({len(media_files):,} photos/media) across all paths.")
 
+        # Classify media files (Screenshots, Documents, Photos, Graphics)
+        classification_map: dict[str, ImageCategory] = {}
+        if media_files:
+            print(f"[*] Classifying {len(media_files):,} images (Screenshots, Documents, Photos, Graphics)...")
+            classification_map = ClassifierEngine.classify_batch(media_files, num_workers=self.num_workers)
+
         # Stage 1: Size grouping
         print("[*] Stage 1: Detecting exact content duplicates (Parallel SHA-256)...")
         size_groups: dict[int, list[FileEntry]] = defaultdict(list)
@@ -291,6 +299,7 @@ class StorageEngine:
         quarantine_moves: list[tuple[str, str]] = []
         group_id = 1
         total_wasted_bytes = 0
+        category_breakdown: dict[str, int] = defaultdict(int)
 
         # Process Stage 1 Exact Duplicates
         for grp in exact_duplicate_groups:
@@ -301,6 +310,7 @@ class StorageEngine:
             )
             keeper = scored[0][1]
             dupes = [x[1] for x in scored[1:]]
+            k_cat = classification_map.get(keeper.path, ImageCategory.FILE)
 
             # Keeper
             records.append(
@@ -312,11 +322,14 @@ class StorageEngine:
                     similarity_score=1.0,
                     size_mb=round(keeper.size_bytes / (1024 * 1024), 3),
                     path=keeper.path,
+                    category=k_cat,
                 )
             )
 
             # Redundant Duplicates
             for d in dupes:
+                d_cat = classification_map.get(d.path, ImageCategory.FILE)
+                category_breakdown[d_cat.value] += 1
                 total_wasted_bytes += d.size_bytes
                 records.append(
                     DuplicateRecord(
@@ -327,6 +340,7 @@ class StorageEngine:
                         similarity_score=1.0,
                         size_mb=round(d.size_bytes / (1024 * 1024), 3),
                         path=d.path,
+                        category=d_cat,
                     )
                 )
                 dst_quarantine, _ = self._resolve_quarantine_destination(d.path)
@@ -347,6 +361,7 @@ class StorageEngine:
             keeper_path, _, keeper_dim = scored[0][1], scored[0][2], scored[0][3]
             dupes = scored[1:]
             keeper_sz = os.path.getsize(keeper_path)
+            k_cat = classification_map.get(keeper_path, ImageCategory.PHOTO)
 
             records.append(
                 DuplicateRecord(
@@ -358,10 +373,13 @@ class StorageEngine:
                     size_mb=round(keeper_sz / (1024 * 1024), 3),
                     path=keeper_path,
                     dimensions=f"{keeper_dim[0]}x{keeper_dim[1]}" if keeper_dim[0] > 0 else None,
+                    category=k_cat,
                 )
             )
 
             for _, dp, sc, d in dupes:
+                d_cat = classification_map.get(dp, ImageCategory.PHOTO)
+                category_breakdown[d_cat.value] += 1
                 dsz = os.path.getsize(dp)
                 total_wasted_bytes += dsz
                 records.append(
@@ -374,6 +392,7 @@ class StorageEngine:
                         size_mb=round(dsz / (1024 * 1024), 3),
                         path=dp,
                         dimensions=f"{d[0]}x{d[1]}" if d[0] > 0 else None,
+                        category=d_cat,
                     )
                 )
                 dst_quarantine, _ = self._resolve_quarantine_destination(dp)
@@ -390,6 +409,7 @@ class StorageEngine:
                     "group_id",
                     "match_type",
                     "action",
+                    "category",
                     "similarity",
                     "size_mb",
                     "path",
@@ -430,6 +450,7 @@ class StorageEngine:
             summary_json=str(self.output_dir / "duplicates_summary.json"),
             quarantine_script=str(sh_path),
             groups=records,
+            category_breakdown=dict(category_breakdown),
         )
 
         # Write JSON Summary
@@ -440,6 +461,9 @@ class StorageEngine:
         print(f" • Exact Duplicate Sets: {len(exact_duplicate_groups)}")
         print(f" • Visual AI Clusters: {len(ml_clusters)}")
         print(f" • Total Recoverable Space: {summary.wasted_mb} MB ({summary.wasted_gb} GB)")
+        if category_breakdown:
+            cat_str = " | ".join(f"{k}: {v}" for k, v in category_breakdown.items())
+            print(f" • Duplicates by Category: {cat_str}")
         print(f" • CSV Report: {csv_path}")
         print(f" • Summary JSON: {summary.summary_json}")
         print(f" • Safe Quarantine Script: {sh_path}")

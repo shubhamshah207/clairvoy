@@ -221,6 +221,30 @@ async def serve_index():
                     </div>
                 </div>
 
+                <!-- Category Filter Bar -->
+                <div class="flex flex-wrap gap-2 mb-6" id="categoryFilterBar">
+                    <button onclick="setCategoryFilter('ALL')" id="filterBtn_ALL" class="cat-filter-btn px-3.5 py-1.5 rounded-full text-xs font-medium bg-indigo-600 text-white transition flex items-center gap-1.5">
+                        <span>All Duplicates</span>
+                        <span id="count_ALL" class="bg-indigo-700/60 px-1.5 py-0.2 rounded-full text-[10px] font-mono">0</span>
+                    </button>
+                    <button onclick="setCategoryFilter('PHOTO')" id="filterBtn_PHOTO" class="cat-filter-btn px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5">
+                        <span>📷 Photos</span>
+                        <span id="count_PHOTO" class="bg-slate-700 px-1.5 py-0.2 rounded-full text-[10px] font-mono">0</span>
+                    </button>
+                    <button onclick="setCategoryFilter('SCREENSHOT')" id="filterBtn_SCREENSHOT" class="cat-filter-btn px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5">
+                        <span>📱 Screenshots</span>
+                        <span id="count_SCREENSHOT" class="bg-slate-700 px-1.5 py-0.2 rounded-full text-[10px] font-mono">0</span>
+                    </button>
+                    <button onclick="setCategoryFilter('DOCUMENT')" id="filterBtn_DOCUMENT" class="cat-filter-btn px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5">
+                        <span>📄 Documents & Receipts</span>
+                        <span id="count_DOCUMENT" class="bg-slate-700 px-1.5 py-0.2 rounded-full text-[10px] font-mono">0</span>
+                    </button>
+                    <button onclick="setCategoryFilter('GRAPHIC')" id="filterBtn_GRAPHIC" class="cat-filter-btn px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5">
+                        <span>🎨 Graphics & Memes</span>
+                        <span id="count_GRAPHIC" class="bg-slate-700 px-1.5 py-0.2 rounded-full text-[10px] font-mono">0</span>
+                    </button>
+                </div>
+
                 <div id="groupsContainer" class="space-y-6"></div>
             </div>
         </div>
@@ -228,6 +252,23 @@ async def serve_index():
         <script>
             let pollTimer = null;
             let currentSummary = null;
+            let activeCategoryFilter = 'ALL';
+
+            function setCategoryFilter(category) {{
+                activeCategoryFilter = category;
+                document.querySelectorAll('.cat-filter-btn').forEach(btn => {{
+                    btn.classList.remove('bg-indigo-600', 'text-white');
+                    btn.classList.add('bg-slate-800', 'text-slate-300');
+                }});
+                const activeBtn = document.getElementById('filterBtn_' + category);
+                if (activeBtn) {{
+                    activeBtn.classList.remove('bg-slate-800', 'text-slate-300');
+                    activeBtn.classList.add('bg-indigo-600', 'text-white');
+                }}
+                if (currentSummary && currentSummary.groups) {{
+                    renderDuplicateGroups(currentSummary.groups, activeCategoryFilter);
+                }}
+            }}
 
             async function triggerScan() {{
                 const dirText = document.getElementById('dirInput').value.trim();
@@ -265,7 +306,7 @@ async def serve_index():
                     const state = await res.json();
 
                     if (state.status === "running") {{
-                        updateStatus("running", "Scanning files and computing DINOv2 embeddings in parallel...");
+                        updateStatus("running", "Scanning files, classifying images, and computing DINOv2 embeddings...");
                     }} else if (state.status === "completed") {{
                         clearInterval(pollTimer);
                         pollTimer = null;
@@ -312,7 +353,16 @@ async def serve_index():
                 document.getElementById('metricML').innerText = summary.visual_ai_groups.toLocaleString();
                 document.getElementById('metricSpace').innerText = summary.wasted_mb + " MB (" + summary.wasted_gb + " GB)";
 
-                renderDuplicateGroups(summary.groups);
+                // Update category counts
+                const cb = summary.category_breakdown || {{}};
+                const totalDupes = summary.groups ? summary.groups.filter(g => g.action === 'DUPLICATE').length : 0;
+                document.getElementById('count_ALL').innerText = totalDupes;
+                document.getElementById('count_PHOTO').innerText = cb.PHOTO || 0;
+                document.getElementById('count_SCREENSHOT').innerText = cb.SCREENSHOT || 0;
+                document.getElementById('count_DOCUMENT').innerText = cb.DOCUMENT || 0;
+                document.getElementById('count_GRAPHIC').innerText = cb.GRAPHIC || 0;
+
+                renderDuplicateGroups(summary.groups, activeCategoryFilter);
             }}
 
             function isImageFile(path) {{
@@ -320,7 +370,22 @@ async def serve_index():
                 return exts.some(e => path.toLowerCase().endsWith(e));
             }}
 
-            function renderDuplicateGroups(records) {{
+            function getCategoryBadge(cat) {{
+                switch(cat) {{
+                    case 'SCREENSHOT':
+                        return '<span class="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] px-2 py-0.5 rounded font-mono font-medium">📱 SCREENSHOT</span>';
+                    case 'DOCUMENT':
+                        return '<span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] px-2 py-0.5 rounded font-mono font-medium">📄 DOCUMENT</span>';
+                    case 'GRAPHIC':
+                        return '<span class="bg-pink-500/20 text-pink-300 border border-pink-500/30 text-[10px] px-2 py-0.5 rounded font-mono font-medium">🎨 GRAPHIC</span>';
+                    case 'PHOTO':
+                        return '<span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] px-2 py-0.5 rounded font-mono font-medium">📷 PHOTO</span>';
+                    default:
+                        return '<span class="bg-slate-800 text-slate-400 border border-slate-700 text-[10px] px-2 py-0.5 rounded font-mono">FILE</span>';
+                }}
+            }}
+
+            function renderDuplicateGroups(records, filterCategory = 'ALL') {{
                 const container = document.getElementById('groupsContainer');
                 container.innerHTML = '';
 
@@ -330,9 +395,15 @@ async def serve_index():
                     groups[r.group_id].push(r);
                 }}
 
-                const groupIds = Object.keys(groups);
+                let groupIds = Object.keys(groups);
+
+                // Apply Category Filter if not 'ALL'
+                if (filterCategory !== 'ALL') {{
+                    groupIds = groupIds.filter(gid => groups[gid].some(item => item.category === filterCategory));
+                }}
+
                 if (groupIds.length === 0) {{
-                    container.innerHTML = '<div class="text-center py-16 text-slate-500 font-mono">No duplicates detected across any scanned path!</div>';
+                    container.innerHTML = `<div class="text-center py-16 text-slate-500 font-mono">No duplicate clusters found matching category: ${{filterCategory}}</div>`;
                     return;
                 }}
 
@@ -363,15 +434,18 @@ async def serve_index():
                                         `<div class="w-16 h-16 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 text-xs font-mono flex-shrink-0">FILE</div>`
                                     }}
                                     <div class="min-w-0 flex-1">
-                                        <div class="flex items-center gap-2 mb-1">
+                                        <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
                                             <span class="text-[11px] px-2 py-0.5 rounded font-bold ${{item.action === 'KEEP' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}}">
                                                 ${{item.action}}
                                             </span>
-                                            <span class="text-xs text-slate-400 font-mono">${{item.size_mb}} MB</span>
-                                            ${{item.dimensions ? `<span class="text-[10px] text-slate-500 font-mono">${{item.dimensions}}</span>` : ''}}
+                                            ${{getCategoryBadge(item.category)}}
                                             ${{item.similarity && item.action === 'DUPLICATE' ? `<span class="text-xs text-indigo-400 font-mono font-bold ml-auto">${{item.similarity}}</span>` : ''}}
                                         </div>
                                         <p class="text-xs text-slate-200 truncate font-mono" title="${{item.path}}">${{item.path.split('/').pop()}}</p>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <span class="text-xs text-slate-400 font-mono">${{item.size_mb}} MB</span>
+                                            ${{item.dimensions ? `<span class="text-[10px] text-slate-500 font-mono">${{item.dimensions}}</span>` : ''}}
+                                        </div>
                                         <p class="text-[10px] text-slate-500 truncate mt-0.5 font-mono" title="${{item.path}}">${{item.path}}</p>
                                     </div>
                                 </div>
