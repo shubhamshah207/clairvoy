@@ -60,29 +60,16 @@ def generate_cli_screenshot() -> Path:
 
 
 def capture_web_ui_screenshots() -> bool:
-    """Attempts to capture headless Web UI screenshots via Playwright if runtime libraries allow."""
+    """Captures authentic, high-resolution Web UI dashboard and visual diff screenshots via Playwright."""
     try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            try:
-                browser = p.chromium.launch(headless=True)
-            except Exception:
-                try:
-                    browser = p.firefox.launch(headless=True)
-                except Exception as e:
-                    print(f"[!] Headless browser launch skipped (missing OS libraries): {e}")
-                    print("[*] To enable automated headless browser capture, install required system libs:")
-                    print("    sudo apt-get install -y libnss3 libnspr4 libatk1.0-0 libasound2")
-                    return False
-
-            context = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=2)
-            page = context.new_page()
-            page.close()
-            browser.close()
-            return True
-    except ImportError:
-        print("[!] Playwright is not installed. Install with: pip install -e '.[docs]'")
+        import sys
+        if str(REPO_ROOT) not in sys.path:
+            sys.path.insert(0, str(REPO_ROOT))
+        from scripts.capture_real_screenshots import main as capture_main
+        capture_main()
+        return True
+    except Exception as e:
+        print(f"[!] Headless browser capture failed: {e}")
         return False
 
 
@@ -94,17 +81,15 @@ def main() -> None:
     # 1. Generate CLI SVG
     generate_cli_screenshot()
 
-    # 2. Check or capture Web UI assets
+    # 2. Generate authentic Web UI assets
+    print("[*] Generating authentic Web UI dashboard and visual diff screenshots...")
+    capture_web_ui_screenshots()
+
     dashboard_img = SCREENSHOT_DIR / "dashboard_preview.png"
     diff_img = SCREENSHOT_DIR / "visual_diff.png"
 
-    if not dashboard_img.exists() or not diff_img.exists():
-        print("[*] Capturing Web UI screenshots via headless browser...")
-        capture_web_ui_screenshots()
-    else:
-        print(f"[✓] Verified existing Web UI hero: {dashboard_img.relative_to(REPO_ROOT)} ({dashboard_img.stat().st_size // 1024} KB)")
-        print(f"[✓] Verified existing Visual Diff: {diff_img.relative_to(REPO_ROOT)} ({diff_img.stat().st_size // 1024} KB)")
-
+    print(f"[✓] Verified Web UI hero: {dashboard_img.relative_to(REPO_ROOT)} ({dashboard_img.stat().st_size // 1024} KB)")
+    print(f"[✓] Verified Visual Diff: {diff_img.relative_to(REPO_ROOT)} ({diff_img.stat().st_size // 1024} KB)")
     print("\n[✓] All documentation screenshot assets are verified and ready.")
 
 

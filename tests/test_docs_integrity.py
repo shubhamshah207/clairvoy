@@ -59,7 +59,20 @@ def test_screenshot_generation_script_exists():
     assert script_path.is_file(), "scripts/capture_screenshots.py must exist"
 
 
-def test_project_level_skill_exists():
-    """Verifies that viral-readme skill exists at project level."""
-    skill_path = REPO_ROOT / ".agents" / "skills" / "viral-readme" / "SKILL.md"
-    assert skill_path.is_file(), "Project-level skill .agents/skills/viral-readme/SKILL.md must exist"
+def test_project_level_skills_exist():
+    """Verifies that viral-readme and diagrams-as-code skills exist at project level."""
+    skill_readme = REPO_ROOT / ".agents" / "skills" / "viral-readme" / "SKILL.md"
+    assert skill_readme.is_file(), "Project-level skill .agents/skills/viral-readme/SKILL.md must exist"
+
+    skill_diagrams = REPO_ROOT / ".agents" / "skills" / "diagrams-as-code" / "SKILL.md"
+    assert skill_diagrams.is_file(), "Project-level skill .agents/skills/diagrams-as-code/SKILL.md must exist"
+
+
+def test_architecture_diagram_and_generator_exist():
+    """Verifies that architecture.svg and its generation script exist and are valid."""
+    script_path = REPO_ROOT / "scripts" / "generate_architecture_diagram.py"
+    assert script_path.is_file(), "scripts/generate_architecture_diagram.py must exist"
+
+    svg_path = REPO_ROOT / "docs" / "assets" / "diagrams" / "architecture.svg"
+    assert svg_path.is_file(), "docs/assets/diagrams/architecture.svg must exist"
+    assert svg_path.stat().st_size > 5000, "architecture.svg appears truncated"
