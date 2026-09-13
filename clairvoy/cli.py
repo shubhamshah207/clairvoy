@@ -33,7 +33,7 @@ def main():
     # Scan command
     scan_parser = subparsers.add_parser("scan", help="Scan a directory for duplicate files")
     scan_parser.add_argument("path", help="Directory path to scan")
-    scan_parser.add_argument("--output", "-o", default="./reports", help="Directory to save report files")
+    scan_parser.add_argument("--output", "-o", default=None, help="Directory to save report files")
     scan_parser.add_argument("--quarantine", action="store_true", help="Automatically generate safe quarantine script")
     
     # UI command
