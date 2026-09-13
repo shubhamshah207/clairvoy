@@ -27,7 +27,7 @@ class SecurityError(Exception):
 
 def resolve_safe_path(
     user_path: str | Path,
-    allowed_root: str | Path | None = None,
+    allowed_roots: str | Path | list[str | Path] | set[str | Path] | None = None,
     allowed_extensions: set[str] | None = None,
     must_exist: bool = True,
 ) -> Path:
@@ -52,16 +52,27 @@ def resolve_safe_path(
         except ValueError:
             continue
 
-    # Enforce confinement if allowed_root is provided
-    if allowed_root is not None:
-        resolved_root = Path(allowed_root).expanduser().resolve()
-        try:
-            if not resolved.is_relative_to(resolved_root):
-                raise SecurityError(
-                    f"Directory traversal detected: '{resolved}' is outside permitted root '{resolved_root}'"
-                )
-        except ValueError:
-            raise SecurityError(f"Path '{resolved}' is not within permitted boundary '{resolved_root}'") from None
+    # Enforce confinement if allowed_roots is provided
+    if allowed_roots is not None:
+        if isinstance(allowed_roots, (str, Path)):
+            root_list = [Path(allowed_roots).expanduser().resolve()]
+        else:
+            root_list = [Path(r).expanduser().resolve() for r in allowed_roots]
+
+        within_any = False
+        for root in root_list:
+            try:
+                if resolved.is_relative_to(root):
+                    within_any = True
+                    break
+            except ValueError:
+                continue
+
+        if not within_any:
+            roots_str = ", ".join(f"'{r}'" for r in root_list)
+            raise SecurityError(
+                f"Directory traversal detected: '{resolved}' is outside permitted root boundaries [{roots_str}]"
+            )
 
     # Check extension whitelist if specified
     if allowed_extensions is not None:
@@ -77,6 +88,37 @@ def resolve_safe_path(
     return resolved
 
 
+def resolve_safe_paths(
+    user_paths: str | Path | list[str | Path] | set[str | Path],
+    allowed_roots: str | Path | list[str | Path] | set[str | Path] | None = None,
+    must_exist: bool = True,
+) -> list[Path]:
+    """
+    Resolves and validates multiple input paths.
+    Accepts lists, sets, or comma/newline-separated strings.
+    """
+    raw_list: list[str | Path] = []
+    if isinstance(user_paths, (str, Path)):
+        # Support comma or newline separated multi-path string input
+        parts = [p.strip() for p in str(user_paths).replace("\r", "\n").replace(",", "\n").split("\n") if p.strip()]
+        raw_list = parts if parts else [user_paths]
+    else:
+        raw_list = list(user_paths)
+
+    resolved_list: list[Path] = []
+    seen = set()
+    for p in raw_list:
+        resolved = resolve_safe_path(p, allowed_roots=allowed_roots, must_exist=must_exist)
+        if resolved not in seen:
+            seen.add(resolved)
+            resolved_list.append(resolved)
+
+    if not resolved_list:
+        raise SecurityError("No valid directories or paths provided.")
+
+    return resolved_list
+
+
 def safe_sh_quote(path_or_cmd: str | Path) -> str:
     """Safely escapes a path or argument for shell execution using POSIX standard."""
     return shlex.quote(str(path_or_cmd))
@@ -84,7 +126,7 @@ def safe_sh_quote(path_or_cmd: str | Path) -> str:
 
 def generate_hardened_quarantine_script(
     moves: list[tuple[str, str]],  # (source_path, dest_path)
-    base_dir: str,
+    base_dir: str | list[str],
     quarantine_dir: str,
 ) -> str:
     """
@@ -94,6 +136,9 @@ def generate_hardened_quarantine_script(
       - Posix shlex quoting on all paths (no injection possible).
       - Uses `mv -n --` (no clobber) to prevent accidental overwrites.
     """
+    base_dirs = [base_dir] if isinstance(base_dir, str) else base_dir
+    base_dirs_str = ", ".join(safe_sh_quote(b) for b in base_dirs)
+
     lines = [
         "#!/usr/bin/env bash",
         "# Generated automatically by Clairvoy Local Storage Engine",
@@ -101,10 +146,10 @@ def generate_hardened_quarantine_script(
         "set -euo pipefail",
         "",
         'echo "[*] Initiating Clairvoy Safe Quarantine..."',
-        f'echo "[*] Base Directory: {safe_sh_quote(base_dir)}"',
+        f'echo "[*] Base Directories: {base_dirs_str}"',
         f'echo "[*] Quarantine Target: {safe_sh_quote(quarantine_dir)}"',
         "",
-        f'mkdir -p -- {safe_sh_quote(quarantine_dir)}',
+        f"mkdir -p -- {safe_sh_quote(quarantine_dir)}",
         "",
         "MOVED_COUNT=0",
         "",
@@ -112,11 +157,11 @@ def generate_hardened_quarantine_script(
 
     for src, dst in moves:
         dst_dir = str(Path(dst).parent)
-        lines.append(f'mkdir -p -- {safe_sh_quote(dst_dir)}')
-        lines.append(f'if [ -f {safe_sh_quote(src)} ]; then')
-        lines.append(f'    mv -n -- {safe_sh_quote(src)} {safe_sh_quote(dst)}')
-        lines.append('    MOVED_COUNT=$((MOVED_COUNT + 1))')
-        lines.append('fi')
+        lines.append(f"mkdir -p -- {safe_sh_quote(dst_dir)}")
+        lines.append(f"if [ -f {safe_sh_quote(src)} ]; then")
+        lines.append(f"    mv -n -- {safe_sh_quote(src)} {safe_sh_quote(dst)}")
+        lines.append("    MOVED_COUNT=$((MOVED_COUNT + 1))")
+        lines.append("fi")
 
     lines.append("")
     lines.append('echo "[✓] Successfully quarantined $MOVED_COUNT duplicate files."')

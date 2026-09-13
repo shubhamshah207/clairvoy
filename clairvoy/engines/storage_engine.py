@@ -1,6 +1,7 @@
 """
 Clairvoy Storage Engine
-High-throughput, hybrid deduplication pipeline combining parallel hashing with Vision AI.
+High-throughput, hybrid deduplication pipeline supporting multi-directory parallel scanning,
+parallel QuickHash/SHA-256 content verification, and Vision AI clustering.
 """
 
 import csv
@@ -10,7 +11,8 @@ import os
 import re
 import time
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from clairvoy.core.config import (
@@ -26,27 +28,28 @@ from clairvoy.core.models import (
     MatchType,
     ScanSummary,
 )
-from clairvoy.core.security import generate_hardened_quarantine_script
+from clairvoy.core.security import generate_hardened_quarantine_script, resolve_safe_paths
 from clairvoy.engines.vision_engine import HAS_ML, VisionEngine
 
 
 class StorageEngine:
     """
-    Two-stage deduplication engine:
-      Stage 1: Size -> Parallel QuickHash (128KB) -> Parallel Full SHA-256
+    Two-stage deduplication engine with multi-directory concurrent traversal:
+      Stage 1: Multi-root tree scan -> Size filter -> Parallel QuickHash -> Parallel SHA-256
       Stage 2: Vision AI embedding cosine similarity on unmatched media files
     """
 
     def __init__(
         self,
-        base_dir: str,
+        paths: str | Path | Iterable[str | Path],
         output_dir: str | None = None,
         enable_ml: bool = True,
         ml_threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
         num_workers: int = DEFAULT_NUM_WORKERS,
     ):
-        self.base_dir = Path(base_dir).resolve()
-        self.output_dir = Path(output_dir or (self.base_dir / "_dedupe_reports")).resolve()
+        self.target_paths: list[Path] = resolve_safe_paths(paths, must_exist=True)
+        self.base_dir: Path = self.target_paths[0]
+        self.output_dir: Path = Path(output_dir or (self.base_dir / "_dedupe_reports")).resolve()
         self.enable_ml = enable_ml and HAS_ML
         self.ml_threshold = ml_threshold
         self.num_workers = num_workers
@@ -108,17 +111,14 @@ class StorageEngine:
 
         return score
 
-    def scan_filesystem(self) -> tuple[list[FileEntry], list[str]]:
-        """
-        Recursively indexes directory using os.scandir to minimize filesystem metadata calls.
-        Returns: (all_file_entries, media_file_paths)
-        """
+    def _scan_directory_tree(self, root_dir: Path) -> tuple[list[FileEntry], list[str]]:
+        """Indexes a directory tree using os.scandir to minimize filesystem metadata latency."""
         entries: list[FileEntry] = []
         media_paths: list[str] = []
 
-        def _traverse(current_dir: Path):
+        def _traverse(current: Path):
             try:
-                with os.scandir(current_dir) as it:
+                with os.scandir(current) as it:
                     for entry in it:
                         try:
                             if entry.is_dir(follow_symlinks=False):
@@ -145,16 +145,88 @@ class StorageEngine:
             except (PermissionError, OSError):
                 return
 
-        _traverse(self.base_dir)
+        _traverse(root_dir)
         return entries, media_paths
 
+    def scan_filesystem(self) -> tuple[list[FileEntry], list[str]]:
+        """
+        Recursively indexes all configured paths concurrently.
+        If multiple roots are provided, scans them in parallel worker threads.
+        If a single root is provided, scans its top-level subdirectories in parallel.
+        """
+        all_entries: list[FileEntry] = []
+        all_media: list[str] = []
+
+        sub_roots: list[Path] = []
+        if len(self.target_paths) > 1:
+            sub_roots = self.target_paths
+        else:
+            single_root = self.target_paths[0]
+            # Discover top-level directories to scan concurrently
+            try:
+                with os.scandir(single_root) as it:
+                    for e in it:
+                        if e.is_dir(follow_symlinks=False) and e.name not in EXCLUDED_DIR_NAMES:
+                            sub_roots.append(Path(e.path))
+                        elif e.is_file(follow_symlinks=False):
+                            stat = e.stat(follow_symlinks=False)
+                            if stat.st_size > 0:
+                                ext = Path(e.name).suffix.lower()
+                                is_m = ext in SUPPORTED_IMAGE_EXTENSIONS
+                                p_str = str(Path(e.path).resolve())
+                                all_entries.append(
+                                    FileEntry(path=p_str, size_bytes=stat.st_size, is_media=is_m)
+                                )
+                                if is_m:
+                                    all_media.append(p_str)
+            except (PermissionError, OSError):
+                sub_roots = [single_root]
+
+            if not sub_roots:
+                sub_roots = [single_root]
+
+        workers = min(len(sub_roots), self.num_workers)
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+            futures = [pool.submit(self._scan_directory_tree, r) for r in sub_roots]
+            for fut in as_completed(futures):
+                entries, media = fut.result()
+                all_entries.extend(entries)
+                all_media.extend(media)
+
+        return all_entries, all_media
+
+    def _resolve_quarantine_destination(self, file_path_str: str) -> tuple[str, str]:
+        """
+        Determines the quarantine path preserving relative structure under its enclosing root.
+        Returns: (target_quarantine_file_path, enclosing_quarantine_directory)
+        """
+        p = Path(file_path_str)
+        enclosing_root: Path | None = None
+
+        for root in self.target_paths:
+            try:
+                if p.is_relative_to(root):
+                    enclosing_root = root
+                    break
+            except ValueError:
+                continue
+
+        if enclosing_root:
+            rel = p.relative_to(enclosing_root)
+            q_dir = enclosing_root / "_duplicate_quarantine"
+            return str(q_dir / rel), str(q_dir)
+        else:
+            q_dir = self.base_dir / "_duplicate_quarantine"
+            return str(q_dir / p.name), str(q_dir)
+
     def run(self) -> ScanSummary:
-        """Executes the full two-stage deduplication pipeline."""
+        """Executes the full two-stage deduplication pipeline across all specified paths."""
         t_start = time.time()
-        print(f"[*] Scanning: {self.base_dir}")
+        paths_display = ", ".join(str(p) for p in self.target_paths)
+        print(f"[*] Scanning {len(self.target_paths)} path(s): {paths_display}")
 
         all_files, media_files = self.scan_filesystem()
-        print(f"[*] Indexed {len(all_files):,} files ({len(media_files):,} photos/media).")
+        print(f"[*] Indexed {len(all_files):,} files ({len(media_files):,} photos/media) across all paths.")
 
         # Stage 1: Size grouping
         print("[*] Stage 1: Detecting exact content duplicates (Parallel SHA-256)...")
@@ -162,7 +234,6 @@ class StorageEngine:
         for entry in all_files:
             size_groups[entry.size_bytes].append(entry)
 
-        # Filter candidate collisions (only sizes with > 1 file)
         collision_candidates = [
             entries for entries in size_groups.values() if len(entries) > 1
         ]
@@ -181,9 +252,7 @@ class StorageEngine:
 
         # Parallel Full SHA-256 on QuickHash matches
         full_hash_map: dict[tuple[int, str], list[FileEntry]] = defaultdict(list)
-        exact_candidates = [
-            grp for grp in quickhash_map.values() if len(grp) > 1
-        ]
+        exact_candidates = [grp for grp in quickhash_map.values() if len(grp) > 1]
         if exact_candidates:
             flat_exact = [e for grp in exact_candidates for e in grp]
             with ThreadPoolExecutor(max_workers=self.num_workers) as pool:
@@ -197,19 +266,13 @@ class StorageEngine:
         exact_duplicate_groups = [
             grp for grp in full_hash_map.values() if len(grp) > 1
         ]
-        print(
-            f"[✓] Stage 1 complete: {len(exact_duplicate_groups)} exact duplicate sets found."
-        )
+        print(f"[✓] Stage 1 complete: {len(exact_duplicate_groups)} exact duplicate sets found.")
 
         # Stage 2: Vision AI on unmatched media files
         ml_clusters: list[tuple[list[str], list[float], list[tuple[int, int]]]] = []
         if self.enable_ml and media_files:
-            exact_matched_paths = {
-                e.path for grp in exact_duplicate_groups for e in grp
-            }
-            unmatched_media = [
-                p for p in media_files if p not in exact_matched_paths
-            ]
+            exact_matched_paths = {e.path for grp in exact_duplicate_groups for e in grp}
+            unmatched_media = [p for p in media_files if p not in exact_matched_paths]
             if unmatched_media:
                 print(
                     f"[*] Stage 2: Running local Vision AI (DINOv2) on {len(unmatched_media):,} photos..."
@@ -266,8 +329,7 @@ class StorageEngine:
                         path=d.path,
                     )
                 )
-                rel_path = os.path.relpath(d.path, self.base_dir)
-                dst_quarantine = str(self.base_dir / "_duplicate_quarantine" / rel_path)
+                dst_quarantine, _ = self._resolve_quarantine_destination(d.path)
                 quarantine_moves.append((d.path, dst_quarantine))
 
             group_id += 1
@@ -314,8 +376,7 @@ class StorageEngine:
                         dimensions=f"{d[0]}x{d[1]}" if d[0] > 0 else None,
                     )
                 )
-                rel_path = os.path.relpath(dp, self.base_dir)
-                dst_quarantine = str(self.base_dir / "_duplicate_quarantine" / rel_path)
+                dst_quarantine, _ = self._resolve_quarantine_destination(dp)
                 quarantine_moves.append((dp, dst_quarantine))
 
             group_id += 1
@@ -345,7 +406,7 @@ class StorageEngine:
         sh_path = self.output_dir / "quarantine_duplicates.sh"
         script_content = generate_hardened_quarantine_script(
             moves=quarantine_moves,
-            base_dir=str(self.base_dir),
+            base_dir=[str(p) for p in self.target_paths],
             quarantine_dir=str(self.base_dir / "_duplicate_quarantine"),
         )
         with open(sh_path, "w", encoding="utf-8") as f:
@@ -354,6 +415,7 @@ class StorageEngine:
 
         elapsed = time.time() - t_start
         summary = ScanSummary(
+            scanned_paths=[str(p) for p in self.target_paths],
             scanned_dir=str(self.base_dir),
             total_files_scanned=len(all_files),
             media_files_scanned=len(media_files),
@@ -374,7 +436,7 @@ class StorageEngine:
         with open(summary.summary_json, "w", encoding="utf-8") as f:
             json.dump(summary.model_dump(), f, indent=2)
 
-        print(f"\n[✓] Scan completed in {elapsed:.1f}s")
+        print(f"\n[✓] Scan completed in {elapsed:.1f}s across {len(self.target_paths)} path(s)")
         print(f" • Exact Duplicate Sets: {len(exact_duplicate_groups)}")
         print(f" • Visual AI Clusters: {len(ml_clusters)}")
         print(f" • Total Recoverable Space: {summary.wasted_mb} MB ({summary.wasted_gb} GB)")

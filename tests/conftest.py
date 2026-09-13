@@ -75,3 +75,35 @@ def sample_images(temp_workspace):
         "red2": p2,
         "blue": p3,
     }
+
+
+@pytest.fixture
+def multi_root_dataset(temp_workspace):
+    """Creates two distinct root folders with cross-folder duplicate files."""
+    root_a = temp_workspace / "remote_drive_a"
+    root_b = temp_workspace / "remote_drive_b"
+    root_a.mkdir()
+    root_b.mkdir()
+
+    shared_content = b"Cross-remote duplicate file payload 999888777" * 50
+    unique_a = b"Unique to drive A"
+    unique_b = b"Unique to drive B"
+
+    # Drive A files
+    file_a1 = root_a / "project_specs.pdf"
+    file_a2 = root_a / "notes.txt"
+    file_a1.write_bytes(shared_content)
+    file_a2.write_bytes(unique_a)
+
+    # Drive B files (contains copy of project_specs with different filename)
+    file_b1 = root_b / "project_specs (backup).pdf"
+    file_b2 = root_b / "summary.txt"
+    file_b1.write_bytes(shared_content)
+    file_b2.write_bytes(unique_b)
+
+    return {
+        "root_a": root_a,
+        "root_b": root_b,
+        "shared_file_a": file_a1,
+        "shared_file_b": file_b1,
+    }

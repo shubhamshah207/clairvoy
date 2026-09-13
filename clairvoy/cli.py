@@ -12,7 +12,7 @@ from clairvoy.core.config import (
     DEFAULT_SIMILARITY_THRESHOLD,
     VERSION,
 )
-from clairvoy.core.security import SecurityError, resolve_safe_path
+from clairvoy.core.security import SecurityError, resolve_safe_paths
 from clairvoy.engines.quarantine import QuarantineEngine
 from clairvoy.engines.storage_engine import StorageEngine
 
@@ -47,14 +47,14 @@ def main() -> None:
 
     # --- Scan Command ---
     scan_parser = subparsers.add_parser(
-        "scan", help="Scan a directory for exact and visual near-duplicate files"
+        "scan", help="Scan one or more directories for exact and visual near-duplicate files"
     )
-    scan_parser.add_argument("path", help="Directory path to scan")
+    scan_parser.add_argument("paths", nargs="+", help="One or more directory paths to scan")
     scan_parser.add_argument(
         "--output",
         "-o",
         default=None,
-        help="Directory to save report files (default: <target>/_dedupe_reports)",
+        help="Directory to save report files (default: <first_target>/_dedupe_reports)",
     )
     scan_parser.add_argument(
         "--no-ml",
@@ -131,16 +131,17 @@ def main() -> None:
     if args.command == "scan":
         print_banner()
         try:
-            target_path = resolve_safe_path(args.path, must_exist=True)
-            if not target_path.is_dir():
-                print(f"[!] Error: Path '{target_path}' is not a directory.")
-                sys.exit(1)
+            target_paths = resolve_safe_paths(args.paths, must_exist=True)
+            for tp in target_paths:
+                if not tp.is_dir():
+                    print(f"[!] Error: Path '{tp}' is not a directory.")
+                    sys.exit(1)
         except (SecurityError, FileNotFoundError) as e:
             print(f"[!] Path Error: {e}")
             sys.exit(1)
 
         engine = StorageEngine(
-            base_dir=str(target_path),
+            paths=target_paths,
             output_dir=args.output,
             enable_ml=not args.no_ml,
             ml_threshold=args.threshold,

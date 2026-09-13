@@ -33,7 +33,7 @@ def test_keeper_scoring():
 
 def test_storage_engine_exact_dedup(sample_dataset):
     root = sample_dataset["root"]
-    engine = StorageEngine(base_dir=str(root), enable_ml=False)
+    engine = StorageEngine(paths=str(root), enable_ml=False)
     summary = engine.run()
 
     assert summary.total_files_scanned == 4
@@ -51,3 +51,22 @@ def test_storage_engine_exact_dedup(sample_dataset):
     actions = [r.action for r in summary.groups]
     assert ActionType.KEEP in actions
     assert ActionType.DUPLICATE in actions
+
+
+def test_storage_engine_multi_root_parallel(multi_root_dataset):
+    root_a = multi_root_dataset["root_a"]
+    root_b = multi_root_dataset["root_b"]
+
+    engine = StorageEngine(paths=[root_a, root_b], enable_ml=False)
+    summary = engine.run()
+
+    assert summary.total_files_scanned == 4
+    assert summary.exact_duplicate_groups == 1
+    assert len(summary.scanned_paths) == 2
+    assert str(root_a.resolve()) in summary.scanned_paths
+    assert str(root_b.resolve()) in summary.scanned_paths
+
+    # Verify cross-folder duplicate was detected
+    paths_in_dupes = [r.path for r in summary.groups]
+    assert str(multi_root_dataset["shared_file_a"].resolve()) in paths_in_dupes
+    assert str(multi_root_dataset["shared_file_b"].resolve()) in paths_in_dupes

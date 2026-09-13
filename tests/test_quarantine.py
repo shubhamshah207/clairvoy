@@ -10,7 +10,7 @@ from clairvoy.engines.storage_engine import StorageEngine
 
 def test_quarantine_and_restore(sample_dataset):
     root = sample_dataset["root"]
-    engine = StorageEngine(base_dir=str(root), enable_ml=False)
+    engine = StorageEngine(paths=str(root), enable_ml=False)
     summary = engine.run()
 
     assert summary.exact_duplicate_groups == 1
@@ -33,3 +33,24 @@ def test_quarantine_and_restore(sample_dataset):
     # Verify files are back in original positions
     for item in manifest.items:
         assert Path(item.original_path).exists()
+
+
+def test_multi_root_quarantine_and_restore(multi_root_dataset):
+    root_a = multi_root_dataset["root_a"]
+    root_b = multi_root_dataset["root_b"]
+
+    engine = StorageEngine(paths=[root_a, root_b], enable_ml=False)
+    summary = engine.run()
+
+    manifest = QuarantineEngine.execute(summary)
+    assert manifest.total_files_moved == 1
+
+    # Check that the quarantined duplicate is moved
+    moved_item = manifest.items[0]
+    assert not Path(moved_item.original_path).exists()
+    assert Path(moved_item.quarantined_path).exists()
+
+    # Restore from manifest dict
+    restored = QuarantineEngine.restore(manifest.model_dump())
+    assert restored == 1
+    assert Path(moved_item.original_path).exists()

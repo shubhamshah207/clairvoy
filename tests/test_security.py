@@ -9,6 +9,7 @@ from clairvoy.core.security import (
     SecurityError,
     generate_hardened_quarantine_script,
     resolve_safe_path,
+    resolve_safe_paths,
     safe_sh_quote,
 )
 
@@ -29,7 +30,7 @@ def test_resolve_safe_path_traversal_detection(temp_workspace):
     outside_file.write_text("secret")
 
     with pytest.raises(SecurityError, match="Directory traversal detected"):
-        resolve_safe_path(outside_file, allowed_root=allowed_dir)
+        resolve_safe_path(outside_file, allowed_roots=allowed_dir)
 
 
 def test_resolve_safe_path_disallowed_system_root():
@@ -48,6 +49,22 @@ def test_resolve_safe_path_extension_whitelist(temp_workspace):
 def test_resolve_safe_path_null_bytes():
     with pytest.raises(SecurityError, match="contains null bytes"):
         resolve_safe_path("folder/file\0.jpg")
+
+
+def test_resolve_safe_paths_multiple(temp_workspace):
+    d1 = temp_workspace / "dir1"
+    d2 = temp_workspace / "dir2"
+    d1.mkdir()
+    d2.mkdir()
+
+    paths = resolve_safe_paths([d1, d2])
+    assert len(paths) == 2
+    assert d1.resolve() in paths
+    assert d2.resolve() in paths
+
+    # Test comma-separated string
+    comma_paths = resolve_safe_paths(f"{d1}, {d2}")
+    assert len(comma_paths) == 2
 
 
 def test_safe_sh_quote_injection_prevention():

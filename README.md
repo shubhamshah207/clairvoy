@@ -90,11 +90,14 @@ pip install -e ".[ml]"
 ### 1. Terminal CLI Usage
 
 ```bash
-# High-speed scan with exact hashing and local Vision AI (DINOv2)
+# High-speed scan of a single folder
 clairvoy scan /path/to/storage
 
-# Custom visual similarity threshold (e.g. 90%) and parallel workers
-clairvoy scan /path/to/storage --threshold 0.90 --workers 16
+# Concurrent multi-path scan across multiple storage remotes / drives
+clairvoy scan /mnt/e/Remotes/gdrive-srshah207 /mnt/e/Remotes/gphotos-shubhamshah207 /mnt/e/Backup
+
+# Tune visual similarity threshold (e.g. 90%) and parallel worker threads
+clairvoy scan /path1 /path2 --threshold 0.90 --workers 16
 
 # Scan general documents only (disables ML vision model)
 clairvoy scan /path/to/storage --no-ml
@@ -102,7 +105,7 @@ clairvoy scan /path/to/storage --no-ml
 # Safely isolate duplicates into _duplicate_quarantine with rollback manifest
 clairvoy quarantine /path/to/storage/_dedupe_reports/duplicates_summary.json
 
-# 1-Click Rollback / Restore quarantined files
+# 1-Click Rollback / Restore quarantined files in parallel
 clairvoy restore /path/to/storage/_duplicate_quarantine/quarantine_manifest.json
 ```
 

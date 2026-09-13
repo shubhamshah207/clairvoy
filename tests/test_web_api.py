@@ -49,3 +49,14 @@ def test_thumbnail_valid_image(client, sample_images):
 def test_scan_invalid_directory(client):
     response = client.post("/api/scan", json={"directory": "/non/existent/path/here"})
     assert response.status_code == 400
+
+
+def test_scan_multiple_directories(client, multi_root_dataset):
+    root_a = str(multi_root_dataset["root_a"])
+    root_b = str(multi_root_dataset["root_b"])
+
+    response = client.post("/api/scan", json={"paths": [root_a, root_b]})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "started"
+    assert data["count"] == 2

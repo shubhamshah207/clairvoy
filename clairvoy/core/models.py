@@ -51,7 +51,8 @@ class DuplicateGroup(BaseModel):
 
 class ScanSummary(BaseModel):
     """Comprehensive summary returned after an engine run."""
-    scanned_dir: str
+    scanned_paths: list[str] = Field(default_factory=list)
+    scanned_dir: str = ""
     total_files_scanned: int
     media_files_scanned: int
     exact_duplicate_groups: int
@@ -76,7 +77,8 @@ class QuarantineItem(BaseModel):
 
 class QuarantineManifest(BaseModel):
     timestamp: str
-    base_dir: str
+    base_dirs: list[str] = Field(default_factory=list)
+    base_dir: str = ""
     quarantine_dir: str
     total_files_moved: int
     total_bytes_moved: int

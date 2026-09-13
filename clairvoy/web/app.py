@@ -1,6 +1,6 @@
 """
 Clairvoy Web Application Server
-Production-grade FastAPI server with non-blocking background scans,
+Production-grade FastAPI server with multi-path concurrent scanning,
 hardened thumbnail streaming, in-memory caching, and 1-click safe quarantine/restore.
 """
 
@@ -19,7 +19,7 @@ from clairvoy.core.config import (
     SUPPORTED_IMAGE_EXTENSIONS,
     VERSION,
 )
-from clairvoy.core.security import SecurityError, resolve_safe_path
+from clairvoy.core.security import SecurityError, resolve_safe_path, resolve_safe_paths
 from clairvoy.engines.quarantine import QuarantineEngine
 from clairvoy.engines.storage_engine import StorageEngine
 
@@ -32,6 +32,7 @@ app = FastAPI(
 # Active scan state
 SCAN_STATE: dict[str, Any] = {
     "status": "idle",  # "idle" | "running" | "completed" | "failed"
+    "target_paths": [],
     "target_dir": "",
     "message": "Ready to scan",
     "summary": None,
@@ -41,7 +42,14 @@ SCAN_LOCK = threading.Lock()
 
 
 class ScanRequest(BaseModel):
-    directory: str = Field(..., description="Target directory path to scan")
+    paths: list[str] | str | None = Field(
+        default=None,
+        description="One or more directory paths to scan concurrently",
+    )
+    directory: str | None = Field(
+        default=None,
+        description="Single target directory (backward compatibility)",
+    )
     enable_ml: bool = Field(default=True, description="Enable local Vision AI model")
     threshold: float = Field(
         default=DEFAULT_SIMILARITY_THRESHOLD,
@@ -50,10 +58,27 @@ class ScanRequest(BaseModel):
         description="Visual similarity threshold (0.70 to 0.99)",
     )
 
+    def get_path_list(self) -> list[str]:
+        if self.paths:
+            if isinstance(self.paths, list):
+                return [p.strip() for p in self.paths if p.strip()]
+            return [
+                p.strip()
+                for p in self.paths.replace("\r", "\n").replace(",", "\n").split("\n")
+                if p.strip()
+            ]
+        if self.directory:
+            return [
+                p.strip()
+                for p in self.directory.replace("\r", "\n").replace(",", "\n").split("\n")
+                if p.strip()
+            ]
+        return []
+
 
 class QuarantineActionRequest(BaseModel):
     summary_file: str | None = None
-    base_dir: str | None = None
+    base_dir: str | list[str] | None = None
 
 
 class RestoreActionRequest(BaseModel):
@@ -71,17 +96,19 @@ def _generate_thumbnail_bytes(resolved_path_str: str) -> bytes:
         return buf.getvalue()
 
 
-def _run_scan_worker(directory: str, enable_ml: bool, threshold: float):
+def _run_scan_worker(directories: list[str], enable_ml: bool, threshold: float):
     try:
         engine = StorageEngine(
-            base_dir=directory,
+            paths=directories,
             enable_ml=enable_ml,
             ml_threshold=threshold,
         )
         summary = engine.run()
         with SCAN_LOCK:
             SCAN_STATE["status"] = "completed"
-            SCAN_STATE["message"] = f"Scan complete. Found {summary.total_duplicate_groups} duplicate groups."
+            SCAN_STATE["message"] = (
+                f"Scan complete across {len(directories)} path(s). Found {summary.total_duplicate_groups} duplicate groups."
+            )
             SCAN_STATE["summary"] = summary.model_dump()
             SCAN_STATE["error"] = None
     except Exception as e:
@@ -99,7 +126,7 @@ async def serve_index():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Clairvoy | Local Storage & Vision AI Deduplicator</title>
+        <title>Clairvoy | Multi-Storage & Vision AI Deduplicator</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
             body {{ background-color: #0b0f19; color: #f8fafc; font-family: ui-sans-serif, system-ui, -apple-system; }}
@@ -116,11 +143,11 @@ async def serve_index():
                         <span class="text-indigo-400">👁️</span> Clairvoy
                         <span class="text-xs font-mono font-normal text-indigo-400 bg-indigo-500/10 border border-indigo-500/30 px-2.5 py-0.5 rounded-full">v{VERSION}</span>
                     </h1>
-                    <p class="text-xs text-slate-400 mt-1">High-Throughput Storage Deduplication with Local Vision AI (Meta DINOv2)</p>
+                    <p class="text-xs text-slate-400 mt-1">Multi-Path Storage Deduplication & Cross-Folder Vision AI (Meta DINOv2)</p>
                 </div>
                 <div class="flex items-center gap-3">
                     <span class="text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-full font-mono flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Offline ONNX Active
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Multi-Tree Parallel Active
                     </span>
                     <a href="https://github.com/shubhamshah207/clairvoy" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-1.5 rounded-full text-slate-300 transition">
                         GitHub ↗
@@ -131,10 +158,12 @@ async def serve_index():
             <!-- Scan Configuration Dashboard -->
             <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 md:p-8 mb-8 shadow-2xl backdrop-blur">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-end">
-                    <div class="lg:col-span-6">
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Target Storage Directory</label>
-                        <input id="dirInput" type="text" value="/mnt/e/Remotes" placeholder="/path/to/folder"
-                               class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 text-slate-100 font-mono transition">
+                    <div class="lg:col-span-7">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                            Target Storage Directories <span class="text-slate-500 font-normal lowercase">(separate multiple folders with commas or newlines)</span>
+                        </label>
+                        <textarea id="dirInput" rows="2" placeholder="/mnt/e/Remotes/gdrive-srshah207&#10;/mnt/e/Remotes/gphotos-shubhamshah207"
+                               class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-100 font-mono transition custom-scrollbar resize-y">/mnt/e/Remotes</textarea>
                     </div>
                     <div class="lg:col-span-3">
                         <div class="flex justify-between items-center mb-2">
@@ -144,7 +173,7 @@ async def serve_index():
                         <input id="thresholdInput" type="range" min="80" max="99" value="95" oninput="document.getElementById('thresholdDisplay').innerText = this.value + '%'"
                                class="w-full accent-indigo-500 cursor-pointer">
                     </div>
-                    <div class="lg:col-span-3 flex gap-3">
+                    <div class="lg:col-span-2 flex gap-3">
                         <button onclick="triggerScan()" id="scanBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-6 rounded-2xl transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
                             <span>Start Scan</span>
                         </button>
@@ -154,7 +183,7 @@ async def serve_index():
                 <!-- Progress / Status Ticker -->
                 <div id="statusContainer" class="mt-4 pt-4 border-t border-slate-800/80 flex items-center gap-3">
                     <div id="statusDot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></div>
-                    <div id="statusMessage" class="text-xs text-slate-400 font-mono">Ready to scan storage.</div>
+                    <div id="statusMessage" class="text-xs text-slate-400 font-mono">Ready to scan storage paths.</div>
                 </div>
             </div>
 
@@ -182,8 +211,8 @@ async def serve_index():
             <div id="resultsCard" class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl hidden">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-6 border-b border-slate-800">
                     <div>
-                        <h2 class="text-xl font-bold text-white">Visual Comparison & Deduplication Review</h2>
-                        <p class="text-xs text-slate-400 mt-1">Review original files (KEEP) side-by-side with detected redundant duplicates (DUPLICATE).</p>
+                        <h2 class="text-xl font-bold text-white">Visual Comparison & Multi-Folder Deduplication</h2>
+                        <p class="text-xs text-slate-400 mt-1">Review original files (KEEP) side-by-side with detected redundant duplicates (DUPLICATE) across all paths.</p>
                     </div>
                     <div class="flex items-center gap-3">
                         <button onclick="executeSafeQuarantine()" id="quarantineBtn" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition shadow-lg shadow-rose-600/20">
@@ -201,21 +230,22 @@ async def serve_index():
             let currentSummary = null;
 
             async function triggerScan() {{
-                const dir = document.getElementById('dirInput').value.trim();
+                const dirText = document.getElementById('dirInput').value.trim();
+                const paths = dirText.split(/[\\n,]+/).map(s => s.trim()).filter(Boolean);
                 const threshold = parseFloat(document.getElementById('thresholdInput').value) / 100.0;
-                if (!dir) return;
+                if (paths.length === 0) return;
 
                 const btn = document.getElementById('scanBtn');
                 btn.disabled = true;
                 btn.classList.add('opacity-50');
 
-                updateStatus("running", "Initiating high-speed filesystem indexing...");
+                updateStatus("running", `Initiating parallel scan across ${{paths.length}} directory tree(s)...`);
 
                 try {{
                     const res = await fetch('/api/scan', {{
                         method: 'POST',
                         headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{ directory: dir, enable_ml: true, threshold: threshold }})
+                        body: JSON.stringify({{ paths: paths, enable_ml: true, threshold: threshold }})
                     }});
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.detail || "Scan request failed");
@@ -235,7 +265,7 @@ async def serve_index():
                     const state = await res.json();
 
                     if (state.status === "running") {{
-                        updateStatus("running", "Scanning files and computing DINOv2 embeddings...");
+                        updateStatus("running", "Scanning files and computing DINOv2 embeddings in parallel...");
                     }} else if (state.status === "completed") {{
                         clearInterval(pollTimer);
                         pollTimer = null;
@@ -302,7 +332,7 @@ async def serve_index():
 
                 const groupIds = Object.keys(groups);
                 if (groupIds.length === 0) {{
-                    container.innerHTML = '<div class="text-center py-16 text-slate-500 font-mono">No duplicates detected in this directory!</div>';
+                    container.innerHTML = '<div class="text-center py-16 text-slate-500 font-mono">No duplicates detected across any scanned path!</div>';
                     return;
                 }}
 
@@ -354,7 +384,7 @@ async def serve_index():
 
             async function executeSafeQuarantine() {{
                 if (!currentSummary) return;
-                if (!confirm("Safely move all detected duplicate files to '_duplicate_quarantine'? A reversible rollback manifest will be created.")) return;
+                if (!confirm("Safely move all detected duplicate files across all paths to '_duplicate_quarantine'? A reversible rollback manifest will be created.")) return;
 
                 const btn = document.getElementById('quarantineBtn');
                 btn.disabled = true;
@@ -364,10 +394,10 @@ async def serve_index():
                     const res = await fetch('/api/quarantine/execute', {{
                         method: 'POST',
                         headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{ summary_file: currentSummary.summary_json, base_dir: currentSummary.scanned_dir }})
+                        body: JSON.stringify({{ summary_file: currentSummary.summary_json, base_dir: currentSummary.scanned_paths || currentSummary.scanned_dir }})
                     }});
                     const data = await res.json();
-                    alert(`Successfully quarantined ${{data.total_files_moved}} files (${{(data.total_bytes_moved / (1024*1024)).toFixed(2)}} MB) into ${{data.quarantine_dir}}`);
+                    alert(`Successfully quarantined ${{data.total_files_moved}} files (${{(data.total_bytes_moved / (1024*1024)).toFixed(2)}} MB) across ${{data.base_dirs ? data.base_dirs.length : 1}} root folder(s).`);
                 }} catch (e) {{
                     alert("Quarantine error: " + e.message);
                 }} finally {{
@@ -386,11 +416,13 @@ async def serve_index():
 async def get_thumbnail(path: str = Query(..., description="Absolute path to media file")):
     """
     Serves a downscaled, securely validated thumbnail image with LRU caching.
-    Guarantees strict directory traversal and extension bounds checking.
+    Guarantees strict directory traversal and extension bounds checking across all scanned roots.
     """
     try:
+        allowed = SCAN_STATE.get("target_paths") or None
         safe_path = resolve_safe_path(
             user_path=path,
+            allowed_roots=allowed,
             allowed_extensions=SUPPORTED_IMAGE_EXTENSIONS,
             must_exist=True,
         )
@@ -412,11 +444,16 @@ async def get_thumbnail(path: str = Query(..., description="Absolute path to med
 
 @app.post("/api/scan")
 async def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
-    """Triggers an asynchronous scan job in the background."""
+    """Triggers an asynchronous scan job across single or multiple directories in parallel."""
+    target_paths = req.get_path_list()
+    if not target_paths:
+        raise HTTPException(status_code=400, detail="No directories provided for scan.")
+
     try:
-        resolved_dir = resolve_safe_path(req.directory, must_exist=True)
-        if not resolved_dir.is_dir():
-            raise HTTPException(status_code=400, detail="Specified path is not a directory.")
+        resolved_dirs = resolve_safe_paths(target_paths, must_exist=True)
+        for rd in resolved_dirs:
+            if not rd.is_dir():
+                raise HTTPException(status_code=400, detail=f"Specified path '{rd}' is not a directory.")
     except (SecurityError, FileNotFoundError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -424,18 +461,23 @@ async def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
         if SCAN_STATE["status"] == "running":
             raise HTTPException(status_code=409, detail="A scan is already actively running.")
         SCAN_STATE["status"] = "running"
-        SCAN_STATE["target_dir"] = str(resolved_dir)
-        SCAN_STATE["message"] = f"Initializing scan on {resolved_dir}..."
+        SCAN_STATE["target_paths"] = [str(d) for d in resolved_dirs]
+        SCAN_STATE["target_dir"] = str(resolved_dirs[0])
+        SCAN_STATE["message"] = f"Initializing parallel scan across {len(resolved_dirs)} directory tree(s)..."
         SCAN_STATE["summary"] = None
         SCAN_STATE["error"] = None
 
     background_tasks.add_task(
         _run_scan_worker,
-        directory=str(resolved_dir),
+        directories=[str(d) for d in resolved_dirs],
         enable_ml=req.enable_ml,
         threshold=req.threshold,
     )
-    return {"status": "started", "target_dir": str(resolved_dir)}
+    return {
+        "status": "started",
+        "target_paths": [str(d) for d in resolved_dirs],
+        "count": len(resolved_dirs),
+    }
 
 
 @app.get("/api/status")
@@ -447,7 +489,7 @@ async def get_scan_status():
 
 @app.post("/api/quarantine/execute")
 async def execute_quarantine(req: QuarantineActionRequest):
-    """Safely isolates duplicate files into a quarantine directory."""
+    """Safely isolates duplicate files into quarantine directories in parallel."""
     if not req.summary_file and not req.base_dir:
         with SCAN_LOCK:
             if not SCAN_STATE["summary"]:
@@ -468,7 +510,7 @@ async def execute_quarantine(req: QuarantineActionRequest):
 
 @app.post("/api/quarantine/restore")
 async def restore_quarantine(req: RestoreActionRequest):
-    """Restores quarantined files from a manifest back to original paths."""
+    """Restores quarantined files from a manifest back to original paths in parallel."""
     try:
         count = QuarantineEngine.restore(req.manifest_file)
         return {"status": "restored", "restored_files_count": count}
