@@ -65,16 +65,16 @@ Replace redundant copies with native NTFS/POSIX hardlinks in seconds. Recover 10
 
 ---
 
-## 🏛️ System Architecture (ByteByteGo Breakdown)
+## 🏛️ End-to-End System Architecture
 
 Clairvoy is designed from the ground up on textbook GoF design patterns (**Chain of Responsibility**, **Strategy**, and dynamic **Service Locator**). It processes petabyte-scale storage trees with minimal memory overhead and zero data loss risk.
 
 <p align="center">
-  <img src="docs/assets/diagrams/architecture.svg" alt="Clairvoy ByteByteGo System Architecture" width="100%">
+  <img src="docs/assets/diagrams/architecture.svg" alt="Clairvoy System Architecture" width="100%">
 </p>
 
 <details>
-<summary><b>Inspect Native Interactive Mermaid Diagram (ByteByteGo Topology)</b></summary>
+<summary><b>Inspect Native Interactive Mermaid Diagram</b></summary>
 
 ```mermaid
 graph TD

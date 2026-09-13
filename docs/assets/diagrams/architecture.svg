@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 960" width="100%" height="100%">
   <defs>
-    <!-- Background & Card Gradients -->
+    <!-- Background and Card Gradients -->
     <linearGradient id="canvasGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#080c14" />
       <stop offset="50%" stop-color="#0f172a" />
@@ -99,14 +99,14 @@
   </g>
 
   <!-- ================================================================================= -->
-  <!-- TOP HEADER (ByteByteGo Brand Style)                                                -->
+  <!-- TOP HEADER                                                                        -->
   <!-- ================================================================================= -->
   <g transform="translate(50, 35)">
     <rect x="0" y="0" width="46" height="46" rx="12" fill="url(#indigoGrad)" />
-    <text x="23" y="29" font-size="22" font-weight="900" fill="#ffffff" text-anchor="middle">👁️</text>
+    <text x="23" y="29" font-size="22" font-weight="900" fill="#ffffff" text-anchor="middle">👁</text>
     <text x="60" y="26" font-size="22" font-weight="800" fill="#ffffff" letter-spacing="-0.5px">Clairvoy System Architecture</text>
-    <text x="60" y="44" font-size="13" font-weight="500" fill="#94a3b8">Textbook Pipeline &amp; Strategy Pattern: Multi-Root Ingestion, Short-Circuit Cascade, Vision AI &amp; Inode Hardlinking</text>
-    
+    <text x="60" y="44" font-size="13" font-weight="500" fill="#94a3b8">Textbook Pipeline and Strategy Pattern: Multi-Root Ingestion, Short-Circuit Cascade, Vision AI and Inode Hardlinking</text>
+
     <!-- Meta Badges on Right -->
     <g transform="translate(1020, 4)">
       <rect x="0" y="0" width="130" height="28" rx="14" fill="#1e293b" stroke="#334155" />
@@ -117,10 +117,10 @@
   </g>
 
   <!-- ================================================================================= -->
-  <!-- 3 MAJOR ARCHITECTURAL SWIMLANES (ByteByteGo Layout)                              -->
+  <!-- 3 MAJOR ARCHITECTURAL SWIMLANES                                                   -->
   <!-- ================================================================================= -->
 
-  <!-- SWIMLANE 1: Ingestion & Fast Filter Layer -->
+  <!-- SWIMLANE 1: Ingestion and Fast Filter Layer -->
   <g transform="translate(45, 105)">
     <rect width="320" height="825" rx="18" fill="url(#laneGrad)" stroke="#334155" stroke-width="1.5" />
     <rect x="16" y="16" width="288" height="34" rx="8" fill="#1e293b" stroke="#475569" />
@@ -175,7 +175,7 @@
       <text x="30" y="96" font-size="10" fill="#cbd5e1" class="font-mono">entry_points: clairvoy.plugins</text>
       <text x="30" y="112" font-size="9" fill="#818cf8" class="font-mono">Registry.discover() &amp; auto-order</text>
       <text x="20" y="142" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">Chain of Responsibility:</tspan> Ordered</text>
-      <text x="28" y="158" font-size="11" fill="#94a3b8">by priority (10 &rarr; 20 &rarr; 30 &rarr; 40)</text>
+      <text x="28" y="158" font-size="11" fill="#94a3b8">by priority (10 → 20 → 30 → 40)</text>
       <text x="20" y="178" font-size="11" fill="#94a3b8">• Short-circuits already-matched files</text>
     </g>
   </g>
@@ -197,7 +197,7 @@
       <text x="18" y="58" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">128 KB QuickHash:</tspan> Reads first 64KB + last 64KB buffer</text>
       <text x="18" y="76" font-size="11" fill="#94a3b8">• <tspan font-weight="700" fill="#34d399">Eliminates 95%</tspan> of same-size file collisions with &lt;0.1ms latency</text>
       <text x="18" y="94" font-size="11" fill="#94a3b8">• Only candidates with matching QuickHash proceed to Full SHA-256</text>
-      <text x="18" y="110" font-size="10" fill="#fbbf24" class="font-mono">Output: Collision Buckets &rarr; Full Byte Verification</text>
+      <text x="18" y="110" font-size="10" fill="#fbbf24" class="font-mono">Output: Collision Buckets → Full Byte Verification</text>
     </g>
 
     <!-- Step 5: Full SHA-256 Matcher -->
@@ -226,10 +226,10 @@
       <text x="18" y="76" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">Feature Vector:</tspan> 384-dimensional L2-normalized embedding</text>
       <text x="18" y="94" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">Catches:</tspan> Burst shots, crops, color filters, 4K vs 720p transcodes</text>
       <text x="18" y="112" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">Inference:</tspan> Batched CPU SIMD / AVX2 (No GPU required)</text>
-      <text x="18" y="132" font-size="10" fill="#818cf8" class="font-mono">Output: Pairwise Cosine Distance &ge; threshold (e.g. 0.95)</text>
+      <text x="18" y="132" font-size="10" fill="#818cf8" class="font-mono">Output: Pairwise Cosine Distance ≥ threshold (e.g. 0.95)</text>
     </g>
 
-    <!-- Step 7: Video & Archive Matchers -->
+    <!-- Step 7: Video and Archive Matchers -->
     <g transform="translate(20, 540)" filter="url(#cardShadow)">
       <rect width="460" height="145" rx="12" fill="url(#cardGradDark)" stroke="#c084fc" stroke-width="1.5" />
       <circle cx="28" cy="28" r="14" fill="url(#purpleGrad)" />
@@ -238,7 +238,7 @@
       <rect x="360" y="14" width="86" height="22" rx="11" fill="#581c87" />
       <text x="403" y="29" font-size="10" font-weight="700" fill="#e9d5ff" text-anchor="middle" class="font-mono">Priority 30-40</text>
       <text x="18" y="58" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">VideoKeyframeMatcherPlugin (Priority 30):</tspan></text>
-      <text x="28" y="74" font-size="11" fill="#cbd5e1">Duration match (&plusmn;1.5%) + 4-frame equidistant dHash similarity</text>
+      <text x="28" y="74" font-size="11" fill="#cbd5e1">Duration match (±1.5%) + 4-frame equidistant dHash similarity</text>
       <text x="18" y="94" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">ArchiveInspectorMatcherPlugin (Priority 40):</tspan></text>
       <text x="28" y="110" font-size="11" fill="#cbd5e1">In-memory ZIP/TAR central directory peek without disk unpack</text>
       <text x="18" y="132" font-size="10" fill="#c084fc" class="font-mono">Catches 4K vs 1080p MP4 re-encodes and cloned backup zips</text>
@@ -248,13 +248,13 @@
     <g transform="translate(20, 715)">
       <rect width="460" height="85" rx="10" fill="#0b0f19" stroke="#334155" />
       <text x="18" y="24" font-size="11" font-weight="700" fill="#34d399">⚡ Performance Guarantee: Short-Circuit Pruning</text>
-      <text x="18" y="44" font-size="11" fill="#94a3b8">Unmatched files flow sequentially: QuickHash &rarr; SHA-256 &rarr; AI Vision &rarr; Video</text>
+      <text x="18" y="44" font-size="11" fill="#94a3b8">Unmatched files flow sequentially: QuickHash → SHA-256 → AI Vision → Video</text>
       <text x="18" y="62" font-size="11" fill="#94a3b8">As soon as files are matched, they are <tspan font-weight="700" fill="#ffffff">pruned from candidate pool</tspan>.</text>
       <text x="18" y="76" font-size="10" fill="#64748b" class="font-mono">Result: Heavy AI inference runs ONLY on remaining near-duplicates!</text>
     </g>
   </g>
 
-  <!-- SWIMLANE 3: Resolution & Storage Engine Mutations -->
+  <!-- SWIMLANE 3: Resolution and Storage Engine Mutations -->
   <g transform="translate(915, 105)">
     <rect width="480" height="825" rx="18" fill="url(#laneGrad)" stroke="#334155" stroke-width="1.5" />
     <rect x="20" y="16" width="440" height="34" rx="8" fill="#1e293b" stroke="#475569" />
@@ -267,8 +267,8 @@
       <text x="28" y="34" font-size="13" font-weight="800" fill="#ffffff" text-anchor="middle">8</text>
       <text x="52" y="26" font-size="14" font-weight="700" fill="#ffffff">DSU Graph Clustering Engine</text>
       <text x="52" y="42" font-size="11" font-weight="600" fill="#818cf8" class="font-mono">Disjoint Set Union (Union-Find)</text>
-      <text x="18" y="66" font-size="11" fill="#94a3b8">• Groups transitive near-duplicate pairs: A ~ B and B ~ C &rArr; {A, B, C}</text>
-      <text x="18" y="84" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">Nearly Linear Complexity:</tspan> Inverse Ackermann O(&alpha;(N))</text>
+      <text x="18" y="66" font-size="11" fill="#94a3b8">• Groups transitive near-duplicate pairs: A ~ B and B ~ C ⇒ {A, B, C}</text>
+      <text x="18" y="84" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">Nearly Linear Complexity:</tspan> Inverse Ackermann O(α(N))</text>
       <text x="18" y="102" font-size="11" fill="#94a3b8">• Partitions whole filesystem into discrete duplicate clusters</text>
       <text x="18" y="114" font-size="10" fill="#818cf8" class="font-mono">Guarantees zero duplicate leakage across multi-folder scans</text>
     </g>
@@ -301,13 +301,13 @@
         <rect x="14" y="12" width="130" height="22" rx="11" fill="#10b981" />
         <text x="79" y="27" font-size="10" font-weight="800" fill="#022c22" text-anchor="middle" class="font-mono">--action hardlink</text>
         <text x="156" y="28" font-size="12" font-weight="700" fill="#a7f3d0">Zero-Space Inode Replacement</text>
-        
+
         <text x="16" y="54" font-size="11" fill="#d1fae5">• Unifies duplicate directory entries to point to keeper's inode</text>
         <text x="16" y="72" font-size="11" fill="#d1fae5">• <tspan font-weight="700" fill="#ffffff">100% Space Reclaim:</tspan> Duplicates consume <tspan font-weight="700" fill="#6ee7b7">0 additional bytes</tspan></text>
         <text x="16" y="90" font-size="11" fill="#d1fae5">• <tspan font-weight="700" fill="#ffffff">Zero Path Breakage:</tspan> All existing paths &amp; apps continue working!</text>
         <text x="16" y="108" font-size="11" fill="#d1fae5">• Uses atomic temporary link swap (crash-safe)</text>
         <rect x="16" y="118" width="372" height="26" rx="6" fill="#022c22" />
-        <text x="24" y="135" font-size="10" fill="#34d399" class="font-mono">os.link(keeper, temp) &rarr; os.replace(temp, dupe)</text>
+        <text x="24" y="135" font-size="10" fill="#34d399" class="font-mono">os.link(keeper, temp) → os.replace(temp, dupe)</text>
       </g>
 
       <!-- Action B: Quarantine -->
@@ -316,7 +316,7 @@
         <rect x="14" y="12" width="140" height="22" rx="11" fill="#f43f5e" />
         <text x="84" y="27" font-size="10" font-weight="800" fill="#4c0519" text-anchor="middle" class="font-mono">--action quarantine</text>
         <text x="166" y="28" font-size="12" font-weight="700" fill="#fecdd3">Reversible Isolation + Manifest</text>
-        
+
         <text x="16" y="54" font-size="11" fill="#ffe4e6">• Non-clobbering atomic isolation directory</text>
         <text x="16" y="72" font-size="11" fill="#ffe4e6">• Generates JSON cryptographic rollback manifest with SHA-256</text>
         <text x="16" y="90" font-size="11" fill="#ffe4e6">• Preserves directory hierarchy, permissions, and timestamps</text>
@@ -328,7 +328,7 @@
   </g>
 
   <!-- ================================================================================= -->
-  <!-- CONNECTORS & DATA FLOW LABELS (ByteByteGo Connectors)                            -->
+  <!-- CONNECTORS AND DATA FLOW LABELS                                                   -->
   <!-- ================================================================================= -->
 
   <!-- Connect 1 -> 2 -->
@@ -358,7 +358,7 @@
 
   <!-- Connect 6 -> 7 -->
   <path d="M 640 615 L 640 645" stroke="#c084fc" stroke-width="2" marker-end="url(#arrowGray)" class="flow-pulse" />
-  <rect x="580" y="621" width="120" height="16" rx="4" fill="#0f172a" stroke="#c084fc" />
+  <rect x="580" y="621" width="120" height="16" rx="4" fill="#c084fc" />
   <text x="640" y="633" font-size="8" fill="#c084fc" text-anchor="middle" class="font-mono">Unmatched Video / Zips</text>
 
   <!-- Connect Layer 2 (5, 6, 7) -> Step 8 (Cross swimlane: Layer 2 to Layer 3) -->
