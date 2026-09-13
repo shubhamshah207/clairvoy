@@ -69,45 +69,48 @@ Replace redundant copies with native NTFS/POSIX hardlinks in seconds. Recover 10
 
 Clairvoy is built on textbook GoF design patterns (**Pipeline / Chain of Responsibility**, **Strategy**, and dynamic **Service Locator**):
 
-```text
-+---------------------------------------------------------------------------------------------------------+
-|                                              CLAIRVOY PLUGGABLE ARCHITECTURE                            |
-+---------------------------------------------------------------------------------------------------------+
-|                                                                                                         |
-|                                                  PluginRegistry                                         |
-|                     - Drop-ins: ~/.clairvoy/plugins/*.py  - Entry Points: clairvoy.plugins              |
-|                                                                                                         |
-|       +-----------------------------------------------------------------------------------------+       |
-|       |                                        DeduplicationPipeline                            |       |
-|       |                                (Short-Circuit Pruning & Priority Chain)                 |       |
-|       +-----------------------------------------------------------------------------------------+       |
-|                                     |                                                      |            |
-|           [Matcher Chain by Priority]                                     [Scoring & Resolution]        |
-|                                     v                                                      v            |
-|       +---------------------------------------------+               +---------------------------+       |
-|       | Priority 10: ExactHashMatcherPlugin         |               | CompositeKeeperStrategy   |       |
-|       |  |--> 128KB QuickHash + Streaming SHA-256   |               |  |--> Filename penalties  |       |
-|       +---------------------------------------------+               |       ((1), -copy, thumb) |       |
-|                             | [prune matched files]                 |  |--> Directory seniority |       |
-|                             v                                       |  |--> Media resolution   |       |
-|       +---------------------------------------------+               +---------------------------+       |
-|       | Priority 20: PhotoVisionMatcherPlugin       |                                      |            |
-|       |  |--> Meta DINOv2 ONNX + DSU Clustering     |                                      v            |
-|       +---------------------------------------------+               +---------------------------+       |
-|                             | [prune matched files]                 | Action Plugins:           |       |
-|                             v                                       |  |--> SafeQuarantine      |       |
-|       +---------------------------------------------+               |       (Non-clobbering)    |       |
-|       | Priority 30: VideoKeyframeMatcherPlugin     |               |  |--> HardlinkAction      |       |
-|       |  |--> Duration (±1.5%) + Keyframe dHash     |               |       (Zero-space inode)  |       |
-|       +---------------------------------------------+               +---------------------------+       |
-|                             | [prune matched files]                                                     |
-|                             v                                                                           |
-|       +---------------------------------------------+                                                   |
-|       | Priority 40: ArchiveInspectorMatcherPlugin  |                                                   |
-|       |  |--> ZIP & TAR In-Memory Central Dir Peek  |                                                   |
-|       +---------------------------------------------+                                                   |
-+---------------------------------------------------------------------------------------------------------+
+<p align="center">
+  <img src="docs/assets/diagrams/architecture.svg" alt="Clairvoy Pluggable Pipeline Architecture" width="98%">
+</p>
+
+<details>
+<summary><b>Inspect Native Interactive Mermaid Diagram</b></summary>
+
+```mermaid
+graph TD
+    classDef inputStyle fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc,rx:10px;
+    classDef matcherStyle fill:#0f172a,stroke:#6366f1,stroke-width:2px,color:#f8fafc,rx:10px;
+    classDef keeperStyle fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#f8fafc,rx:10px;
+    classDef actionStyle fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc,rx:10px;
+
+    subgraph INGESTION ["📁 Input & Discovery"]
+        Input["Multi-Root Filesystem Scan<br/>(Parallel os.scandir)"]:::inputStyle
+        Registry["PluginRegistry (~/.clairvoy/plugins)"]:::inputStyle
+    end
+
+    subgraph PIPELINE ["⚡ Tiered Matcher Chain (Priority & Cost Ascending)"]
+        M1["Priority 10: ExactHashMatcherPlugin<br/>QuickHash (128KB) + Full SHA-256"]:::matcherStyle
+        M2["Priority 20: PhotoVisionMatcherPlugin<br/>Meta DINOv2 ONNX + DSU Clustering"]:::matcherStyle
+        M3["Priority 30: VideoKeyframeMatcherPlugin<br/>Duration (±1.5%) + Keyframe dHash"]:::matcherStyle
+        M4["Priority 40: ArchiveInspectorMatcherPlugin<br/>In-Memory ZIP/TAR Central Dir Peek"]:::matcherStyle
+    end
+
+    subgraph RESOLUTION ["🛡️ Scoring & Safe Resolution"]
+        Keeper["CompositeKeeperStrategy<br/>Quality + Directory Seniority"]:::keeperStyle
+        A1["--action hardlink<br/>Zero-Space Inode Replacement"]:::actionStyle
+        A2["--action quarantine<br/>Reversible Isolation + Manifest"]:::actionStyle
+    end
+
+    Input --> M1
+    M1 -- "Prune Exact Matches" --> M2
+    M2 -- "Prune Photo Clones" --> M3
+    M3 -- "Prune Video Clones" --> M4
+    M1 & M2 & M3 & M4 --> Keeper
+    Keeper --> A1
+    Keeper --> A2
 ```
+
+</details>
 
 ### Core Suite of Default Plugins
 1. **ExactHashMatcherPlugin** (`priority = 10`): Two-stage byte verification via 128KB QuickHash and full streaming SHA-256.
