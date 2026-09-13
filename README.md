@@ -90,33 +90,54 @@ pip install -e ".[ml]"
 ### 1. Terminal CLI Usage
 
 ```bash
-# Fast deduplication scan of a directory
+# High-speed scan with exact hashing and local Vision AI (DINOv2)
 clairvoy scan /path/to/storage
 
-# Scan with safe quarantine (moves duplicates instead of deleting)
-clairvoy scan /path/to/storage --quarantine
+# Custom visual similarity threshold (e.g. 90%) and parallel workers
+clairvoy scan /path/to/storage --threshold 0.90 --workers 16
 
-# Generate JSON and CSV reports only
-clairvoy report /path/to/storage --output ./reports
+# Scan general documents only (disables ML vision model)
+clairvoy scan /path/to/storage --no-ml
+
+# Safely isolate duplicates into _duplicate_quarantine with rollback manifest
+clairvoy quarantine /path/to/storage/_dedupe_reports/duplicates_summary.json
+
+# 1-Click Rollback / Restore quarantined files
+clairvoy restore /path/to/storage/_duplicate_quarantine/quarantine_manifest.json
 ```
 
 ### 2. Interactive Web App Usage
 
 ```bash
-# Start the local web interface
+# Launch local Web App dashboard
 clairvoy ui --port 8000
 ```
-Open **`http://localhost:8000`** in your browser to inspect duplicates side-by-side.
+Open **`http://localhost:8000`** in your browser to inspect duplicates side-by-side, view thumbnails, and execute 1-click safe quarantine.
+
+---
+
+## 🧪 Testing
+
+```bash
+# Install development and test dependencies
+pip install -e ".[dev,ml]"
+
+# Run full unit and integration test suite
+pytest -v
+```
 
 ---
 
 ## 🗺️ Roadmap
 
 - [x] Initial project design and architecture
-- [x] Fast Content Hash & Metadata Deduplication Engine
-- [x] DINOv2 ONNX quantized vision model integration
-- [x] FastAPI backend + REST API progress reporting
+- [x] Fast Content Hash & Metadata Deduplication Engine (QuickHash + SHA-256)
+- [x] Local Meta DINOv2 ONNX quantized vision model integration
+- [x] FastAPI backend + async background scan engine
 - [x] Interactive Web App review dashboard with visual side-by-side diff
+- [x] Reversible quarantine engine with rollback manifests
+- [x] Directory traversal security shield and strict path validation
+- [x] Automated unit and integration test suite (100% passing)
 - [ ] PyPI automated release pipeline via GitHub Actions
 
 ---

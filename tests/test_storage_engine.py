@@ -1,0 +1,53 @@
+"""
+Unit Tests for Storage Engine and Hashing
+"""
+
+from pathlib import Path
+
+from clairvoy.core.models import ActionType
+from clairvoy.engines.storage_engine import StorageEngine
+
+
+def test_quick_hash_and_sha256(temp_workspace):
+    p = temp_workspace / "sample.bin"
+    p.write_bytes(b"hello world" * 1000)
+
+    qh = StorageEngine.compute_quick_hash(str(p))
+    sha = StorageEngine.compute_full_sha256(str(p))
+
+    assert len(qh) == 32  # MD5 hex
+    assert len(sha) == 64  # SHA256 hex
+
+
+def test_keeper_scoring():
+    # Regular file
+    score_orig = StorageEngine.score_file_keeper("/path/to/photos/vacation.jpg")
+    # File with (1)
+    score_dupe = StorageEngine.score_file_keeper("/path/to/photos/vacation (1).jpg")
+    # File in trash
+    score_trash = StorageEngine.score_file_keeper("/path/to/trash/vacation.jpg")
+
+    assert score_orig > score_dupe
+    assert score_orig > score_trash
+
+
+def test_storage_engine_exact_dedup(sample_dataset):
+    root = sample_dataset["root"]
+    engine = StorageEngine(base_dir=str(root), enable_ml=False)
+    summary = engine.run()
+
+    assert summary.total_files_scanned == 4
+    assert summary.exact_duplicate_groups == 1
+    assert summary.visual_ai_groups == 0
+    assert summary.total_duplicate_groups == 1
+    assert summary.wasted_bytes > 0
+
+    # Verify report files were created
+    assert Path(summary.csv_report).exists()
+    assert Path(summary.summary_json).exists()
+    assert Path(summary.quarantine_script).exists()
+
+    # Check that keep vs duplicate actions are tagged
+    actions = [r.action for r in summary.groups]
+    assert ActionType.KEEP in actions
+    assert ActionType.DUPLICATE in actions

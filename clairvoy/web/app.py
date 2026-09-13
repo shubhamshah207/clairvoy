@@ -1,277 +1,476 @@
 """
-Clairvoy Web App Server (FastAPI)
-Includes interactive side-by-side visual photo comparison and quarantine controls.
+Clairvoy Web Application Server
+Production-grade FastAPI server with non-blocking background scans,
+hardened thumbnail streaming, in-memory caching, and 1-click safe quarantine/restore.
 """
 
-import os
 import io
-import shutil
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
-from pydantic import BaseModel
-from PIL import Image
+import threading
+from functools import lru_cache
+from typing import Any
+
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse, Response
+from PIL import Image, ImageOps
+from pydantic import BaseModel, Field
+
+from clairvoy.core.config import (
+    DEFAULT_SIMILARITY_THRESHOLD,
+    SUPPORTED_IMAGE_EXTENSIONS,
+    VERSION,
+)
+from clairvoy.core.security import SecurityError, resolve_safe_path
+from clairvoy.engines.quarantine import QuarantineEngine
 from clairvoy.engines.storage_engine import StorageEngine
 
-app = FastAPI(title="Clairvoy", description="Local-first AI storage deduplication engine")
+app = FastAPI(
+    title="Clairvoy Web",
+    description="Local-First AI Storage Deduplication Engine",
+    version=VERSION,
+)
 
-CURRENT_SCAN = {
-    "status": "idle",
+# Active scan state
+SCAN_STATE: dict[str, Any] = {
+    "status": "idle",  # "idle" | "running" | "completed" | "failed"
+    "target_dir": "",
+    "message": "Ready to scan",
     "summary": None,
-    "target_dir": ""
+    "error": None,
 }
+SCAN_LOCK = threading.Lock()
+
 
 class ScanRequest(BaseModel):
-    directory: str
-    enable_ml: bool = True
-    threshold: float = 0.95
+    directory: str = Field(..., description="Target directory path to scan")
+    enable_ml: bool = Field(default=True, description="Enable local Vision AI model")
+    threshold: float = Field(
+        default=DEFAULT_SIMILARITY_THRESHOLD,
+        ge=0.70,
+        le=0.99,
+        description="Visual similarity threshold (0.70 to 0.99)",
+    )
 
-class QuarantineRequest(BaseModel):
-    paths: list[str]
-    base_dir: str
+
+class QuarantineActionRequest(BaseModel):
+    summary_file: str | None = None
+    base_dir: str | None = None
+
+
+class RestoreActionRequest(BaseModel):
+    manifest_file: str
+
+
+# In-memory thumbnail cache (max 1024 entries)
+@lru_cache(maxsize=1024)
+def _generate_thumbnail_bytes(resolved_path_str: str) -> bytes:
+    with Image.open(resolved_path_str) as img:
+        img = ImageOps.exif_transpose(img)
+        img.thumbnail((256, 256), Image.Resampling.BILINEAR)
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=82, optimize=True)
+        return buf.getvalue()
+
+
+def _run_scan_worker(directory: str, enable_ml: bool, threshold: float):
+    try:
+        engine = StorageEngine(
+            base_dir=directory,
+            enable_ml=enable_ml,
+            ml_threshold=threshold,
+        )
+        summary = engine.run()
+        with SCAN_LOCK:
+            SCAN_STATE["status"] = "completed"
+            SCAN_STATE["message"] = f"Scan complete. Found {summary.total_duplicate_groups} duplicate groups."
+            SCAN_STATE["summary"] = summary.model_dump()
+            SCAN_STATE["error"] = None
+    except Exception as e:
+        with SCAN_LOCK:
+            SCAN_STATE["status"] = "failed"
+            SCAN_STATE["message"] = f"Scan failed: {e!s}"
+            SCAN_STATE["error"] = str(e)
+
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    html_content = """
+async def serve_index():
+    html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Clairvoy | Local Storage Deduplicator & Vision AI</title>
+        <title>Clairvoy | Local Storage & Vision AI Deduplicator</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
-            body { background-color: #0b0f19; color: #f1f5f9; font-family: ui-sans-serif, system-ui, -apple-system; }
+            body {{ background-color: #0b0f19; color: #f8fafc; font-family: ui-sans-serif, system-ui, -apple-system; }}
+            .custom-scrollbar::-webkit-scrollbar {{ width: 6px; }}
+            .custom-scrollbar::-webkit-scrollbar-thumb {{ background: #334155; border-radius: 4px; }}
         </style>
     </head>
-    <body class="p-6 md:p-10">
+    <body class="p-4 md:p-8 min-h-screen">
         <div class="max-w-7xl mx-auto">
             <!-- Header -->
-            <header class="flex justify-between items-center pb-6 border-b border-slate-800 mb-8">
+            <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-6 border-b border-slate-800 mb-8 gap-4">
                 <div>
                     <h1 class="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
                         <span class="text-indigo-400">👁️</span> Clairvoy
+                        <span class="text-xs font-mono font-normal text-indigo-400 bg-indigo-500/10 border border-indigo-500/30 px-2.5 py-0.5 rounded-full">v{VERSION}</span>
                     </h1>
-                    <p class="text-sm text-slate-400 mt-1">Local-First Storage Deduplicator & Vision Transformer AI</p>
+                    <p class="text-xs text-slate-400 mt-1">High-Throughput Storage Deduplication with Local Vision AI (Meta DINOv2)</p>
                 </div>
                 <div class="flex items-center gap-3">
-                    <span class="text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-full font-mono">
-                        ● Local DINOv2 Engine Active
+                    <span class="text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-full font-mono flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Offline ONNX Active
                     </span>
-                    <a href="https://github.com/shubhamshah207/clairvoy" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-full text-slate-300 transition">
-                        GitHub Repo ↗
+                    <a href="https://github.com/shubhamshah207/clairvoy" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-1.5 rounded-full text-slate-300 transition">
+                        GitHub ↗
                     </a>
                 </div>
             </header>
 
-            <!-- Scan Configuration Card -->
+            <!-- Scan Configuration Dashboard -->
             <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 md:p-8 mb-8 shadow-2xl backdrop-blur">
-                <div class="flex flex-col lg:flex-row gap-6 items-end">
-                    <div class="flex-1 w-full">
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Storage Directory</label>
-                        <input id="dirInput" type="text" placeholder="/mnt/e/Remotes" value="/mnt/e/Remotes" 
-                               class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-100 font-mono transition">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-end">
+                    <div class="lg:col-span-6">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Target Storage Directory</label>
+                        <input id="dirInput" type="text" value="/mnt/e/Remotes" placeholder="/path/to/folder"
+                               class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 text-slate-100 font-mono transition">
                     </div>
-                    <div class="w-full lg:w-48">
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                            AI Sensitivity: <span id="thresholdVal" class="text-indigo-400 font-bold">95%</span>
-                        </label>
-                        <input id="thresholdInput" type="range" min="80" max="99" value="95" oninput="document.getElementById('thresholdVal').innerText = this.value + '%'" 
+                    <div class="lg:col-span-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">AI Sensitivity</label>
+                            <span id="thresholdDisplay" class="text-xs font-mono font-bold text-indigo-400">95%</span>
+                        </div>
+                        <input id="thresholdInput" type="range" min="80" max="99" value="95" oninput="document.getElementById('thresholdDisplay').innerText = this.value + '%'"
                                class="w-full accent-indigo-500 cursor-pointer">
                     </div>
-                    <div class="flex items-center gap-3">
-                        <button onclick="startScan()" id="scanBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-8 py-3.5 rounded-2xl transition shadow-lg shadow-indigo-600/30 flex items-center gap-2">
-                            <span>Scan Storage</span>
+                    <div class="lg:col-span-3 flex gap-3">
+                        <button onclick="triggerScan()" id="scanBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-6 rounded-2xl transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+                            <span>Start Scan</span>
                         </button>
                     </div>
                 </div>
-                <div id="scanStatus" class="text-xs text-slate-400 mt-3"></div>
+
+                <!-- Progress / Status Ticker -->
+                <div id="statusContainer" class="mt-4 pt-4 border-t border-slate-800/80 flex items-center gap-3">
+                    <div id="statusDot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></div>
+                    <div id="statusMessage" class="text-xs text-slate-400 font-mono">Ready to scan storage.</div>
+                </div>
             </div>
 
-            <!-- Stats Grid -->
-            <div id="statsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8 hidden">
-                <div class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl">
+            <!-- Metrics Overview -->
+            <div id="metricsRow" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 hidden">
+                <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl">
                     <div class="text-xs uppercase tracking-wider text-slate-400 font-medium">Scanned Files</div>
-                    <div id="statFiles" class="text-3xl font-extrabold text-white mt-1.5">0</div>
+                    <div id="metricFiles" class="text-3xl font-extrabold text-white mt-1">0</div>
                 </div>
-                <div class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl">
+                <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl">
                     <div class="text-xs uppercase tracking-wider text-slate-400 font-medium">Exact Duplicates</div>
-                    <div id="statExact" class="text-3xl font-extrabold text-amber-400 mt-1.5">0</div>
+                    <div id="metricExact" class="text-3xl font-extrabold text-amber-400 mt-1">0</div>
                 </div>
-                <div class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl">
-                    <div class="text-xs uppercase tracking-wider text-slate-400 font-medium">Vision AI Clusters</div>
-                    <div id="statML" class="text-3xl font-extrabold text-indigo-400 mt-1.5">0</div>
+                <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl">
+                    <div class="text-xs uppercase tracking-wider text-slate-400 font-medium">Vision AI Matches</div>
+                    <div id="metricML" class="text-3xl font-extrabold text-indigo-400 mt-1">0</div>
                 </div>
-                <div class="bg-slate-900/70 border border-slate-800 p-5 rounded-2xl">
+                <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl">
                     <div class="text-xs uppercase tracking-wider text-slate-400 font-medium">Recoverable Space</div>
-                    <div id="statSpace" class="text-3xl font-extrabold text-emerald-400 mt-1.5">0 MB</div>
+                    <div id="metricSpace" class="text-3xl font-extrabold text-emerald-400 mt-1">0 MB</div>
                 </div>
             </div>
 
-            <!-- Results Section -->
+            <!-- Results View -->
             <div id="resultsCard" class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl hidden">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-6 border-b border-slate-800">
                     <div>
-                        <h2 class="text-xl font-bold text-white">Visual Comparison & Duplicate Sets</h2>
-                        <p class="text-xs text-slate-400 mt-1">Review matches side-by-side. The highest quality original is tagged as KEEP.</p>
+                        <h2 class="text-xl font-bold text-white">Visual Comparison & Deduplication Review</h2>
+                        <p class="text-xs text-slate-400 mt-1">Review original files (KEEP) side-by-side with detected redundant duplicates (DUPLICATE).</p>
                     </div>
                     <div class="flex items-center gap-3">
-                        <button onclick="quarantineAll()" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition shadow-lg shadow-rose-600/20">
+                        <button onclick="executeSafeQuarantine()" id="quarantineBtn" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition shadow-lg shadow-rose-600/20">
                             Move Duplicates to Quarantine
                         </button>
                     </div>
                 </div>
 
-                <!-- Group Cards Container -->
-                <div id="clustersContainer" class="space-y-6"></div>
+                <div id="groupsContainer" class="space-y-6"></div>
             </div>
         </div>
 
         <script>
-            let scanResults = null;
+            let pollTimer = null;
+            let currentSummary = null;
 
-            async function startScan() {
+            async function triggerScan() {{
                 const dir = document.getElementById('dirInput').value.trim();
                 const threshold = parseFloat(document.getElementById('thresholdInput').value) / 100.0;
                 if (!dir) return;
 
                 const btn = document.getElementById('scanBtn');
-                const status = document.getElementById('scanStatus');
                 btn.disabled = true;
                 btn.classList.add('opacity-50');
-                status.innerText = "Scanning files and running Vision AI embeddings... please wait.";
 
-                try {
-                    const res = await fetch('/api/scan', {
+                updateStatus("running", "Initiating high-speed filesystem indexing...");
+
+                try {{
+                    const res = await fetch('/api/scan', {{
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({directory: dir, enable_ml: true, threshold: threshold})
-                    });
-                    scanResults = await res.json();
-                    status.innerText = "Scan completed successfully!";
-                    
-                    document.getElementById('statsGrid').classList.remove('hidden');
-                    document.getElementById('resultsCard').classList.remove('hidden');
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ directory: dir, enable_ml: true, threshold: threshold }})
+                    }});
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || "Scan request failed");
 
-                    document.getElementById('statFiles').innerText = scanResults.total_files_scanned.toLocaleString();
-                    document.getElementById('statExact').innerText = scanResults.exact_duplicate_groups.toLocaleString();
-                    document.getElementById('statML').innerText = scanResults.visual_ai_groups.toLocaleString();
-                    document.getElementById('statSpace').innerText = scanResults.wasted_mb + " MB (" + scanResults.wasted_gb + " GB)";
-
-                    renderClusters(scanResults.groups);
-                } catch(e) {
-                    status.innerText = "Scan error: " + e;
-                } finally {
+                    if (pollTimer) clearInterval(pollTimer);
+                    pollTimer = setInterval(pollScanStatus, 1000);
+                }} catch (e) {{
+                    updateStatus("failed", "Error: " + e.message);
                     btn.disabled = false;
                     btn.classList.remove('opacity-50');
-                }
-            }
+                }}
+            }}
 
-            function isImage(path) {
-                const exts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp'];
+            async function pollScanStatus() {{
+                try {{
+                    const res = await fetch('/api/status');
+                    const state = await res.json();
+
+                    if (state.status === "running") {{
+                        updateStatus("running", "Scanning files and computing DINOv2 embeddings...");
+                    }} else if (state.status === "completed") {{
+                        clearInterval(pollTimer);
+                        pollTimer = null;
+                        document.getElementById('scanBtn').disabled = false;
+                        document.getElementById('scanBtn').classList.remove('opacity-50');
+                        updateStatus("completed", state.message);
+                        currentSummary = state.summary;
+                        renderSummary(state.summary);
+                    }} else if (state.status === "failed") {{
+                        clearInterval(pollTimer);
+                        pollTimer = null;
+                        document.getElementById('scanBtn').disabled = false;
+                        document.getElementById('scanBtn').classList.remove('opacity-50');
+                        updateStatus("failed", state.message);
+                    }}
+                }} catch (e) {{
+                    console.error("Polling error:", e);
+                }}
+            }}
+
+            function updateStatus(type, msg) {{
+                const dot = document.getElementById('statusDot');
+                const text = document.getElementById('statusMessage');
+                text.innerText = msg;
+
+                if (type === "running") {{
+                    dot.className = "w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping";
+                }} else if (type === "completed") {{
+                    dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+                }} else if (type === "failed") {{
+                    dot.className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+                }} else {{
+                    dot.className = "w-2.5 h-2.5 rounded-full bg-slate-500";
+                }}
+            }}
+
+            function renderSummary(summary) {{
+                if (!summary) return;
+                document.getElementById('metricsRow').classList.remove('hidden');
+                document.getElementById('resultsCard').classList.remove('hidden');
+
+                document.getElementById('metricFiles').innerText = summary.total_files_scanned.toLocaleString();
+                document.getElementById('metricExact').innerText = summary.exact_duplicate_groups.toLocaleString();
+                document.getElementById('metricML').innerText = summary.visual_ai_groups.toLocaleString();
+                document.getElementById('metricSpace').innerText = summary.wasted_mb + " MB (" + summary.wasted_gb + " GB)";
+
+                renderDuplicateGroups(summary.groups);
+            }}
+
+            function isImageFile(path) {{
+                const exts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'];
                 return exts.some(e => path.toLowerCase().endsWith(e));
-            }
+            }}
 
-            function renderClusters(groups) {
-                const container = document.getElementById('clustersContainer');
+            function renderDuplicateGroups(records) {{
+                const container = document.getElementById('groupsContainer');
                 container.innerHTML = '';
 
-                // Group records by group_id
-                const grouped = {};
-                for (const r of groups) {
-                    if (!grouped[r.group_id]) grouped[r.group_id] = [];
-                    grouped[r.group_id].push(r);
-                }
+                const groups = {{}};
+                for (const r of records) {{
+                    if (!groups[r.group_id]) groups[r.group_id] = [];
+                    groups[r.group_id].push(r);
+                }}
 
-                const groupKeys = Object.keys(grouped);
-                if (groupKeys.length === 0) {
-                    container.innerHTML = '<div class="text-center py-12 text-slate-500">No duplicates found in this directory! Clean storage.</div>';
+                const groupIds = Object.keys(groups);
+                if (groupIds.length === 0) {{
+                    container.innerHTML = '<div class="text-center py-16 text-slate-500 font-mono">No duplicates detected in this directory!</div>';
                     return;
-                }
+                }}
 
-                for (const gid of groupKeys.slice(0, 50)) { // Render top 50
-                    const items = grouped[gid];
+                // Render top 100 groups
+                for (const gid of groupIds.slice(0, 100)) {{
+                    const items = groups[gid];
                     const card = document.createElement('div');
-                    card.className = 'bg-slate-950 border border-slate-800/80 rounded-2xl p-5 shadow-sm';
+                    card.className = "bg-slate-950/80 border border-slate-800 rounded-2xl p-5 shadow-sm";
 
-                    const matchType = items[0].match_type === 'VISUAL_AI_NEAR_DUPLICATE' ? 
+                    const isAI = items[0].match_type === 'VISUAL_AI_NEAR_DUPLICATE';
+                    const badge = isAI ?
                         '<span class="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 text-xs px-2.5 py-1 rounded-full font-medium">Vision AI Match</span>' :
                         '<span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs px-2.5 py-1 rounded-full font-medium">Exact Hash Match</span>';
 
                     card.innerHTML = `
                         <div class="flex justify-between items-center mb-4">
                             <div class="flex items-center gap-3">
-                                <span class="font-bold text-white text-sm">Group #${gid}</span>
-                                ${matchType}
+                                <span class="font-bold text-white text-sm">Cluster #${{gid}}</span>
+                                ${{badge}}
                             </div>
-                            <span class="text-xs text-slate-400 font-mono">${items.length} files</span>
+                            <span class="text-xs text-slate-400 font-mono">${{items.length}} files</span>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            ${items.map(item => `
-                                <div class="bg-slate-900 border ${item.action === 'KEEP' ? 'border-emerald-500/40 bg-emerald-950/10' : 'border-slate-800'} rounded-xl p-3 flex gap-3 items-center">
-                                    ${isImage(item.path) ? 
-                                        `<img src="/api/thumbnail?path=${encodeURIComponent(item.path)}" class="w-16 h-16 rounded-lg object-cover bg-slate-800 flex-shrink-0" loading="lazy">` : 
-                                        `<div class="w-16 h-16 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 text-xl font-mono flex-shrink-0">FILE</div>`
-                                    }
+                            ${{items.map(item => `
+                                <div class="bg-slate-900 border ${{item.action === 'KEEP' ? 'border-emerald-500/50 bg-emerald-950/10' : 'border-slate-800'}} rounded-xl p-3 flex gap-3 items-center">
+                                    ${{isImageFile(item.path) ?
+                                        `<img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}" class="w-16 h-16 rounded-lg object-cover bg-slate-800 flex-shrink-0" loading="lazy" alt="preview">` :
+                                        `<div class="w-16 h-16 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 text-xs font-mono flex-shrink-0">FILE</div>`
+                                    }}
                                     <div class="min-w-0 flex-1">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <span class="text-xs px-2 py-0.5 rounded font-bold ${item.action === 'KEEP' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}">
-                                                ${item.action}
+                                            <span class="text-[11px] px-2 py-0.5 rounded font-bold ${{item.action === 'KEEP' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}}">
+                                                ${{item.action}}
                                             </span>
-                                            <span class="text-xs text-slate-400 font-mono">${item.size_mb} MB</span>
-                                            ${item.similarity ? `<span class="text-xs text-indigo-400 font-mono ml-auto">${item.similarity}</span>` : ''}
+                                            <span class="text-xs text-slate-400 font-mono">${{item.size_mb}} MB</span>
+                                            ${{item.dimensions ? `<span class="text-[10px] text-slate-500 font-mono">${{item.dimensions}}</span>` : ''}}
+                                            ${{item.similarity && item.action === 'DUPLICATE' ? `<span class="text-xs text-indigo-400 font-mono font-bold ml-auto">${{item.similarity}}</span>` : ''}}
                                         </div>
-                                        <p class="text-xs text-slate-300 truncate font-mono" title="${item.path}">${item.path.split('/').pop()}</p>
-                                        <p class="text-[10px] text-slate-500 truncate mt-0.5 font-mono" title="${item.path}">${item.path}</p>
+                                        <p class="text-xs text-slate-200 truncate font-mono" title="${{item.path}}">${{item.path.split('/').pop()}}</p>
+                                        <p class="text-[10px] text-slate-500 truncate mt-0.5 font-mono" title="${{item.path}}">${{item.path}}</p>
                                     </div>
                                 </div>
-                            `).join('')}
+                            `).join('')}}
                         </div>
                     `;
                     container.appendChild(card);
-                }
-            }
+                }}
+            }}
 
-            async function quarantineAll() {
-                if (!confirm("Are you sure you want to safely move all detected duplicate files to the _duplicate_quarantine folder?")) return;
-                alert("Running safe quarantine script generated by Clairvoy. Check your target directory _dedupe_reports/quarantine_duplicates.sh");
-            }
+            async function executeSafeQuarantine() {{
+                if (!currentSummary) return;
+                if (!confirm("Safely move all detected duplicate files to '_duplicate_quarantine'? A reversible rollback manifest will be created.")) return;
+
+                const btn = document.getElementById('quarantineBtn');
+                btn.disabled = true;
+                btn.innerText = "Quarantining...";
+
+                try {{
+                    const res = await fetch('/api/quarantine/execute', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ summary_file: currentSummary.summary_json, base_dir: currentSummary.scanned_dir }})
+                    }});
+                    const data = await res.json();
+                    alert(`Successfully quarantined ${{data.total_files_moved}} files (${{(data.total_bytes_moved / (1024*1024)).toFixed(2)}} MB) into ${{data.quarantine_dir}}`);
+                }} catch (e) {{
+                    alert("Quarantine error: " + e.message);
+                }} finally {{
+                    btn.disabled = false;
+                    btn.innerText = "Move Duplicates to Quarantine";
+                }}
+            }}
         </script>
     </body>
     </html>
     """
     return HTMLResponse(content=html_content)
 
+
 @app.get("/api/thumbnail")
-async def get_thumbnail(path: str = Query(...)):
-    """Serve a fast, downscaled image thumbnail for visual review."""
-    if not os.path.isfile(path):
-        raise HTTPException(status_code=404, detail="File not found")
+async def get_thumbnail(path: str = Query(..., description="Absolute path to media file")):
+    """
+    Serves a downscaled, securely validated thumbnail image with LRU caching.
+    Guarantees strict directory traversal and extension bounds checking.
+    """
     try:
-        with Image.open(path) as img:
-            img.thumbnail((200, 200), Image.Resampling.BILINEAR)
-            buf = io.BytesIO()
-            img.convert("RGB").save(buf, format="JPEG", quality=80)
-            buf.seek(0)
-            return StreamingResponse(buf, media_type="image/jpeg")
+        safe_path = resolve_safe_path(
+            user_path=path,
+            allowed_extensions=SUPPORTED_IMAGE_EXTENSIONS,
+            must_exist=True,
+        )
+    except SecurityError as se:
+        raise HTTPException(status_code=403, detail=str(se)) from se
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found") from None
+
+    try:
+        thumb_bytes = _generate_thumbnail_bytes(str(safe_path))
+        return Response(
+            content=thumb_bytes,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Image decode error: {e!s}") from e
+
 
 @app.post("/api/scan")
-async def trigger_scan(req: ScanRequest):
-    if not os.path.isdir(req.directory):
-        raise HTTPException(status_code=400, detail=f"Directory '{req.directory}' not found")
-    
-    engine = StorageEngine(
-        base_dir=req.directory,
+async def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
+    """Triggers an asynchronous scan job in the background."""
+    try:
+        resolved_dir = resolve_safe_path(req.directory, must_exist=True)
+        if not resolved_dir.is_dir():
+            raise HTTPException(status_code=400, detail="Specified path is not a directory.")
+    except (SecurityError, FileNotFoundError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    with SCAN_LOCK:
+        if SCAN_STATE["status"] == "running":
+            raise HTTPException(status_code=409, detail="A scan is already actively running.")
+        SCAN_STATE["status"] = "running"
+        SCAN_STATE["target_dir"] = str(resolved_dir)
+        SCAN_STATE["message"] = f"Initializing scan on {resolved_dir}..."
+        SCAN_STATE["summary"] = None
+        SCAN_STATE["error"] = None
+
+    background_tasks.add_task(
+        _run_scan_worker,
+        directory=str(resolved_dir),
         enable_ml=req.enable_ml,
-        ml_threshold=req.threshold
+        threshold=req.threshold,
     )
-    summary = engine.run()
-    CURRENT_SCAN["status"] = "completed"
-    CURRENT_SCAN["summary"] = summary
-    CURRENT_SCAN["target_dir"] = req.directory
-    return summary
+    return {"status": "started", "target_dir": str(resolved_dir)}
+
 
 @app.get("/api/status")
-async def get_status():
-    return CURRENT_SCAN
+async def get_scan_status():
+    """Returns the live state and summary of the background scan."""
+    with SCAN_LOCK:
+        return SCAN_STATE
+
+
+@app.post("/api/quarantine/execute")
+async def execute_quarantine(req: QuarantineActionRequest):
+    """Safely isolates duplicate files into a quarantine directory."""
+    if not req.summary_file and not req.base_dir:
+        with SCAN_LOCK:
+            if not SCAN_STATE["summary"]:
+                raise HTTPException(status_code=400, detail="No active scan summary available.")
+            summary_data = SCAN_STATE["summary"]
+    else:
+        summary_data = req.summary_file or req.base_dir
+
+    try:
+        manifest = QuarantineEngine.execute(
+            summary_or_records=summary_data,
+            base_dir=req.base_dir,
+        )
+        return manifest.model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Quarantine failed: {e!s}") from e
+
+
+@app.post("/api/quarantine/restore")
+async def restore_quarantine(req: RestoreActionRequest):
+    """Restores quarantined files from a manifest back to original paths."""
+    try:
+        count = QuarantineEngine.restore(req.manifest_file)
+        return {"status": "restored", "restored_files_count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Restore failed: {e!s}") from e
