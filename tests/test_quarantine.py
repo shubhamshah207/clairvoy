@@ -54,3 +54,22 @@ def test_multi_root_quarantine_and_restore(multi_root_dataset):
     restored = QuarantineEngine.restore(manifest.model_dump())
     assert restored == 1
     assert Path(moved_item.original_path).exists()
+
+
+def test_quarantine_prevents_destination_clobbering(temp_workspace):
+    src = temp_workspace / "duplicate.txt"
+    dst = temp_workspace / "quarantine" / "duplicate.txt"
+    src.write_text("content to quarantine")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text("existing pre-existing file in quarantine")
+
+    # Call _move_single_file directly
+    res = QuarantineEngine._move_single_file((src, dst, 10, 1))
+    assert res is not None
+    # Verify pre-existing file was NOT overwritten
+    assert dst.read_text() == "existing pre-existing file in quarantine"
+    # Verify quarantined file was moved to a non-colliding path
+    assert Path(res.quarantined_path).exists()
+    assert res.quarantined_path != str(dst)
+    assert Path(res.quarantined_path).read_text() == "content to quarantine"
+

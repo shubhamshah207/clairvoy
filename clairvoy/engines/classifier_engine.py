@@ -141,72 +141,75 @@ class ClassifierEngine:
         return cls._session
 
     @classmethod
-    def _classify_deterministic(cls, path: str) -> tuple[ImageCategory | None, Image.Image | None]:
+    def _classify_deterministic(cls, path: str) -> ImageCategory | None:
         """
         Tier 1: Instant hardware & filename check (<0.2ms).
-        Returns (ImageCategory, None) if resolved with high certainty,
-        or (None, opened_PIL_Image) if ambiguous and requires Tier 2 neural inspection.
+        Returns ImageCategory if resolved with high certainty,
+        or None if ambiguous and requires Tier 2 neural inspection.
         """
         fn = os.path.basename(path)
 
         # Signal 1: Explicit filename keywords
         if SCREENSHOT_NAME_PATTERNS.search(fn):
-            return ImageCategory.SCREENSHOT, None
+            return ImageCategory.SCREENSHOT
         if DOCUMENT_NAME_PATTERNS.search(fn):
-            return ImageCategory.DOCUMENT, None
+            return ImageCategory.DOCUMENT
         if GRAPHIC_NAME_PATTERNS.search(fn):
-            return ImageCategory.GRAPHIC, None
+            return ImageCategory.GRAPHIC
 
         try:
-            img = Image.open(path)
-            w, h = img.size
-            if w <= 0 or h <= 0:
-                img.close()
-                return ImageCategory.FILE, None
+            with Image.open(path) as img:
+                w, h = img.size
+                if w <= 0 or h <= 0:
+                    return ImageCategory.FILE
 
-            # Signal 2: Authentic camera hardware sensor EXIF tags
-            exif = img.getexif()
-            if exif:
-                for k in exif:
-                    tag_name = ExifTags.TAGS.get(k, k)
-                    if tag_name in CAMERA_HARDWARE_TAGS:
-                        img.close()
-                        return ImageCategory.PHOTO, None
+                # Signal 2: Authentic camera hardware sensor EXIF tags
+                exif = img.getexif()
+                if exif:
+                    for k in exif:
+                        tag_name = ExifTags.TAGS.get(k, k)
+                        if tag_name in CAMERA_HARDWARE_TAGS:
+                            return ImageCategory.PHOTO
 
-            # Signal 3: Standard phone/screen aspect ratios with lossless PNG format
-            aspect = max(w, h) / max(1, min(w, h))
-            is_screen_ratio = any(abs(aspect - r) < 0.04 for r in COMMON_SCREEN_RATIOS)
-            ext = os.path.splitext(fn)[1].lower()
+                # Signal 3: Standard phone/screen aspect ratios with lossless PNG format
+                aspect = max(w, h) / max(1, min(w, h))
+                is_screen_ratio = any(abs(aspect - r) < 0.04 for r in COMMON_SCREEN_RATIOS)
+                ext = os.path.splitext(fn)[1].lower()
 
-            if is_screen_ratio and ext in {".png", ".webp"}:
-                # Screen ratio + lossless format without camera EXIF is strongly indicative of a screenshot
-                img.close()
-                return ImageCategory.SCREENSHOT, None
+                if is_screen_ratio and ext in {".png", ".webp"}:
+                    return ImageCategory.SCREENSHOT
 
-            # Ambiguous image (EXIF stripped, WhatsApp save, scanned paper, graphic, etc.)
-            return None, img
+                return None
 
         except Exception:
-            return ImageCategory.FILE, None
+            return ImageCategory.FILE
 
     @classmethod
-    def _classify_neural_batch(
+    def _classify_neural_paths(
         cls,
-        images: list[Image.Image],
+        paths: list[str],
         session: "ort.InferenceSession",
     ) -> list[ImageCategory]:
         """
         Tier 2: Batched neural forward pass using OpenAI CLIP ViT-B/32 ONNX.
-        Computes cosine similarity against calibrated zero-shot category prototype vectors.
+        Processes paths in safe streaming batches without leaking file descriptors.
         """
         categories, prototype_matrix = get_category_prototypes()
-        batch_tensors = []
+        batch_tensors: list[np.ndarray] = []
+        valid_indices: list[int] = []
 
-        for img in images:
-            rgb_img = img.convert("RGB").resize((224, 224), Image.Resampling.BICUBIC)
-            arr = np.array(rgb_img, dtype=np.float32) / 255.0
-            arr = np.transpose(arr, (2, 0, 1))  # [3, 224, 224]
-            batch_tensors.append(arr)
+        for idx, p in enumerate(paths):
+            try:
+                with Image.open(p) as img:
+                    rgb_img = img.convert("RGB").resize((224, 224), Image.Resampling.BICUBIC)
+                    arr = np.array(rgb_img, dtype=np.float32) / 255.0
+                    batch_tensors.append(np.transpose(arr, (2, 0, 1)))
+                    valid_indices.append(idx)
+            except Exception:
+                continue
+
+        if not batch_tensors:
+            return [ImageCategory.FILE] * len(paths)
 
         # Vectorized batch tensor [B, 3, 224, 224] normalized
         batch_np = np.stack(batch_tensors, axis=0)
@@ -224,40 +227,45 @@ class ClassifierEngine:
         sims = np.dot(embeddings, prototype_matrix.T)
         best_indices = np.argmax(sims, axis=1)
 
-        return [categories[idx] for idx in best_indices]
+        result_cats = [ImageCategory.FILE] * len(paths)
+        for valid_i, best_cat_i in zip(valid_indices, best_indices, strict=False):
+            result_cats[valid_i] = categories[best_cat_i]
+
+        return result_cats
 
     @classmethod
-    def _classify_heuristic_pixel(cls, img: Image.Image) -> ImageCategory:
+    def _classify_heuristic_pixel_path(cls, path: str) -> ImageCategory:
         """
         Graceful Tier 1 fallback when CLIP ONNX model is not present or offline.
         Uses whiteness ratio and color saturation differentials.
         """
         try:
-            thumb = img.convert("RGB").resize((128, 128), Image.Resampling.BILINEAR)
-            arr = np.array(thumb, dtype=np.float32)
+            with Image.open(path) as img:
+                thumb = img.convert("RGB").resize((128, 128), Image.Resampling.BILINEAR)
+                arr = np.array(thumb, dtype=np.float32)
 
-            # Whiteness ratio (Documents/Receipts have white background)
-            white_pixels = (arr[:, :, 0] > 185) & (arr[:, :, 1] > 185) & (arr[:, :, 2] > 185)
-            white_ratio = float(np.mean(white_pixels))
+                # Whiteness ratio (Documents/Receipts have white background)
+                white_pixels = (arr[:, :, 0] > 185) & (arr[:, :, 1] > 185) & (arr[:, :, 2] > 185)
+                white_ratio = float(np.mean(white_pixels))
 
-            # Color saturation difference
-            color_diff = np.abs(arr[:, :, 0] - arr[:, :, 1]) + np.abs(arr[:, :, 1] - arr[:, :, 2])
-            mean_saturation_diff = float(np.mean(color_diff))
+                # Color saturation difference
+                color_diff = np.abs(arr[:, :, 0] - arr[:, :, 1]) + np.abs(arr[:, :, 1] - arr[:, :, 2])
+                mean_saturation_diff = float(np.mean(color_diff))
 
-            if white_ratio >= 0.40 and mean_saturation_diff < 45:
-                return ImageCategory.DOCUMENT
+                if white_ratio >= 0.40 and mean_saturation_diff < 45:
+                    return ImageCategory.DOCUMENT
 
-            flat_horizontal = np.mean(np.abs(np.diff(arr, axis=1)) < 2.0)
-            flat_vertical = np.mean(np.abs(np.diff(arr, axis=0)) < 2.0)
-            flat_ui_ratio = max(flat_horizontal, flat_vertical)
+                flat_horizontal = np.mean(np.abs(np.diff(arr, axis=1)) < 2.0)
+                flat_vertical = np.mean(np.abs(np.diff(arr, axis=0)) < 2.0)
+                flat_ui_ratio = max(flat_horizontal, flat_vertical)
 
-            if flat_ui_ratio > 0.35:
-                return ImageCategory.SCREENSHOT
+                if flat_ui_ratio > 0.35:
+                    return ImageCategory.SCREENSHOT
 
-            if mean_saturation_diff > 90 or flat_ui_ratio > 0.28:
-                return ImageCategory.GRAPHIC
+                if mean_saturation_diff > 90 or flat_ui_ratio > 0.28:
+                    return ImageCategory.GRAPHIC
 
-            return ImageCategory.PHOTO
+                return ImageCategory.PHOTO
         except Exception:
             return ImageCategory.FILE
 
@@ -268,21 +276,15 @@ class ClassifierEngine:
         1. Instant Tier 1 deterministic check (<0.2ms).
         2. Tier 2 Neural CLIP Zero-Shot check for ambiguous images.
         """
-        cat, img = cls._classify_deterministic(path)
+        cat = cls._classify_deterministic(path)
         if cat is not None:
             return cat
 
-        if img is None:
-            return ImageCategory.FILE
-
-        try:
-            session = cls.get_session() if use_neural else None
-            if session is not None:
-                results = cls._classify_neural_batch([img], session)
-                return results[0]
-            return cls._classify_heuristic_pixel(img)
-        finally:
-            img.close()
+        session = cls.get_session() if use_neural else None
+        if session is not None:
+            results = cls._classify_neural_paths([path], session)
+            return results[0]
+        return cls._classify_heuristic_pixel_path(path)
 
     @classmethod
     def classify_batch(
@@ -303,39 +305,33 @@ class ClassifierEngine:
 
         results: dict[str, ImageCategory] = {}
         ambiguous_paths: list[str] = []
-        ambiguous_images: list[Image.Image] = []
 
         # Step 1: Fast deterministic heuristic pass
         workers = min(len(paths_list), num_workers)
         with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
             preliminary = list(pool.map(cls._classify_deterministic, paths_list))
 
-        for path, (cat, img) in zip(paths_list, preliminary, strict=False):
+        for path, cat in zip(paths_list, preliminary, strict=False):
             if cat is not None:
                 results[path] = cat
-            elif img is not None:
-                ambiguous_paths.append(path)
-                ambiguous_images.append(img)
             else:
-                results[path] = ImageCategory.FILE
+                ambiguous_paths.append(path)
 
         # Step 2: Tier 2 Neural inference for ambiguous images
-        if ambiguous_images:
+        if ambiguous_paths:
             session = cls.get_session() if use_neural else None
 
             if session is not None:
                 batch_size = 32
-                for i in range(0, len(ambiguous_images), batch_size):
-                    chunk_imgs = ambiguous_images[i : i + batch_size]
+                for i in range(0, len(ambiguous_paths), batch_size):
                     chunk_paths = ambiguous_paths[i : i + batch_size]
-                    chunk_cats = cls._classify_neural_batch(chunk_imgs, session)
-                    for p, c, img in zip(chunk_paths, chunk_cats, chunk_imgs, strict=False):
+                    chunk_cats = cls._classify_neural_paths(chunk_paths, session)
+                    for p, c in zip(chunk_paths, chunk_cats, strict=False):
                         results[p] = c
-                        img.close()
             else:
                 # Heuristic pixel fallback
-                for p, img in zip(ambiguous_paths, ambiguous_images, strict=False):
-                    results[p] = cls._classify_heuristic_pixel(img)
-                    img.close()
+                for p in ambiguous_paths:
+                    results[p] = cls._classify_heuristic_pixel_path(p)
 
         return results
+

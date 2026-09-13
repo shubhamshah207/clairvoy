@@ -205,18 +205,23 @@ class VisionEngine:
         print(f"[*] Extracted {n_images} embeddings in {time.time() - t0:.1f}s.")
         print(f"[*] Clustering near-duplicates (threshold: {self.threshold * 100:.0f}%)...")
 
-        # Step 2: Compute pairwise cosine similarity matrix
-        sim_matrix = np.dot(all_embs, all_embs.T)
-
-        # Step 3: Graph clustering with Disjoint Set Union
+        # Step 2: Memory-efficient chunked dot-products with Disjoint Set Union
         dsu = DisjointSetUnion(n_images)
-        for i in range(n_images):
-            # Only examine upper triangle
-            for j in range(i + 1, n_images):
-                if sim_matrix[i, j] >= self.threshold:
-                    dsu.union(i, j)
+        chunk_size = 2048
 
-        # Group indices by root representative
+        for i_start in range(0, n_images, chunk_size):
+            i_end = min(i_start + chunk_size, n_images)
+            chunk_sim = np.dot(all_embs[i_start:i_end], all_embs.T)
+
+            # Mask out self-matches and lower triangle
+            for r in range(i_end - i_start):
+                chunk_sim[r, : i_start + r + 1] = 0.0
+
+            rows, cols = np.where(chunk_sim >= self.threshold)
+            for r, c in zip(rows, cols, strict=False):
+                dsu.union(i_start + r, c)
+
+        # Step 3: Group indices by root representative
         cluster_indices: dict[int, list[int]] = {}
         for idx in range(n_images):
             root = dsu.find(idx)
@@ -227,10 +232,14 @@ class VisionEngine:
         for root, indices in cluster_indices.items():
             if len(indices) > 1:
                 group_paths = [valid_paths[idx] for idx in indices]
-                # Similarity relative to root representative
-                scores = [float(sim_matrix[root, idx]) for idx in indices]
+                # Compute exact similarity of cluster members relative to root representative
+                root_emb = all_embs[root : root + 1]
+                member_embs = all_embs[indices]
+                member_sims = np.dot(root_emb, member_embs.T).squeeze(0)
+                scores = [float(s) for s in member_sims]
                 dims = [dimensions[p] for p in group_paths]
                 clusters.append((group_paths, scores, dims))
 
         print(f"[✓] Clustered {len(clusters)} visual near-duplicate groups.")
         return clusters
+

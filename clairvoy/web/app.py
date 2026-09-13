@@ -570,7 +570,16 @@ async def execute_quarantine(req: QuarantineActionRequest):
                 raise HTTPException(status_code=400, detail="No active scan summary available.")
             summary_data = SCAN_STATE["summary"]
     else:
-        summary_data = req.summary_file or req.base_dir
+        if req.summary_file:
+            try:
+                safe_summary = resolve_safe_path(req.summary_file, must_exist=True)
+                summary_data = str(safe_summary)
+            except SecurityError as se:
+                raise HTTPException(status_code=403, detail=str(se)) from se
+            except FileNotFoundError:
+                raise HTTPException(status_code=404, detail="Summary file not found.") from None
+        else:
+            summary_data = req.base_dir
 
     try:
         manifest = QuarantineEngine.execute(
@@ -586,7 +595,13 @@ async def execute_quarantine(req: QuarantineActionRequest):
 async def restore_quarantine(req: RestoreActionRequest):
     """Restores quarantined files from a manifest back to original paths in parallel."""
     try:
-        count = QuarantineEngine.restore(req.manifest_file)
+        safe_manifest = resolve_safe_path(req.manifest_file, must_exist=True)
+        count = QuarantineEngine.restore(safe_manifest)
         return {"status": "restored", "restored_files_count": count}
+    except SecurityError as se:
+        raise HTTPException(status_code=403, detail=str(se)) from se
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Manifest file not found.") from None
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Restore failed: {e!s}") from e
+

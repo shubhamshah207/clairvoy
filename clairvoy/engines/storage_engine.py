@@ -58,27 +58,34 @@ class StorageEngine:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def compute_quick_hash(path: str) -> str:
+    def compute_quick_hash(path: str) -> str | None:
         """Reads 64KB from head and 64KB from tail to create a fast preliminary fingerprint."""
-        h = hashlib.md5()
-        size = os.path.getsize(path)
-        with open(path, "rb") as f:
-            if size <= 128 * 1024:
-                h.update(f.read())
-            else:
-                h.update(f.read(64 * 1024))
-                f.seek(size - 64 * 1024)
-                h.update(f.read(64 * 1024))
-        return h.hexdigest()
+        try:
+            h = hashlib.md5()
+            size = os.path.getsize(path)
+            with open(path, "rb") as f:
+                if size <= 128 * 1024:
+                    h.update(f.read())
+                else:
+                    h.update(f.read(64 * 1024))
+                    f.seek(size - 64 * 1024)
+                    h.update(f.read(64 * 1024))
+            return h.hexdigest()
+        except (OSError, PermissionError):
+            return None
 
     @staticmethod
-    def compute_full_sha256(path: str) -> str:
+    def compute_full_sha256(path: str) -> str | None:
         """Computes complete SHA-256 digest in 1MB buffered blocks."""
-        h = hashlib.sha256()
-        with open(path, "rb") as f:
-            while chunk := f.read(1024 * 1024):
-                h.update(chunk)
-        return h.hexdigest()
+        try:
+            h = hashlib.sha256()
+            with open(path, "rb") as f:
+                while chunk := f.read(1024 * 1024):
+                    h.update(chunk)
+            return h.hexdigest()
+        except (OSError, PermissionError):
+            return None
+
 
     @staticmethod
     def score_file_keeper(path: str, dimensions: tuple[int, int] | None = None) -> int:
@@ -171,29 +178,30 @@ class StorageEngine:
                         if e.is_dir(follow_symlinks=False) and e.name not in EXCLUDED_DIR_NAMES:
                             sub_roots.append(Path(e.path))
                         elif e.is_file(follow_symlinks=False):
-                            stat = e.stat(follow_symlinks=False)
-                            if stat.st_size > 0:
-                                ext = Path(e.name).suffix.lower()
-                                is_m = ext in SUPPORTED_IMAGE_EXTENSIONS
-                                p_str = str(Path(e.path).resolve())
-                                all_entries.append(
-                                    FileEntry(path=p_str, size_bytes=stat.st_size, is_media=is_m)
-                                )
-                                if is_m:
-                                    all_media.append(p_str)
+                            try:
+                                stat = e.stat(follow_symlinks=False)
+                                if stat.st_size > 0:
+                                    ext = Path(e.name).suffix.lower()
+                                    is_m = ext in SUPPORTED_IMAGE_EXTENSIONS
+                                    p_str = str(Path(e.path).resolve())
+                                    all_entries.append(
+                                        FileEntry(path=p_str, size_bytes=stat.st_size, is_media=is_m)
+                                    )
+                                    if is_m:
+                                        all_media.append(p_str)
+                            except (PermissionError, OSError):
+                                continue
             except (PermissionError, OSError):
-                sub_roots = [single_root]
+                sub_roots = []
 
-            if not sub_roots:
-                sub_roots = [single_root]
-
-        workers = min(len(sub_roots), self.num_workers)
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-            futures = [pool.submit(self._scan_directory_tree, r) for r in sub_roots]
-            for fut in as_completed(futures):
-                entries, media = fut.result()
-                all_entries.extend(entries)
-                all_media.extend(media)
+        if sub_roots:
+            workers = min(len(sub_roots), self.num_workers)
+            with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+                futures = [pool.submit(self._scan_directory_tree, r) for r in sub_roots]
+                for fut in as_completed(futures):
+                    entries, media = fut.result()
+                    all_entries.extend(entries)
+                    all_media.extend(media)
 
         return all_entries, all_media
 
@@ -255,8 +263,9 @@ class StorageEngine:
                     pool.map(self.compute_quick_hash, [e.path for e in flat_candidates])
                 )
             for entry, qh in zip(flat_candidates, hashes, strict=False):
-                entry.quick_hash = qh
-                quickhash_map[(entry.size_bytes, qh)].append(entry)
+                if qh is not None:
+                    entry.quick_hash = qh
+                    quickhash_map[(entry.size_bytes, qh)].append(entry)
 
         # Parallel Full SHA-256 on QuickHash matches
         full_hash_map: dict[tuple[int, str], list[FileEntry]] = defaultdict(list)
@@ -268,13 +277,15 @@ class StorageEngine:
                     pool.map(self.compute_full_sha256, [e.path for e in flat_exact])
                 )
             for entry, sha in zip(flat_exact, sha_hashes, strict=False):
-                entry.full_sha256 = sha
-                full_hash_map[(entry.size_bytes, sha)].append(entry)
+                if sha is not None:
+                    entry.full_sha256 = sha
+                    full_hash_map[(entry.size_bytes, sha)].append(entry)
 
         exact_duplicate_groups = [
             grp for grp in full_hash_map.values() if len(grp) > 1
         ]
         print(f"[✓] Stage 1 complete: {len(exact_duplicate_groups)} exact duplicate sets found.")
+
 
         # Stage 2: Vision AI on unmatched media files
         ml_clusters: list[tuple[list[str], list[float], list[tuple[int, int]]]] = []

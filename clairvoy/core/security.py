@@ -8,12 +8,19 @@ from pathlib import Path
 
 # Sensitive directories that should never be accessed or served via web endpoints
 DISALLOWED_ROOT_PATHS = {
+    Path("/"),
     Path("/etc"),
     Path("/proc"),
     Path("/sys"),
     Path("/dev"),
     Path("/boot"),
     Path("/root"),
+    Path("/bin"),
+    Path("/sbin"),
+    Path("/lib"),
+    Path("/lib64"),
+    Path("/usr"),
+    Path("/var"),
     Path.home() / ".ssh",
     Path.home() / ".gnupg",
     Path.home() / ".aws",
@@ -44,10 +51,14 @@ def resolve_safe_path(
     except (OSError, RuntimeError) as e:
         raise SecurityError(f"Could not resolve path '{user_path}': {e}") from e
 
+    # Check against root directory anchor
+    if resolved == Path("/") or resolved == Path(resolved.anchor):
+        raise SecurityError("Direct access or scanning of filesystem root directory is forbidden.")
+
     # Check against restricted system paths
     for disallowed in DISALLOWED_ROOT_PATHS:
         try:
-            if resolved == disallowed or resolved.is_relative_to(disallowed):
+            if resolved == disallowed or (disallowed != Path("/") and resolved.is_relative_to(disallowed)):
                 raise SecurityError(f"Access denied: Path is inside restricted system directory: {disallowed}")
         except ValueError:
             continue
@@ -96,6 +107,7 @@ def resolve_safe_paths(
     """
     Resolves and validates multiple input paths.
     Accepts lists, sets, or comma/newline-separated strings.
+    Automatically prunes redundant nested child paths.
     """
     raw_list: list[str | Path] = []
     if isinstance(user_paths, (str, Path)):
@@ -113,10 +125,18 @@ def resolve_safe_paths(
             seen.add(resolved)
             resolved_list.append(resolved)
 
-    if not resolved_list:
+    # Prune redundant nested child paths (e.g. if ['/a', '/a/b'] is provided, keep only parent '/a')
+    pruned_list: list[Path] = []
+    sorted_candidates = sorted(resolved_list, key=lambda x: len(x.parts))
+    for candidate in sorted_candidates:
+        if not any(candidate.is_relative_to(parent) and candidate != parent for parent in pruned_list):
+            pruned_list.append(candidate)
+
+    if not pruned_list:
         raise SecurityError("No valid directories or paths provided.")
 
-    return resolved_list
+    return pruned_list
+
 
 
 def safe_sh_quote(path_or_cmd: str | Path) -> str:

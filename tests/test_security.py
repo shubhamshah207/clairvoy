@@ -80,3 +80,20 @@ def test_generate_hardened_quarantine_script():
     assert "set -euo pipefail" in script
     assert "mv -n --" in script
     assert "'/path/to/source file.jpg'" in script
+
+
+def test_resolve_safe_path_filesystem_root_rejected():
+    with pytest.raises(SecurityError, match="root directory"):
+        resolve_safe_path("/", must_exist=False)
+
+
+def test_resolve_safe_paths_prunes_nested_descendants(temp_workspace):
+    parent = temp_workspace / "parent"
+    child = parent / "child"
+    parent.mkdir()
+    child.mkdir()
+
+    paths = resolve_safe_paths([parent, child])
+    assert len(paths) == 1
+    assert paths[0] == parent.resolve()
+

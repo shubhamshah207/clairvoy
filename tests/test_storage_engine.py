@@ -70,3 +70,17 @@ def test_storage_engine_multi_root_parallel(multi_root_dataset):
     paths_in_dupes = [r.path for r in summary.groups]
     assert str(multi_root_dataset["shared_file_a"].resolve()) in paths_in_dupes
     assert str(multi_root_dataset["shared_file_b"].resolve()) in paths_in_dupes
+
+
+def test_storage_engine_flat_directory_no_duplicates(temp_workspace):
+    # Tests that flat directories with unique files are not double-scanned
+    (temp_workspace / "u1.txt").write_text("unique content 1")
+    (temp_workspace / "u2.txt").write_text("unique content 2")
+    (temp_workspace / "u3.txt").write_text("unique content 3")
+
+    engine = StorageEngine(paths=temp_workspace, enable_ml=False)
+    summary = engine.run()
+
+    assert summary.total_files_scanned == 3
+    assert summary.total_duplicate_groups == 0
+

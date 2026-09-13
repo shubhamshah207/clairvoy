@@ -24,16 +24,27 @@ class QuarantineEngine:
 
     @staticmethod
     def _move_single_file(item: tuple[Path, Path, int, int]) -> QuarantineItem | None:
-        """Moves a single file to its quarantine location."""
+        """Moves a single file to its quarantine location without clobbering existing files."""
         src, dst, size, gid = item
         try:
             if not src.exists():
                 return None
             dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(src), str(dst))
+
+            # Prevent overwriting if destination already exists
+            target_dst = dst
+            if target_dst.exists():
+                stem = dst.stem
+                suffix = dst.suffix
+                counter = 1
+                while target_dst.exists():
+                    target_dst = dst.parent / f"{stem}_{counter}{suffix}"
+                    counter += 1
+
+            shutil.move(str(src), str(target_dst))
             return QuarantineItem(
                 original_path=str(src),
-                quarantined_path=str(dst),
+                quarantined_path=str(target_dst),
                 size_bytes=size,
                 group_id=gid,
             )
@@ -43,18 +54,34 @@ class QuarantineEngine:
 
     @staticmethod
     def _restore_single_file(item: dict) -> bool:
-        """Restores a single quarantined file back to its original location."""
+        """Restores a single quarantined file back to its original location safely."""
         q_path = Path(item["quarantined_path"])
         orig_path = Path(item["original_path"])
         try:
             if not q_path.exists():
                 return False
+
+            # Verify original path is not inside forbidden system root
+            from clairvoy.core.security import resolve_safe_path
+
+            resolve_safe_path(orig_path, must_exist=False)
+
             orig_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(q_path), str(orig_path))
+            target_orig = orig_path
+            if target_orig.exists():
+                stem = orig_path.stem
+                suffix = orig_path.suffix
+                counter = 1
+                while target_orig.exists():
+                    target_orig = orig_path.parent / f"{stem}_restored_{counter}{suffix}"
+                    counter += 1
+
+            shutil.move(str(q_path), str(target_orig))
             return True
         except Exception as e:
             print(f"[!] Restore move error for {q_path}: {e}")
             return False
+
 
     @classmethod
     def execute(
@@ -153,13 +180,14 @@ class QuarantineEngine:
                     )
                 )
 
+        actual_bytes = sum(item.size_bytes for item in manifest_items)
         manifest = QuarantineManifest(
             timestamp=datetime.now(timezone.utc).isoformat(),
             base_dirs=[str(b) for b in base_roots],
             base_dir=str(primary_root),
             quarantine_dir=str(primary_quarantine),
             total_files_moved=len(manifest_items),
-            total_bytes_moved=total_bytes,
+            total_bytes_moved=actual_bytes,
             items=manifest_items,
         )
 
@@ -183,13 +211,16 @@ class QuarantineEngine:
         Restores all duplicate files to their exact original locations.
         """
         if isinstance(manifest_path_or_dict, (str, Path)):
-            manifest_file = Path(manifest_path_or_dict).resolve()
+            from clairvoy.core.security import resolve_safe_path
+
+            manifest_file = resolve_safe_path(manifest_path_or_dict, must_exist=True)
             with open(manifest_file, encoding="utf-8") as f:
                 data = json.load(f)
         else:
             data = manifest_path_or_dict
 
         items = data.get("items", [])
+
         if dry_run:
             return len(items)
 
