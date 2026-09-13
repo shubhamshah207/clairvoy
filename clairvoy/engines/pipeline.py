@@ -79,9 +79,10 @@ class CompositeKeeperStrategy(BaseKeeperPlugin):
             score += 30
 
         # Filename artifacts
-        if re.search(r"\(\d+\)", filename):
+        stem = Path(filename).stem
+        if re.search(r"\(\d+\)|[-_ ]\d+$", stem):
             score -= 20
-        if re.search(r"[-_ ]copy|\bcopy\b", lower_name):
+        if re.search(r"[-_ ]copy|\bcopy\b|[-_ ]dupe|\bdupe\b|\bduplicate\b", lower_name):
             score -= 25
         if "-edited" in lower_name:
             score -= 10
