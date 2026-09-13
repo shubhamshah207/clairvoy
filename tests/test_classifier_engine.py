@@ -26,11 +26,22 @@ def test_classify_by_filename(temp_workspace):
     assert ClassifierEngine.classify_image(str(p_meme)) == ImageCategory.GRAPHIC
 
 
+def test_classify_by_camera_exif(temp_workspace):
+    # Camera photo with Sony EXIF tags
+    p_photo = temp_workspace / "nature_vacation.jpg"
+    img = Image.new("RGB", (400, 300), color=(120, 160, 200))
+    exif = img.getexif()
+    exif[0x010F] = "Sony"  # Make
+    exif[0x0110] = "ILCE-7M4"  # Model
+    img.save(p_photo, exif=exif)
+
+    assert ClassifierEngine.classify_image(str(p_photo)) == ImageCategory.PHOTO
+
+
 def test_classify_document_by_whiteness(temp_workspace):
     # A scanned page or receipt: predominantly white with black text lines
     p_receipt = temp_workspace / "paper_scan.jpg"
     img = Image.new("RGB", (300, 400), color=(250, 250, 250))
-    # Draw some dark lines
     arr = np.array(img)
     arr[100:110, 50:250] = (20, 20, 20)
     arr[150:160, 50:250] = (20, 20, 20)
@@ -46,12 +57,34 @@ def test_classify_batch_parallel(temp_workspace):
     p2 = temp_workspace / "store_receipt.jpg"
     p3 = temp_workspace / "standard_camera_photo.jpg"
 
-    # Natural image with varied pixels
-    arr = np.random.randint(40, 220, size=(200, 200, 3), dtype=np.uint8)
-    Image.fromarray(arr).save(p3)
+    Image.new("RGB", (1080, 2340), color=(50, 50, 50)).save(p1)
+
+    img2 = Image.new("RGB", (300, 400), color=(250, 250, 250))
+    arr2 = np.array(img2)
+    arr2[100:110, 50:250] = (20, 20, 20)
+    Image.fromarray(arr2).save(p2)
+
+    img3 = Image.new("RGB", (400, 300), color=(100, 140, 180))
+    exif = img3.getexif()
+    exif[0x010F] = "Apple"
+    exif[0x0110] = "iPhone 15 Pro"
+    img3.save(p3, exif=exif)
 
     results = ClassifierEngine.classify_batch([str(p1), str(p2), str(p3)])
     assert len(results) == 3
     assert results[str(p1)] == ImageCategory.SCREENSHOT
     assert results[str(p2)] == ImageCategory.DOCUMENT
     assert results[str(p3)] == ImageCategory.PHOTO
+
+
+def test_neural_clip_inference(temp_workspace):
+    p_img = temp_workspace / "ambiguous_file_001.jpg"
+    img = Image.new("RGB", (300, 400), color=(250, 250, 250))
+    arr = np.array(img)
+    for y in range(40, 360, 20):
+        arr[y : y + 3, 30:270] = (15, 15, 15)
+    Image.fromarray(arr).save(p_img)
+
+    cat = ClassifierEngine.classify_image(str(p_img), use_neural=True)
+    assert cat in {ImageCategory.DOCUMENT, ImageCategory.PHOTO, ImageCategory.SCREENSHOT, ImageCategory.GRAPHIC}
+
