@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use Clairvoy in your research or benchmarks, please cite it as below."
+authors:
+  - family-names: "Shah"
+    given-names: "Shubham"
+title: "Clairvoy: Local-First AI Storage Deduplication Engine"
+version: 0.1.0
+date-released: 2026-09-13
+url: "https://github.com/shubhamshah207/clairvoy"
+keywords:
+  - deduplication
+  - computer-vision
+  - storage-optimization
+  - vision-transformers
+  - hardlinks
+license: Apache-2.0

@@ -1,0 +1,31 @@
+name: "Bug Report"
+description: "File a report to help us fix a bug in Clairvoy"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for reporting an issue with Clairvoy!
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Commands executed, scan directory structure, or flags passed.
+      placeholder: |
+        1. clairvoy scan ~/Pictures --action hardlink
+        2. Encountered error ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating System & Python Version
+      placeholder: "Ubuntu 22.04 / Python 3.12 / Clairvoy 0.1.0"
+    validations:
+      required: true

@@ -1,0 +1,18 @@
+name: "Feature / Plugin Request"
+description: "Suggest a new idea or matcher/action plugin for Clairvoy"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Use Case
+      description: Is your feature request related to a specific file modality (audio, RAW photos, archives)?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the matcher plugin, keeper priority, or resolution action you would like to see.
+    validations:
+      required: true
