@@ -33,8 +33,9 @@ def main():
     # Scan command
     scan_parser = subparsers.add_parser("scan", help="Scan a directory for duplicate files")
     scan_parser.add_argument("path", help="Directory path to scan")
-    scan_parser.add_argument("--output", "-o", default=None, help="Directory to save report files")
-    scan_parser.add_argument("--quarantine", action="store_true", help="Automatically generate safe quarantine script")
+    scan_parser.add_argument("--output", "-o", default=None, help="Directory to save report files (default: <target>/_dedupe_reports)")
+    scan_parser.add_argument("--no-ml", action="store_true", help="Disable Vision AI model")
+    scan_parser.add_argument("--threshold", "-t", type=float, default=0.95, help="Visual similarity threshold (default: 0.95)")
     
     # UI command
     ui_parser = subparsers.add_parser("ui", help="Launch the interactive Web App")
@@ -55,7 +56,12 @@ def main():
             print(f"Error: Directory '{target_dir}' does not exist.")
             sys.exit(1)
             
-        engine = StorageEngine(target_dir, args.output)
+        engine = StorageEngine(
+            base_dir=target_dir,
+            output_dir=args.output,
+            enable_ml=not args.no_ml,
+            ml_threshold=args.threshold
+        )
         engine.run()
 
     elif args.command == "ui":

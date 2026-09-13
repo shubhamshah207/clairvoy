@@ -114,9 +114,9 @@ Open **`http://localhost:8000`** in your browser to inspect duplicates side-by-s
 
 - [x] Initial project design and architecture
 - [x] Fast Content Hash & Metadata Deduplication Engine
-- [ ] DINOv2 ONNX quantized vision model integration
-- [ ] FastAPI backend + Server-Sent Events progress reporting
-- [ ] Interactive Web App review dashboard with visual side-by-side diff
+- [x] DINOv2 ONNX quantized vision model integration
+- [x] FastAPI backend + REST API progress reporting
+- [x] Interactive Web App review dashboard with visual side-by-side diff
 - [ ] PyPI automated release pipeline via GitHub Actions
 
 ---
