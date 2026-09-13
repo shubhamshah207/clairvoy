@@ -2,154 +2,202 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-104%20passed-brightgreen.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)]()
+[![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-> **Clairvoy** (*from Clairvoyance — clear perception*) is a local-first, AI-powered storage deduplication engine with both a headless **CLI** and an interactive **Web App UI**.
-> It combines lightning-fast byte hashing for general files with Vision Transformer embeddings to catch near-duplicate photos, burst shots, and re-encoded videos.
+> **Clairvoy** (*from Clairvoyance — clear perception*) is an enterprise-grade, pluggable deduplication engine with both a high-throughput **CLI** and an interactive **Web UI**.  
+> It combines lightning-fast byte hashing for exact duplicates with offline Vision Transformer (DINOv2) embeddings to catch near-duplicate photos, burst shots, video transcodes, and in-memory archive contents.
 
----
-
-## 🏛️ Architecture
-
-```text
-+-------------------------------------------------------------------------+
-|                           USER INTERFACES                               |
-|                                                                         |
-|    [ 1. Terminal CLI: `clairvoy scan` ]     [ 2. Web App: localhost ]  |
-|         (Headless, scriptable, cron)          (Modern Browser UI)       |
-+-------------------------------------------------------------------------+
-                                     |
-                                     v
-+-------------------------------------------------------------------------+
-|                  FASTAPI BACKEND & EVENT STREAM (SSE)                   |
-|                                                                         |
-|   • REST API endpoints (`/api/scan`, `/api/duplicates`, `/api/action`)  |
-|   • Live progress streaming via Server-Sent Events                      |
-|   • Local SQLite cache (`clairvoy.db`) for instant incremental re-scans |
-+-------------------------------------------------------------------------+
-                                     |
-                +--------------------+--------------------+
-                |                                         |
-                v                                         v
-+-------------------------------+       +-------------------------------+
-|     ENGINE 1: STORAGE CORE    |       |       ENGINE 2: ML VISION     |
-|    (Czkawka CLI / Fast Hash)  |       |   (DINOv2 + FAISS / ONNX)     |
-|                               |       |                               |
-| • Byte-for-byte exact hash    |       | • Offline Vision Transformer  |
-| • Filename normalization      |       | • Burst-shot detection        |
-| • Non-media & general files   |       | • Angle & crop similarity     |
-| • Broken & empty files        |       | • Visual vector cosine search |
-+-------------------------------+       +-------------------------------+
-                                     |
-                                     v
-+-------------------------------------------------------------------------+
-|                         WEB APP FEATURES                                |
-|                                                                         |
-|   • Categorized Dashboard: Exact Duplicates, Similar Photos, Large Files|
-|   • Interactive Visual Diff: Side-by-side photo comparison with slider  |
-|   • 1-Click Smart Clean: Pre-selects best quality / resolution keeper   |
-|   • Non-Destructive Quarantine with 1-Click Rollback                    |
-+-------------------------------------------------------------------------+
-```
+<p align="center">
+  <img src="docs/assets/screenshots/dashboard_preview.png" alt="Clairvoy Web UI Dashboard" width="92%">
+</p>
 
 ---
 
-## ✨ Features
-
-- ⚡ **Two-Stage Hybrid Engine**:
-  - **Stage 1 (Storage Core):** Filters 80–90% of duplicates in seconds using size grouping, quick-hash (header/footer 64KB), and full SHA-256 content verification.
-  - **Stage 2 (Vision AI Core):** Applies lightweight, offline Vision Transformer embeddings (DINOv2 / ONNX) to discover burst shots, resized images, and color-graded duplicates.
-- 🏷️ **Automatic Image Classification**:
-  - Automatically identifies and categorizes images into **Screenshots**, **Documents & Receipts**, **Camera Photos**, and **Graphics/Memes**.
-  - Uses multi-signal EXIF hardware analysis, screen aspect ratio detection, and color space analytics.
-  - Interactive category filter tabs directly in the Web UI.
-- 🌐 **Interactive Web App UI**:
-  - Launch with `clairvoy ui` to review duplicate pairs side-by-side in your browser.
-  - Adjust similarity thresholds dynamically with an interactive slider.
-  - Filter duplicates by category (e.g. view and clean only screenshots or receipts).
-- 🛡️ **Non-Destructive Quarantine**:
-  - Never permanently deletes without confirmation.
-  - Safely moves duplicates to a designated `_quarantine/` folder with an automated 1-click rollback manifest.
-- 🔒 **100% Local & Privacy-Preserving**:
-  - Zero cloud dependencies, zero telemetry.
-  - All ML models run strictly on your local CPU / GPU.
-
----
-
-## 🚀 Quick Start
-
-### Installation
+## ⚡ 30-Second Quickstart
 
 ```bash
-# Clone the repository
+# 1. Clone & install Clairvoy
 git clone https://github.com/shubhamshah207/clairvoy.git
 cd clairvoy
-
-# Install in editable mode
-pip install -e .
-
-# (Optional) Install ML dependencies for deep vision clustering
 pip install -e ".[ml]"
-```
 
-### 1. Terminal CLI Usage
+# 2. Run a fast deduplication scan with zero-space hardlink replacement
+clairvoy scan ~/Pictures --action hardlink
 
-```bash
-# High-speed scan of a single folder
-clairvoy scan /path/to/storage
-
-# Concurrent multi-path scan across multiple storage remotes / drives
-clairvoy scan /mnt/e/Remotes/gdrive-srshah207 /mnt/e/Remotes/gphotos-shubhamshah207 /mnt/e/Backup
-
-# Tune visual similarity threshold (e.g. 90%) and parallel worker threads
-clairvoy scan /path1 /path2 --threshold 0.90 --workers 16
-
-# Scan general documents only (disables ML vision model)
-clairvoy scan /path/to/storage --no-ml
-
-# Safely isolate duplicates into _duplicate_quarantine with rollback manifest
-clairvoy quarantine /path/to/storage/_dedupe_reports/duplicates_summary.json
-
-# 1-Click Rollback / Restore quarantined files in parallel
-clairvoy restore /path/to/storage/_duplicate_quarantine/quarantine_manifest.json
-```
-
-### 2. Interactive Web App Usage
-
-```bash
-# Launch local Web App dashboard
+# 3. Or launch the interactive Web Dashboard in your browser
 clairvoy ui --port 8000
 ```
-Open **`http://localhost:8000`** in your browser to inspect duplicates side-by-side, view thumbnails, and execute 1-click safe quarantine.
 
 ---
 
-## 🧪 Testing
+## 🥊 Why Clairvoy? (Feature Matrix)
 
+| Feature | Clairvoy 👁️ | Czkawka | dupeGuru | fdupes |
+|:---|:---:|:---:|:---:|:---:|
+| **Local-First & 100% Offline** | ✅ | ✅ | ✅ | ✅ |
+| **AI Visual Clustering (DINOv2)** | ✅ | ❌ | ❌ | ❌ |
+| **Video Transcode Matcher (4K vs 720p)** | ✅ | ⚠️ (Duration only) | ❌ | ❌ |
+| **In-Memory ZIP/TAR Inspection** | ✅ | ❌ | ❌ | ❌ |
+| **Zero-Space NTFS/POSIX Hardlinking** | ✅ | ✅ | ❌ | ✅ |
+| **Pluggable Architecture (`~/.clairvoy/plugins`)** | ✅ | ❌ | ❌ | ❌ |
+| **Deterministic Keeper Scoring** | ✅ | ⚠️ (Manual) | ⚠️ (Manual) | ❌ |
+| **Interactive Side-by-Side Web Diff** | ✅ | ❌ (GTK only) | ❌ (Qt only) | ❌ |
+
+---
+
+## 📸 Feature Showcase
+
+### 1. Interactive Side-by-Side Visual Diff
+Inspect near-duplicate photos side-by-side with similarity metrics, camera resolution badges (4K vs 720p), and instant keeper designation.
+
+<p align="center">
+  <img src="docs/assets/screenshots/visual_diff.png" alt="Clairvoy Visual Diff Comparison" width="92%">
+</p>
+
+### 2. High-Speed CLI & Zero-Space Hardlink Replacement
+Replace redundant copies with native NTFS/POSIX hardlinks in seconds. Recover 100% of wasted space while preserving all existing file paths and applications.
+
+<p align="center">
+  <img src="docs/assets/screenshots/cli_execution.svg" alt="Clairvoy CLI Terminal Execution" width="92%">
+</p>
+
+---
+
+## 🏛️ Pluggable Pipeline Architecture
+
+Clairvoy is built on textbook GoF design patterns (**Pipeline / Chain of Responsibility**, **Strategy**, and dynamic **Service Locator**):
+
+```text
++---------------------------------------------------------------------------------------------------------+
+|                                              CLAIRVOY PLUGGABLE ARCHITECTURE                            |
++---------------------------------------------------------------------------------------------------------+
+|                                                                                                         |
+|                                                  PluginRegistry                                         |
+|                     - Drop-ins: ~/.clairvoy/plugins/*.py  - Entry Points: clairvoy.plugins              |
+|                                                                                                         |
+|       +-----------------------------------------------------------------------------------------+       |
+|       |                                        DeduplicationPipeline                            |       |
+|       |                                (Short-Circuit Pruning & Priority Chain)                 |       |
+|       +-----------------------------------------------------------------------------------------+       |
+|                                     |                                                      |            |
+|           [Matcher Chain by Priority]                                     [Scoring & Resolution]        |
+|                                     v                                                      v            |
+|       +---------------------------------------------+               +---------------------------+       |
+|       | Priority 10: ExactHashMatcherPlugin         |               | CompositeKeeperStrategy   |       |
+|       |  |--> 128KB QuickHash + Streaming SHA-256   |               |  |--> Filename penalties  |       |
+|       +---------------------------------------------+               |       ((1), -copy, thumb) |       |
+|                             | [prune matched files]                 |  |--> Directory seniority |       |
+|                             v                                       |  |--> Media resolution   |       |
+|       +---------------------------------------------+               +---------------------------+       |
+|       | Priority 20: PhotoVisionMatcherPlugin       |                                      |            |
+|       |  |--> Meta DINOv2 ONNX + DSU Clustering     |                                      v            |
+|       +---------------------------------------------+               +---------------------------+       |
+|                             | [prune matched files]                 | Action Plugins:           |       |
+|                             v                                       |  |--> SafeQuarantine      |       |
+|       +---------------------------------------------+               |       (Non-clobbering)    |       |
+|       | Priority 30: VideoKeyframeMatcherPlugin     |               |  |--> HardlinkAction      |       |
+|       |  |--> Duration (±1.5%) + Keyframe dHash     |               |       (Zero-space inode)  |       |
+|       +---------------------------------------------+               +---------------------------+       |
+|                             | [prune matched files]                                                     |
+|                             v                                                                           |
+|       +---------------------------------------------+                                                   |
+|       | Priority 40: ArchiveInspectorMatcherPlugin  |                                                   |
+|       |  |--> ZIP & TAR In-Memory Central Dir Peek  |                                                   |
+|       +---------------------------------------------+                                                   |
++---------------------------------------------------------------------------------------------------------+
+```
+
+### Core Suite of Default Plugins
+1. **ExactHashMatcherPlugin** (`priority = 10`): Two-stage byte verification via 128KB QuickHash and full streaming SHA-256.
+2. **PhotoVisionMatcherPlugin** (`priority = 20`): Local quantized Meta DINOv2 ONNX embeddings with Disjoint Set Union clustering.
+3. **VideoKeyframeMatcherPlugin** (`priority = 30`): Video container stream duration matching ($\pm 1.5\%$) and 10%, 50%, 90% keyframe dHash comparisons to catch transcodes (e.g. 4K original vs 720p WhatsApp share).
+4. **ArchiveInspectorMatcherPlugin** (`priority = 40`): In-memory ZIP and TAR central directory peeking without disk extraction.
+5. **CompositeKeeperStrategy**: Multi-signal scoring engine penalizing copy suffixes (`(1)`, `-copy`), trash folders, and rewarding directory seniority and higher image resolutions.
+6. **SafeQuarantineActionPlugin**: Non-clobbering reversible file isolation with machine-readable `quarantine_manifest.json` and 1-click restore.
+7. **HardlinkActionPlugin**: Zero-space NTFS and POSIX atomic inode replacement with partition boundary safety checks.
+
+---
+
+## 🛠️ CLI Usage & Plugin Management
+
+### Inspect Registered Plugins
 ```bash
-# Install development and test dependencies
-pip install -e ".[dev,ml]"
+clairvoy plugins list
+```
 
-# Run full unit and integration test suite
-pytest -v
+```text
++-------------------+---------+----------+---------+-----------+-------------------------------------------------------------------------------------------+
+| ID                | Type    | Priority | Enabled | Available | Description                                                                               |
++-------------------+---------+----------+---------+-----------+-------------------------------------------------------------------------------------------+
+| exact_hash        | Matcher | 10       | yes     | yes       | High-performance 2-stage hash matching via 128KB QuickHash and full SHA-256               |
+| photo_vision      | Matcher | 20       | yes     | yes       | Local AI visual similarity clustering powered by Meta DINOv2 ONNX                         |
+| video_matcher     | Matcher | 30       | yes     | yes       | Matches video transcodes and duplicates via stream duration and sampled keyframes         |
+| archive_inspector | Matcher | 40       | yes     | yes       | Peeks inside ZIP and TAR central directories without extracting to match files on disk    |
+| composite_keeper  | Keeper  | -        | yes     | yes       | Scores files based on filename cleanliness, directory seniority, and media resolution     |
+| hardlink          | Action  | -        | yes     | yes       | Replaces duplicates with hardlinks to the keeper inode for instant zero-space reclamation |
+| quarantine        | Action  | -        | yes     | yes       | Safely isolates duplicate files into a quarantine directory with rollback manifest        |
++-------------------+---------+----------+---------+-----------+-------------------------------------------------------------------------------------------+
+```
+
+### Scan & Deduplicate
+```bash
+# Standard high-speed deduplication scan
+clairvoy scan /path/to/storage
+
+# Immediate zero-space hardlinking
+clairvoy scan /path/to/storage --action hardlink
+
+# Safe reversible quarantine
+clairvoy scan /path/to/storage --action quarantine
+
+# Preview action without touching disk (Dry-Run mode)
+clairvoy scan /path/to/storage --action hardlink --dry-run
+
+# Runtime plugin toggles
+clairvoy scan /path/to/storage --disable-plugin photo_vision --enable-plugin custom_matcher
+
+# Concurrent multi-path scan across multiple storage remotes
+clairvoy scan /mnt/drives/Media /mnt/drives/Backup /mnt/drives/Archives --workers 16
 ```
 
 ---
 
-## 🗺️ Roadmap
+## 🛡️ Security & Safe Operations
 
-- [x] Initial project design and architecture
-- [x] Fast Content Hash & Metadata Deduplication Engine (QuickHash + SHA-256)
-- [x] Local Meta DINOv2 ONNX quantized vision model integration
-- [x] FastAPI backend + async background scan engine
-- [x] Interactive Web App review dashboard with visual side-by-side diff
-- [x] Reversible quarantine engine with rollback manifests
-- [x] Directory traversal security shield and strict path validation
-- [x] Automated unit and integration test suite (100% passing)
-- [ ] PyPI automated release pipeline via GitHub Actions
+- **Strict Path Traversal Protection**: System directories (`/`, `/bin`, `/usr`, `/etc`, `C:\Windows`, `C:\Program Files`) are blacklisted and verified via canonical path resolution.
+- **Atomic Hardlinking**: Links are created via temporary files and swapped using `os.replace` to guarantee zero data loss even during power failures.
+- **Cross-Device Safety**: Hardlinks check device IDs (`st_dev`) to ensure they never attempt cross-partition linking.
+- **Reversible Rollbacks**: All quarantined files can be restored with a single command:
+  ```bash
+  clairvoy restore /path/to/_duplicate_quarantine/quarantine_manifest.json
+  ```
+
+---
+
+## 🧪 Testing & Verification
+
+Clairvoy is backed by a 100% automated test suite:
+
+```bash
+# Run full test suite (104 tests)
+pytest -v
+
+# Run linter checks
+ruff check .
+```
+
+---
+
+## 🤝 Contributing & Community
+
+- [Contribution Guidelines](CONTRIBUTING.md): Environment setup, writing custom plugins in `~/.clairvoy/plugins/`, and testing standards.
+- [Security Policy](SECURITY.md): Vulnerability disclosures and filesystem boundaries.
+- [Issue Templates](.github/ISSUE_TEMPLATE/): Bug reports and feature requests.
 
 ---
 
 ## 📄 License
 
-Licensed under the [Apache License, Version 2.0](./LICENSE).
+Licensed under the [Apache License, Version 2.0](LICENSE).
