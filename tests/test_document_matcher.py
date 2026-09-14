@@ -381,3 +381,22 @@ def test_multi_cluster_grouping(tmp_path: Path):
     cluster_member_paths = [{m.path for m in c.members} for c in clusters]
     assert {str(d1), str(d2)} in cluster_member_paths
     assert {str(p1), str(p2)} in cluster_member_paths
+
+
+def test_document_surrogate_characters_handling(tmp_path: Path, monkeypatch):
+    """Verifies that PDF or document text containing isolated Unicode surrogate characters does not crash."""
+    plugin = DocumentTextMatcherPlugin()
+    doc = tmp_path / "surrogate.pdf"
+    doc.write_bytes(b"%PDF-1.4 dummy mock content")
+
+    # Mock _extract_pdf_text returning a string containing surrogate character \ud835
+    monkeypatch.setattr(plugin, "_extract_pdf_text", lambda p: "Math symbol \ud835 section header text")
+
+    # Must extract without raising UnicodeEncodeError
+    res = plugin._extract_document_data(str(doc))
+    assert res is not None
+    content_hash, preview, length, tokens = res
+    assert isinstance(content_hash, str)
+    assert len(content_hash) == 64
+    assert "math" in tokens
+

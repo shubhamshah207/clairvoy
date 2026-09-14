@@ -14,6 +14,7 @@ import io
 import logging
 import os
 import re
+import warnings
 import xml.etree.ElementTree as ET
 import zipfile
 from collections import defaultdict
@@ -30,6 +31,7 @@ try:
 
     HAS_PYPDF = True
     PYPDF_VERSION = getattr(pypdf, "__version__", "unknown")
+    logging.getLogger("pypdf").setLevel(logging.ERROR)
 except ImportError:
     HAS_PYPDF = False
     PYPDF_VERSION = None
@@ -138,67 +140,75 @@ class DocumentTextMatcherPlugin(BaseMatcherPlugin):
                 raw_text = self._extract_tabular_text(path)
             else:
                 return None
+
+            if not raw_text:
+                return None
+
+            # Sanitize Unicode surrogates (e.g. \ud800-\udfff from PDF symbol fonts)
+            raw_text = raw_text.encode("utf-8", errors="replace").decode("utf-8")
+
+            # Normalize whitespace and apply word cap
+            if ext in {".csv", ".tsv"}:
+                words = raw_text.split()
+                if not words:
+                    return None
+                norm_text = " ".join(words[:MAX_WORDS]) if len(words) > MAX_WORDS else raw_text
+            else:
+                norm_text = re.sub(r"\s+", " ", raw_text).strip()
+                if not norm_text:
+                    return None
+                words = norm_text.split()
+                if len(words) > MAX_WORDS:
+                    norm_text = " ".join(words[:MAX_WORDS])
+
+            content_hash = hashlib.sha256(norm_text.encode("utf-8", errors="replace")).hexdigest()
+            preview = norm_text[:500]
+            length = len(norm_text)
+            tokens = set(re.findall(r"\b\w+\b", norm_text.lower()))
+
+            return content_hash, preview, length, tokens
         except Exception as e:
             logger.debug("Extraction error on %s: %s", path, e)
             return None
-
-        if not raw_text:
-            return None
-
-        # Normalize whitespace and apply word cap
-        if ext in {".csv", ".tsv"}:
-            # Tabular data is already structured; apply word cap if excessive
-            words = raw_text.split()
-            if not words:
-                return None
-            norm_text = " ".join(words[:MAX_WORDS]) if len(words) > MAX_WORDS else raw_text
-        else:
-
-            norm_text = re.sub(r"\s+", " ", raw_text).strip()
-            if not norm_text:
-                return None
-            words = norm_text.split()
-            if len(words) > MAX_WORDS:
-                norm_text = " ".join(words[:MAX_WORDS])
-
-        content_hash = hashlib.sha256(norm_text.encode("utf-8")).hexdigest()
-        preview = norm_text[:500]
-        length = len(norm_text)
-        tokens = set(re.findall(r"\b\w+\b", norm_text.lower()))
-
-        return content_hash, preview, length, tokens
 
     def _extract_pdf_text(self, path: str) -> str | None:
         """Extract text from PDF using pure-Python pypdf up to 50 pages."""
         if not HAS_PYPDF:
             return None
 
-        try:
-            reader = pypdf.PdfReader(path)
-            if getattr(reader, "is_encrypted", False):
-                try:
-                    if not reader.decrypt(""):
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", module="pypdf")
+            warnings.filterwarnings("ignore", category=UserWarning)
+            try:
+                reader = pypdf.PdfReader(path)
+                if getattr(reader, "is_encrypted", False):
+                    try:
+                        if not reader.decrypt(""):
+                            return None
+                    except Exception:
                         return None
-                except Exception:
-                    return None
 
-            pages = reader.pages[:MAX_PDF_PAGES]
-            text_parts: list[str] = []
-            total_bytes = 0
+                pages = reader.pages[:MAX_PDF_PAGES]
+                text_parts: list[str] = []
+                total_bytes = 0
 
-            for page in pages:
-                page_text = page.extract_text() or ""
-                if page_text:
-                    text_parts.append(page_text)
-                    total_bytes += len(page_text.encode("utf-8", errors="replace"))
-                    if total_bytes >= MAX_BUFFER_BYTES:
-                        break
+                for page in pages:
+                    try:
+                        page_text = page.extract_text() or ""
+                    except Exception:
+                        continue
+                    if page_text:
+                        clean_page = page_text.encode("utf-8", errors="replace").decode("utf-8")
+                        text_parts.append(clean_page)
+                        total_bytes += len(clean_page.encode("utf-8", errors="replace"))
+                        if total_bytes >= MAX_BUFFER_BYTES:
+                            break
 
-            joined = " ".join(text_parts).strip()
-            return joined if joined else None
-        except Exception as e:
-            logger.debug("Failed to extract PDF text from %s: %s", path, e)
-            return None
+                joined = " ".join(text_parts).strip()
+                return joined if joined else None
+            except Exception as e:
+                logger.debug("Failed to extract PDF text from %s: %s", path, e)
+                return None
 
     def _extract_docx_text(self, path: str) -> str | None:
         """Extract body text from .docx by inspecting word/document.xml in memory."""
@@ -360,11 +370,21 @@ class DocumentTextMatcherPlugin(BaseMatcherPlugin):
         valid_entries: list[FileEntry] = []
         entry_data: list[tuple[str, str, int, set[str]]] = []
 
-        for entry in supported:
+        total_docs = len(supported)
+        for i, entry in enumerate(supported):
             data = self._extract_document_data(entry.path)
             if data is not None:
                 valid_entries.append(entry)
                 entry_data.append(data)
+            if (i + 1) % 20 == 0 or (i + 1) == total_docs:
+                print(
+                    f"\r     [>] Extracting document text: {i+1:,}/{total_docs:,} documents...",
+                    end="",
+                    flush=True,
+                )
+
+        if total_docs > 0:
+            print()
 
         n = len(valid_entries)
         if n < 2:
