@@ -3,6 +3,7 @@ Tests for documentation integrity, screenshot asset presence, and GitHub specifi
 """
 
 import re
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -76,3 +77,53 @@ def test_architecture_diagram_and_generator_exist():
     svg_path = REPO_ROOT / "docs" / "assets" / "diagrams" / "architecture.svg"
     assert svg_path.is_file(), "docs/assets/diagrams/architecture.svg must exist"
     assert svg_path.stat().st_size > 5000, "architecture.svg appears truncated"
+
+
+def test_agent_readiness_and_progressive_disclosure():
+    """
+    Verifies that the package is AI-agent-ready according to progressive disclosure principles:
+    - Root AGENTS.md exists, stays within instruction budget (< 15KB).
+    - CLAUDE.md and agents.md symlinks exist and resolve to AGENTS.md.
+    - Progressive disclosure subdocs exist (ARCHITECTURE.md, PLUGINS.md, TESTING.md).
+    """
+    agents_path = REPO_ROOT / "AGENTS.md"
+    assert agents_path.is_file(), "AGENTS.md must exist in repo root"
+    assert agents_path.stat().st_size < 15 * 1024, "AGENTS.md exceeds instruction budget limit"
+
+    # Verify symlinks
+    claude_path = REPO_ROOT / "CLAUDE.md"
+    assert claude_path.exists(), "CLAUDE.md symlink must exist"
+    assert claude_path.resolve() == agents_path.resolve(), "CLAUDE.md must resolve to AGENTS.md"
+
+    agents_lower = REPO_ROOT / "agents.md"
+    assert agents_lower.exists(), "agents.md symlink must exist"
+    assert agents_lower.resolve() == agents_path.resolve(), "agents.md must resolve to AGENTS.md"
+
+    # Verify progressive disclosure subdocs
+    for subdoc in ["docs/ARCHITECTURE.md", "docs/PLUGINS.md", "docs/TESTING.md"]:
+        subdoc_path = REPO_ROOT / subdoc
+        assert subdoc_path.is_file(), f"Progressive disclosure document {subdoc} must exist"
+        assert subdoc_path.stat().st_size > 500, f"{subdoc} appears too sparse or empty"
+
+
+def test_agent_guard_behavior():
+    """
+    Verifies that scripts/agent_guard.py exists and correctly enforces guardrails.
+    """
+    import subprocess
+    guard_path = REPO_ROOT / "scripts" / "agent_guard.py"
+    assert guard_path.is_file(), "scripts/agent_guard.py must exist"
+
+    # Test dangerous git push blocked (exit code 2)
+    res_push = subprocess.run([sys.executable, str(guard_path), "git push origin main"], capture_output=True)
+    assert res_push.returncode == 2, "Dangerous git push was not blocked by agent_guard"
+    assert b"GUARDRAIL BLOCKED" in res_push.stderr
+
+    # Test dangerous git reset blocked (exit code 2)
+    res_reset = subprocess.run([sys.executable, str(guard_path), "git reset --hard HEAD~1"], capture_output=True)
+    assert res_reset.returncode == 2, "Dangerous git reset was not blocked by agent_guard"
+
+    # Test safe git status allowed (exit code 0)
+    res_safe = subprocess.run([sys.executable, str(guard_path), "git status"], capture_output=True)
+    assert res_safe.returncode == 0, "Safe command was incorrectly blocked by agent_guard"
+
