@@ -49,3 +49,29 @@ def test_vision_preprocessing_and_inference(sample_images):
     assert red1 in cluster_paths
     assert red2 in cluster_paths
     assert blue not in cluster_paths
+
+
+def test_preprocess_palette_transparency(tmp_path):
+    import warnings
+
+    from PIL import Image
+
+    # Create palette image with transparency
+    img = Image.new("RGBA", (100, 100), (255, 0, 0, 0))
+    palette_img = img.convert("P", palette=Image.Palette.ADAPTIVE)
+    path = tmp_path / "transparent_palette.png"
+    palette_img.save(path, format="PNG", transparency=0)
+
+    engine = VisionEngine(threshold=0.90)
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always")
+        tensor, dims = engine.preprocess_single_image(str(path))
+        # Ensure no UserWarning about Palette images with Transparency
+        palette_warnings = [
+            w for w in recorded if "Palette images with Transparency" in str(w.message)
+        ]
+        assert len(palette_warnings) == 0
+
+    assert tensor is not None
+    assert dims == (100, 100)
+

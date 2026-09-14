@@ -104,9 +104,9 @@ class VisionEngine:
         """Initializes high-performance ONNX Runtime inference session."""
         model_path = self._ensure_model()
         opts = ort.SessionOptions()
-        threads = min(os.cpu_count() or 4, 8)
+        threads = min(os.cpu_count() or 4, 4)
         opts.intra_op_num_threads = threads
-        opts.inter_op_num_threads = 2
+        opts.inter_op_num_threads = 1
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
@@ -120,7 +120,6 @@ class VisionEngine:
     @staticmethod
     def _extract_frame_via_ffmpeg(path: str) -> Image.Image | None:
         """Extract a single frame from an image or video file using local ffmpeg pipe."""
-        import io
         import shutil
         import subprocess
 
@@ -128,23 +127,28 @@ class VisionEngine:
         if not shutil.which("ffmpeg") and not Path(ffmpeg_bin).exists():
             return None
         try:
+            # Scale directly during ffmpeg decode to raw 224x224 RGB bytes to minimize pipe memory & latency
             cmd = [
                 str(ffmpeg_bin),
                 "-v",
                 "error",
+                "-threads",
+                "1",
                 "-i",
                 path,
+                "-vf",
+                "scale=224:224:force_original_aspect_ratio=increase,crop=224:224",
                 "-vframes",
                 "1",
                 "-f",
-                "image2pipe",
-                "-vcodec",
-                "png",
+                "rawvideo",
+                "-pix_fmt",
+                "rgb24",
                 "-",
             ]
             res = subprocess.run(cmd, capture_output=True, timeout=10)
-            if res.returncode == 0 and res.stdout:
-                return Image.open(io.BytesIO(res.stdout)).convert("RGB")
+            if res.returncode == 0 and len(res.stdout) == 224 * 224 * 3:
+                return Image.frombytes("RGB", (224, 224), res.stdout)
         except Exception:
             return None
         return None
@@ -155,22 +159,48 @@ class VisionEngine:
         Loads, resizes, and standardizes an image tensor for DINOv2 input:
         Shape: (3, 224, 224), Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225]
         Supports .jpg, .png, .webp, .psd, and .heic (via Pillow or ffmpeg fallback).
+        Memory safe: uses draft decoding on JPEGs, handles palette transparency cleanly,
+        and ensures image contexts and file handles are closed promptly.
         """
         try:
-            img = None
-            try:
-                img = Image.open(path)
-                img.load()
-            except Exception:
-                ext = Path(path).suffix.lower()
-                if ext in {".heic", ".heif"}:
+            ext = Path(path).suffix.lower()
+            img: Image.Image | None = None
+            w, h = 0, 0
+
+            if ext in {".heic", ".heif"}:
+                try:
+                    with Image.open(path) as pil_img:
+                        w, h = pil_img.size
+                        pil_img.load()
+                        img = pil_img.copy()
+                except Exception:
                     img = VisionEngine._extract_frame_via_ffmpeg(path)
+                    if img is not None:
+                        w, h = img.size
+            else:
+                try:
+                    with Image.open(path) as pil_img:
+                        w, h = pil_img.size
+                        if ext in {".jpg", ".jpeg"}:
+                            import contextlib
+
+                            with contextlib.suppress(Exception):
+                                pil_img.draft("RGB", (224, 224))
+                        # Convert palette transparency cleanly to avoid PIL UserWarning
+                        if pil_img.mode == "P" and "transparency" in pil_img.info:
+                            converted = pil_img.convert("RGBA").convert("RGB")
+                        else:
+                            converted = pil_img.convert("RGB")
+                        img = converted.resize((224, 224), Image.Resampling.BILINEAR)
+                except Exception:
+                    return None, (0, 0)
 
             if img is None:
                 return None, (0, 0)
 
-            w, h = img.size
-            img = img.convert("RGB").resize((224, 224), Image.Resampling.BILINEAR)
+            if img.size != (224, 224):
+                img = img.resize((224, 224), Image.Resampling.BILINEAR)
+
             arr = np.array(img, dtype=np.float32) / 255.0
             mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
             std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -213,9 +243,10 @@ class VisionEngine:
         dimensions: dict[str, tuple[int, int]] = {}
         embeddings_list: list[np.ndarray] = []
 
-        # Step 1: Concurrent Preprocessing in chunks
+        # Step 1: Concurrent Preprocessing in chunks with bounded concurrency
         chunk_size = self.batch_size * 4
-        with ThreadPoolExecutor(max_workers=self.num_workers) as pool:
+        preprocess_workers = min(4, self.num_workers)
+        with ThreadPoolExecutor(max_workers=preprocess_workers) as pool:
             for i in range(0, len(image_paths), chunk_size):
                 chunk = image_paths[i : i + chunk_size]
                 results = list(pool.map(self.preprocess_single_image, chunk))
@@ -241,6 +272,12 @@ class VisionEngine:
                     embeddings_list.append(embs)
                     valid_paths.extend(batch_paths)
 
+                # Periodically release memory and unreferenced C buffers
+                if (i // chunk_size) % 5 == 0:
+                    import gc
+
+                    gc.collect()
+
         if not embeddings_list:
             return []
 
@@ -251,7 +288,7 @@ class VisionEngine:
 
         # Step 2: Memory-efficient chunked dot-products with Disjoint Set Union
         dsu = DisjointSetUnion(n_images)
-        chunk_size = 2048
+        chunk_size = 1024
 
         for i_start in range(0, n_images, chunk_size):
             i_end = min(i_start + chunk_size, n_images)
