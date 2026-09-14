@@ -118,20 +118,64 @@ class VisionEngine:
         )
 
     @staticmethod
+    def _extract_frame_via_ffmpeg(path: str) -> Image.Image | None:
+        """Extract a single frame from an image or video file using local ffmpeg pipe."""
+        import io
+        import shutil
+        import subprocess
+
+        ffmpeg_bin = shutil.which("ffmpeg") or "/home/shubhamshah207/.local/bin/ffmpeg"
+        if not shutil.which("ffmpeg") and not Path(ffmpeg_bin).exists():
+            return None
+        try:
+            cmd = [
+                str(ffmpeg_bin),
+                "-v",
+                "error",
+                "-i",
+                path,
+                "-vframes",
+                "1",
+                "-f",
+                "image2pipe",
+                "-vcodec",
+                "png",
+                "-",
+            ]
+            res = subprocess.run(cmd, capture_output=True, timeout=10)
+            if res.returncode == 0 and res.stdout:
+                return Image.open(io.BytesIO(res.stdout)).convert("RGB")
+        except Exception:
+            return None
+        return None
+
+    @staticmethod
     def preprocess_single_image(path: str) -> tuple[np.ndarray | None, tuple[int, int]]:
         """
         Loads, resizes, and standardizes an image tensor for DINOv2 input:
         Shape: (3, 224, 224), Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225]
+        Supports .jpg, .png, .webp, .psd, and .heic (via Pillow or ffmpeg fallback).
         """
         try:
-            with Image.open(path) as img:
-                w, h = img.size
-                img = img.convert("RGB").resize((224, 224), Image.Resampling.BILINEAR)
-                arr = np.array(img, dtype=np.float32) / 255.0
-                mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-                std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-                arr = (arr - mean) / std
-                return np.transpose(arr, (2, 0, 1)), (w, h)
+            img = None
+            try:
+                img = Image.open(path)
+                img.load()
+            except Exception:
+                ext = Path(path).suffix.lower()
+                if ext in {".heic", ".heif"}:
+                    img = VisionEngine._extract_frame_via_ffmpeg(path)
+
+            if img is None:
+                return None, (0, 0)
+
+            w, h = img.size
+            img = img.convert("RGB").resize((224, 224), Image.Resampling.BILINEAR)
+            arr = np.array(img, dtype=np.float32) / 255.0
+            mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+            std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+            arr = (arr - mean) / std
+            return np.transpose(arr, (2, 0, 1)), (w, h)
         except Exception:
             return None, (0, 0)
 

@@ -26,6 +26,7 @@ SUPPORTED_IMAGE_EXTENSIONS = {
     ".tiff",
     ".tif",
     ".heic",
+    ".psd",
 }
 
 
