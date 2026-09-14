@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 class MatchType(str, Enum):
     EXACT_HASH = "EXACT_HASH"
     VISUAL_AI_NEAR_DUPLICATE = "VISUAL_AI_NEAR_DUPLICATE"
+    CONTENT_NEAR_DUPLICATE = "CONTENT_NEAR_DUPLICATE"
 
 
 class ImageCategory(str, Enum):

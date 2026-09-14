@@ -168,6 +168,7 @@ def test_duplicate_cluster_model():
     )
     assert cluster.cluster_id == 1
     assert len(cluster.members) == 2
+    assert MatchType.CONTENT_NEAR_DUPLICATE.value == "CONTENT_NEAR_DUPLICATE"
     assert cluster.similarity_scores == [1.0, 1.0]
     assert cluster.metadata["hash"] == "abcdef123456"
 
