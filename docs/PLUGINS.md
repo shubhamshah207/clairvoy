@@ -26,10 +26,10 @@ Implements candidate grouping and duplicate clustering.
 - `plugin_id: str` (unique identifier)
 - `display_name: str`
 - `priority_order: int` (Determines execution order; lower runs first)
-  - `10-19`: Exact byte/hash matchers
-  - `20-29`: Visual / neural embedding matchers
-  - `30-39`: Audio / video temporal matchers
-  - `40-49`: Container / archive inspectors
+  - `10-19`: Exact byte/hash matchers (`exact_hash`: QuickHash + SHA-256)
+  - `20-29`: Visual / neural embedding matchers (`photo_vision`: Meta DINOv2 ONNX for `.jpg`, `.png`, `.webp`, `.heic`, `.psd`)
+  - `30-39`: Audio / video temporal matchers (`video_matcher`: duration + keyframes for `.mp4`, `.mkv`, `.mov`, `.ts`, `.mp`)
+  - `40-49`: Container / archive inspectors (`archive_inspector`: in-memory CRC32 for `.zip`, `.jar`, `.apk`, `.tar`, `.rar`)
 - `filter_supported(candidates: list[FileEntry]) -> list[FileEntry]`
 - `find_duplicates(candidates, all_indexed_files, context) -> list[DuplicateCluster]`
 

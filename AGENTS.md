@@ -74,9 +74,11 @@ All agents operating in this repository **MUST read this document** and **MUST m
 |         +----------------------------+----------------------------+             |
 |         |                            |                            |             |
 |         v                            v                            v             |
-|  [Tier 1 Matchers]          [Tier 2 Matchers]            [Tier 3 Matchers]      |
+|  [Tier 1: Byte Exact]       [Tier 2: Visual AI & Video]  [Tier 3: Archives]     |
 |  ExactHashMatcherPlugin     PhotoVisionMatcherPlugin     ArchiveInspector...    |
-|  (QuickHash + SHA-256)      (DINOv2 Embeddings)          (ZIP/TAR in-memory)    |
+|  (QuickHash + SHA-256)      (DINOv2: .heic, .psd, etc.)  (In-Memory: .zip,      |
+|                             VideoKeyframeMatcherPlugin   .jar, .apk, .rar)      |
+|                             (Duration/Frames: .ts, .mp)                         |
 |         |                            |                            |             |
 |         +----------------------------+----------------------------+             |
 |                                      |                                          |
@@ -94,6 +96,15 @@ All agents operating in this repository **MUST read this document** and **MUST m
 |  SafeQuarantineActionPlugin                                HardlinkActionPlugin |
 +---------------------------------------------------------------------------------+
 ```
+
+### Supported Format Matrix & Tier Mapping
+
+| Modality | Formats Handled | Engine / Plugin | Key Invariant / Discriminator |
+|---|---|---|---|
+| **Photos & Raster** | `.jpg`, `.png`, `.webp`, `.bmp`, `.tiff`, `.tif`, `.heic`, `.psd` | [`PhotoVisionMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/photo_vision.py) & [`VisionEngine`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/vision_engine.py) | Native Pillow PSD composite; dual-path HEIC (Pillow / ffmpeg pipe). |
+| **Video & Motion** | `.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.flv`, `.wmv`, `.m4v`, `.ts`, `.mp` | [`VideoKeyframeMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/video_matcher.py) | $O(1)$ sync byte `0x47` distinguishes MPEG-TS from TypeScript; `ftyp` box detects `.mp` Motion Photos. |
+| **In-Memory Archives** | `.zip`, `.jar`, `.apk`, `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.rar` | [`ArchiveInspectorMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/archive_inspector.py) | In-memory central directory CRC32 inspection without disk extraction. |
+| **Stream Utils** | Binary magic-byte probes | [`format_utils.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/format_utils.py) | `is_mpeg_ts`, `is_motion_photo_video`, `is_rar_archive`. |
 
 ---
 

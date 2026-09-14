@@ -64,6 +64,7 @@ The codebase is strictly structured into 4 cohesive packages with minimal cross-
 
 ### `clairvoy.core` (Data Domain, Security, Contracts)
 - [`models.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/models.py): Canonical Pydantic v2 schemas (`FileEntry`, `DuplicateRecord`, `DuplicateCluster`, `ScanSummary`, `ActionResult`).
+- [`format_utils.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/format_utils.py): $O(1)$ stream header validators (`is_mpeg_ts`, `is_motion_photo_video`, `is_rar_archive`) discriminating media streams from ambiguous source files.
 - [`plugins.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/plugins.py): Base plugin ABCs (`BasePlugin`, `BaseMatcherPlugin`, `BaseKeeperPlugin`, `BaseActionPlugin`) and thread-safe `PluginRegistry`.
 - [`security.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/security.py): Enterprise filesystem defenses: path traversal verification, system root protection, sanitized shell command generation.
 - [`config.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/config.py): Global configuration defaults and environment variable overrides.
@@ -71,15 +72,15 @@ The codebase is strictly structured into 4 cohesive packages with minimal cross-
 ### `clairvoy.engines` (Computation, Inference, Orchestration)
 - [`pipeline.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/pipeline.py): `DeduplicationPipeline` coordinating chained matchers with short-circuit pruning, plus `CompositeKeeperStrategy`.
 - [`storage_engine.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/storage_engine.py): Multi-threaded filesystem scanner, 128KB head/tail QuickHash, and SHA-256 digests.
-- [`vision_engine.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/vision_engine.py): 100% offline Meta DINOv2 ONNX Runtime embedding inference and Disjoint Set Union (DSU) graph clustering.
+- [`vision_engine.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/vision_engine.py): 100% offline Meta DINOv2 ONNX Runtime embedding inference, dual-path HEIC frame decoding, and Disjoint Set Union (DSU) graph clustering.
 - [`classifier_engine.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/classifier_engine.py): Fast cosine distance classifier categorizing media into Photo, Screenshot, Meme, or Document.
 - [`quarantine.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/quarantine.py): Manifest-backed non-destructive quarantine isolation engine with automated rollback generator.
 
 ### `clairvoy.plugins` (Bundled Default Extensions)
 - [`exact_hash.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/exact_hash.py): Tier 1 byte-for-byte deduplication (Priority 10).
-- [`photo_vision.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/photo_vision.py): Tier 2 visual similarity deduplication (Priority 20).
-- [`video_matcher.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/video_matcher.py): Tier 3 video keyframe hash deduplication (Priority 30).
-- [`archive_inspector.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/archive_inspector.py): Tier 4 in-memory ZIP/TAR central directory inspector (Priority 40).
+- [`photo_vision.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/photo_vision.py): Tier 2 visual similarity deduplication supporting `.jpg`, `.png`, `.webp`, `.heic`, and `.psd` (Priority 20).
+- [`video_matcher.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/video_matcher.py): Tier 3 video keyframe hash deduplication supporting `.mp4`, `.mkv`, `.mov`, `.ts`, and `.mp` (Priority 30).
+- [`archive_inspector.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/archive_inspector.py): Tier 4 in-memory ZIP/TAR/JAR/APK central directory inspector (Priority 40).
 - [`quarantine_action.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/quarantine_action.py): Safe reversible quarantine action.
 - [`hardlink_action.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/hardlink_action.py): Cross-filesystem safe hardlink replacement action.
 
