@@ -18,6 +18,7 @@ All agents operating in this repository **MUST read this document** and **MUST m
   /home/shubhamshah207/miniconda3/bin/clairvoy scan /path/to/folder
   /home/shubhamshah207/miniconda3/bin/clairvoy plugins list
   /home/shubhamshah207/miniconda3/bin/clairvoy plugins info exact_hash
+  /home/shubhamshah207/miniconda3/bin/clairvoy plugins info document_matcher
   ```
 
 ---
@@ -49,52 +50,50 @@ All agents operating in this repository **MUST read this document** and **MUST m
 ## 3. High-Level Architecture Overview
 
 ```
-+---------------------------------------------------------------------------------+
-|                                 CLAIRVOY ENGINE                                 |
-+---------------------------------------------------------------------------------+
-|                                                                                 |
-|   +-------------------+      +---------------------+      +-----------------+   |
-|   |    CLI (Typer)    |      |    FastAPI (Web)    |      | Custom Plugins  |   |
-|   |  clairvoy/cli.py  |      |   clairvoy/web/     |      | ~/.clairvoy/... |   |
-|   +---------+---------+      +----------+----------+      +--------+--------+   |
-|             |                           |                          |            |
-|             +---------------------+     |     +--------------------+            |
-|                                   v     v     v                                 |
-|                        +---------------------------+                            |
-|                        |       PluginRegistry      |                            |
-|                        | clairvoy/core/plugins.py  |                            |
-|                        +-------------+-------------+                            |
-|                                      |                                          |
-|                                      v                                          |
-|                        +---------------------------+                            |
-|                        |   DeduplicationPipeline   |                            |
-|                        | clairvoy/engines/pipeline |                            |
-|                        +-------------+-------------+                            |
-|                                      |                                          |
-|         +----------------------------+----------------------------+             |
-|         |                            |                            |             |
-|         v                            v                            v             |
-|  [Tier 1: Byte Exact]       [Tier 2: Visual AI & Video]  [Tier 3: Archives]     |
-|  ExactHashMatcherPlugin     PhotoVisionMatcherPlugin     ArchiveInspector...    |
-|  (QuickHash + SHA-256)      (DINOv2: .heic, .psd, etc.)  (In-Memory: .zip,      |
-|                             VideoKeyframeMatcherPlugin   .jar, .apk, .rar)      |
-|                             (Duration/Frames: .ts, .mp)                         |
-|         |                            |                            |             |
-|         +----------------------------+----------------------------+             |
-|                                      |                                          |
-|                                      v                                          |
-|                        +---------------------------+                            |
-|                        |  CompositeKeeperStrategy  |                            |
-|                        |  (Scoring & Seniority)    |                            |
-|                        +-------------+-------------+                            |
-|                                      |                                          |
-|                                      v                                          |
-|         +----------------------------+----------------------------+             |
-|         |                                                         |             |
-|         v                                                         v             |
-|  [Action: SafeQuarantine]                                  [Action: Hardlink]   |
-|  SafeQuarantineActionPlugin                                HardlinkActionPlugin |
-+---------------------------------------------------------------------------------+
++---------------------------------------------------------------------------------------------------------+
+|                                             CLAIRVOY ENGINE                                             |
++---------------------------------------------------------------------------------------------------------+
+|                                                                                                         |
+|   +-------------------+            +---------------------+              +-----------------+             |
+|   |    CLI (Typer)    |            |    FastAPI (Web)    |              | Custom Plugins  |             |
+|   |  clairvoy/cli.py  |            |   clairvoy/web/     |              | ~/.clairvoy/... |             |
+|   +---------+---------+            +----------+----------+              +--------+--------+             |
+|             |                                 |                                  |                      |
+|             +---------------------------+     |     +----------------------------+                      |
+|                                         v     v     v                                                   |
+|                              +---------------------------+                                              |
+|                              |       PluginRegistry      |                                              |
+|                              | clairvoy/core/plugins.py  |                                              |
+|                              +-------------+-------------+                                              |
+|                                            |                                                            |
+|                                            v                                                            |
+|                              +---------------------------+                                              |
+|                              |   DeduplicationPipeline   |                                              |
+|                              | clairvoy/engines/pipeline |                                              |
+|                              +-------------+-------------+                                              |
+|                                            |                                                            |
+|        +------------------+----------------+-----------------+------------------+                       |
+|        |                  |                |                 |                  |                       |
+|        v                  v                v                 v                  v                       |
+| [Tier 1: Byte Exact][Tier 2: Visual AI] [Tier 3: Video]  [Tier 4: Archives] [Tier 5: Documents]         |
+| ExactHashMatcher    PhotoVisionMatcher  VideoKeyframe... ArchiveInspector.. DocumentTextMatcher         |
+| (QuickHash+SHA-256) (DINOv2: .heic,..)  (Frames: .mp4..) (In-Memory: .zip)  (.pdf, .docx, .csv)         |
+|        |                  |                |                 |                  |                       |
+|        +------------------+----------------+-----------------+------------------+                       |
+|                                            |                                                            |
+|                                            v                                                            |
+|                              +---------------------------+                                              |
+|                              |  CompositeKeeperStrategy  |                                              |
+|                              |  (Scoring & Seniority)    |                                              |
+|                              +-------------+-------------+                                              |
+|                                            |                                                            |
+|                                            v                                                            |
+|                              +-------------+-------------+                                              |
+|                              |                           |                                              |
+|                              v                           v                                              |
+|                 [Action: SafeQuarantine]          [Action: Hardlink]                                    |
+|                 SafeQuarantineActionPlugin        HardlinkActionPlugin                                  |
++---------------------------------------------------------------------------------------------------------+
 ```
 
 ### Supported Format Matrix & Tier Mapping
@@ -104,6 +103,7 @@ All agents operating in this repository **MUST read this document** and **MUST m
 | **Photos & Raster** | `.jpg`, `.png`, `.webp`, `.bmp`, `.tiff`, `.tif`, `.heic`, `.psd` | [`PhotoVisionMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/photo_vision.py) & [`VisionEngine`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/vision_engine.py) | Native Pillow PSD composite; dual-path HEIC (Pillow / ffmpeg pipe). |
 | **Video & Motion** | `.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.flv`, `.wmv`, `.m4v`, `.ts`, `.mp` | [`VideoKeyframeMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/video_matcher.py) | $O(1)$ sync byte `0x47` distinguishes MPEG-TS from TypeScript; `ftyp` box detects `.mp` Motion Photos. |
 | **In-Memory Archives** | `.zip`, `.jar`, `.apk`, `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.rar` | [`ArchiveInspectorMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/archive_inspector.py) | In-memory central directory CRC32 inspection without disk extraction. |
+| **Documents & Tabular** | `.pdf`, `.docx`, `.pptx`, `.odt`, `.csv`, `.tsv` | [`DocumentTextMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/document_matcher.py) | In-memory `zipfile` XML inspection; pure-Python `pypdf` up to 50 pages; permutation-invariant tabular row sort; token Jaccard similarity $\ge 0.90$; 25MB buffer / 50k words cap. |
 | **Stream Utils** | Binary magic-byte probes | [`format_utils.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/format_utils.py) | `is_mpeg_ts`, `is_motion_photo_video`, `is_rar_archive`. |
 
 ---

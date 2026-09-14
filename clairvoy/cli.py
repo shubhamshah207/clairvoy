@@ -28,6 +28,7 @@ from clairvoy.engines.pipeline import (
 )
 from clairvoy.engines.quarantine import QuarantineEngine
 from clairvoy.plugins.archive_inspector import ArchiveInspectorMatcherPlugin
+from clairvoy.plugins.document_matcher import DocumentTextMatcherPlugin
 from clairvoy.plugins.exact_hash import ExactHashMatcherPlugin
 from clairvoy.plugins.hardlink_action import HardlinkActionPlugin
 from clairvoy.plugins.photo_vision import PhotoVisionMatcherPlugin
@@ -59,6 +60,7 @@ def discover_plugins(registry: PluginRegistry | None = None) -> PluginRegistry:
         ArchiveInspectorMatcherPlugin(),
         PhotoVisionMatcherPlugin(),
         VideoKeyframeMatcherPlugin(),
+        DocumentTextMatcherPlugin(),
         CompositeKeeperStrategy(),
         SafeQuarantineActionPlugin(),
         HardlinkActionPlugin(),
@@ -349,6 +351,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         print(f" • Exact Duplicate Sets: {summary.exact_duplicate_groups}")
         print(f" • Visual AI Clusters: {summary.visual_ai_groups}")
+        print(f" • Document & Tabular Clusters: {summary.content_duplicate_groups}")
         print(f" • Total Recoverable Space: {summary.wasted_mb} MB ({summary.wasted_gb} GB)")
         if summary.category_breakdown:
             cat_str = " | ".join(f"{k}: {v}" for k, v in summary.category_breakdown.items())

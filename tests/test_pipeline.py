@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from clairvoy.core.models import ActionType, FileEntry, MatchType
+from clairvoy.core.models import ActionType, FileEntry, ImageCategory, MatchType
 from clairvoy.core.plugins import (
     BaseKeeperPlugin,
     BaseMatcherPlugin,
@@ -304,6 +304,7 @@ def test_pipeline_default_registry_population(sample_dataset):
     assert "photo_vision" in matcher_ids
     assert "video_matcher" in matcher_ids
     assert "archive_inspector" in matcher_ids
+    assert "document_matcher" in matcher_ids
 
     action_ids = [a.plugin_id for a in pipeline.registry.get_actions(enabled_only=False)]
     assert "quarantine" in action_ids
@@ -344,3 +345,39 @@ def test_pipeline_action_errors(sample_dataset):
     fresh_pipeline = DeduplicationPipeline(paths=[root])
     with pytest.raises(ValueError, match="No scan summary or duplicate records provided"):
         fresh_pipeline.execute_action("quarantine")
+
+
+def test_pipeline_document_matcher_integration(temp_workspace):
+    """Verifies that DeduplicationPipeline correctly routes document files to DocumentTextMatcherPlugin,
+    clusters content duplicates, updates content_duplicate_groups, and categorizes them as DOCUMENT.
+    """
+    doc_dir = temp_workspace / "docs"
+    doc_dir.mkdir()
+
+    csv_a = doc_dir / "data_a.csv"
+    csv_b = doc_dir / "data_b.csv"
+    csv_unique = doc_dir / "unique.csv"
+
+    csv_a.write_text("id,name,value\n1,alpha,100\n2,beta,200\n3,gamma,300\n", encoding="utf-8")
+    # csv_b has permuted rows so exact_hash will NOT match, but document_matcher will
+    csv_b.write_text("id,name,value\n3,gamma,300\n1,alpha,100\n2,beta,200\n", encoding="utf-8")
+    csv_unique.write_text("id,name,value\n9,omega,999\n", encoding="utf-8")
+
+    pipeline = DeduplicationPipeline(paths=[doc_dir])
+    summary = pipeline.run_scan()
+
+    assert summary.total_files_scanned == 3
+    assert summary.exact_duplicate_groups == 0
+    assert summary.content_duplicate_groups == 1
+    assert summary.total_duplicate_groups == 1
+    assert summary.wasted_bytes > 0
+    assert len(summary.groups) == 2  # 1 keeper + 1 duplicate
+
+    keeper = next(r for r in summary.groups if r.action == ActionType.KEEP)
+    dupe = next(r for r in summary.groups if r.action == ActionType.DUPLICATE)
+
+    assert keeper.match_type == MatchType.CONTENT_NEAR_DUPLICATE
+    assert dupe.match_type == MatchType.CONTENT_NEAR_DUPLICATE
+    assert keeper.category == ImageCategory.DOCUMENT
+    assert dupe.category == ImageCategory.DOCUMENT
+    assert summary.category_breakdown.get(ImageCategory.DOCUMENT.value, 0) == 1

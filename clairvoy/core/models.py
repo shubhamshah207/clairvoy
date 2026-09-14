@@ -68,6 +68,7 @@ class ScanSummary(BaseModel):
     media_files_scanned: int
     exact_duplicate_groups: int
     visual_ai_groups: int
+    content_duplicate_groups: int = 0
     total_duplicate_groups: int
     wasted_bytes: int
     wasted_mb: float

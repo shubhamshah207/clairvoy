@@ -41,6 +41,7 @@ from clairvoy.core.plugins import (
 from clairvoy.core.security import generate_hardened_quarantine_script, resolve_safe_paths
 from clairvoy.engines.classifier_engine import ClassifierEngine
 from clairvoy.plugins.archive_inspector import ArchiveInspectorMatcherPlugin
+from clairvoy.plugins.document_matcher import DocumentTextMatcherPlugin
 from clairvoy.plugins.exact_hash import ExactHashMatcherPlugin
 from clairvoy.plugins.hardlink_action import HardlinkActionPlugin
 from clairvoy.plugins.photo_vision import PhotoVisionMatcherPlugin
@@ -155,6 +156,7 @@ class DeduplicationPipeline:
             self.registry.register(PhotoVisionMatcherPlugin())
             self.registry.register(VideoKeyframeMatcherPlugin())
             self.registry.register(ArchiveInspectorMatcherPlugin())
+            self.registry.register(DocumentTextMatcherPlugin())
 
         # If registry has no actions registered, populate default action suite
         if len(self.registry.get_actions(enabled_only=False)) == 0:
@@ -383,6 +385,11 @@ class DeduplicationPipeline:
                 keeper.path,
                 ImageCategory.PHOTO if keeper.is_media else ImageCategory.FILE,
             )
+            if cluster.match_type == MatchType.CONTENT_NEAR_DUPLICATE:
+                if keeper.category == ImageCategory.FILE:
+                    keeper.category = ImageCategory.DOCUMENT
+                if k_cat == ImageCategory.FILE:
+                    k_cat = ImageCategory.DOCUMENT
             records.append(
                 DuplicateRecord(
                     group_id=cluster.cluster_id,
@@ -403,6 +410,11 @@ class DeduplicationPipeline:
                     d.path,
                     ImageCategory.PHOTO if d.is_media else ImageCategory.FILE,
                 )
+                if cluster.match_type == MatchType.CONTENT_NEAR_DUPLICATE:
+                    if d.category == ImageCategory.FILE:
+                        d.category = ImageCategory.DOCUMENT
+                    if d_cat == ImageCategory.FILE:
+                        d_cat = ImageCategory.DOCUMENT
                 category_breakdown[d_cat.value] += 1
                 total_wasted_bytes += d.size_bytes
 
@@ -470,6 +482,9 @@ class DeduplicationPipeline:
         visual_ai_groups = sum(
             1 for c in all_clusters if c.match_type == MatchType.VISUAL_AI_NEAR_DUPLICATE
         )
+        content_duplicate_groups = sum(
+            1 for c in all_clusters if c.match_type == MatchType.CONTENT_NEAR_DUPLICATE
+        )
 
         summary_json_path = self.output_dir / "clairvoy_summary.json"
         summary = ScanSummary(
@@ -479,6 +494,7 @@ class DeduplicationPipeline:
             media_files_scanned=len(media_files),
             exact_duplicate_groups=exact_duplicate_groups,
             visual_ai_groups=visual_ai_groups,
+            content_duplicate_groups=content_duplicate_groups,
             total_duplicate_groups=len(all_clusters),
             wasted_bytes=total_wasted_bytes,
             wasted_mb=round(total_wasted_bytes / (1024 * 1024), 2),
