@@ -344,6 +344,18 @@ def main(argv: list[str] | None = None) -> None:
             output_dir=args.output,
             num_workers=args.workers,
         )
+
+        active_matchers = registry.get_matchers(enabled_only=True, available_only=True)
+        matcher_chain = " -> ".join(m.plugin_id for m in active_matchers)
+        out_display = str(pipeline.output_dir)
+
+        print(f"[*] Initializing Deduplication Engine across {len(target_paths)} target path(s)...")
+        for tp in target_paths:
+            print(f" • Scan Target: {tp}")
+        print(f" • Report Destination: {out_display}")
+        print(f" • Concurrency Workers: {args.workers}")
+        print(f" • Active Matcher Pipeline: {matcher_chain}\n")
+
         summary = pipeline.run_scan()
 
         print(

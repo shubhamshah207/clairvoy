@@ -88,6 +88,10 @@ class ExactHashMatcherPlugin(BaseMatcherPlugin):
         for entry in filtered_candidates:
             size_groups[entry.size_bytes].append(entry)
 
+        candidate_size_groups = [g for g in size_groups.values() if len(g) > 1]
+        if candidate_size_groups:
+            print(f"     [>] Found {len(candidate_size_groups):,} candidate size collision groups. Computing hashes...")
+
         for size_bytes, size_group in size_groups.items():
             if len(size_group) < 2:
                 continue

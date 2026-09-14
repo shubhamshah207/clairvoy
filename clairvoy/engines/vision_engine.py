@@ -278,13 +278,26 @@ class VisionEngine:
 
                     gc.collect()
 
+                total_photos = len(image_paths)
+                processed = min(i + chunk_size, total_photos)
+                pct = int((processed / total_photos) * 100)
+                bar_len = 25
+                filled = int(bar_len * processed / total_photos)
+                bar = "=" * filled + (">" if filled < bar_len else "") + " " * max(0, bar_len - filled - (1 if filled < bar_len else 0))
+                print(
+                    f"\r     [>] Progress: [{bar}] {pct:3d}% ({processed:,}/{total_photos:,} photos)",
+                    end="",
+                    flush=True,
+                )
+
         if not embeddings_list:
             return []
 
+        print()
         all_embs = np.vstack(embeddings_list)
         n_images = len(valid_paths)
-        print(f"[*] Extracted {n_images} embeddings in {time.time() - t0:.1f}s.")
-        print(f"[*] Clustering near-duplicates (threshold: {self.threshold * 100:.0f}%)...")
+        print(f"     [✓] Extracted {n_images:,} embeddings in {time.time() - t0:.1f}s.")
+        print(f"     Clustering near-duplicates (threshold: {self.threshold * 100:.0f}%)...")
 
         # Step 2: Memory-efficient chunked dot-products with Disjoint Set Union
         dsu = DisjointSetUnion(n_images)

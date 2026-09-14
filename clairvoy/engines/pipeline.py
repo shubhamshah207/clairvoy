@@ -249,12 +249,21 @@ class DeduplicationPipeline:
 
         if sub_roots:
             workers = min(len(sub_roots), self.num_workers)
+            total_sub = len(sub_roots)
+            done_sub = 0
             with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
                 futures = [pool.submit(self._scan_directory_tree, r) for r in sub_roots]
                 for fut in as_completed(futures):
                     entries, media = fut.result()
                     all_entries.extend(entries)
                     all_media.extend(media)
+                    done_sub += 1
+                    print(
+                        f"\r    [>] Indexed {done_sub}/{total_sub} top-level folders ({len(all_entries):,} files)...",
+                        end="",
+                        flush=True,
+                    )
+            print()
 
         return all_entries, all_media
 
@@ -285,10 +294,12 @@ class DeduplicationPipeline:
     ) -> ScanSummary:
         """Executes the deduplication scan using chained matchers and keeper scoring."""
         t_start = time.time()
+        print(f"[*] Stage 1/3: Traversing & indexing filesystem tree across {len(self.target_paths)} target path(s)...")
         if progress_callback:
             progress_callback("Scanning filesystem", 0, len(self.target_paths))
 
         all_files, media_files = self.scan_filesystem()
+        print(f"    [✓] Filesystem indexed: {len(all_files):,} files ({len(media_files):,} media items) in {time.time() - t_start:.1f}s.\n")
 
         if progress_callback:
             progress_callback("Filesystem indexed", len(all_files), max(1, len(all_files)))
@@ -296,11 +307,13 @@ class DeduplicationPipeline:
         # Classify media files
         classification_map: dict[str, ImageCategory] = {}
         if media_files:
+            print(f"[*] Pre-classifying {len(media_files):,} media items (EXIF & Content Type)...")
             try:
                 classification_map = ClassifierEngine.classify_batch(
                     media_files,
                     num_workers=self.num_workers,
                 )
+                print("    [✓] Media classification complete.\n")
             except Exception as exc:
                 logger.warning("Error during batch classification: %s", exc)
 
@@ -308,15 +321,17 @@ class DeduplicationPipeline:
         matchers = self.registry.get_matchers(enabled_only=True, available_only=True)
         total_matchers = len(matchers)
 
+        print(f"[*] Stage 2/3: Executing Chained Matcher Tiers ({total_matchers} tiers active):")
+
         all_clusters: list[DuplicateCluster] = []
         matched_paths: set[str] = set()
         next_cluster_id = 1
 
-        for idx, matcher in enumerate(matchers):
+        for idx, matcher in enumerate(matchers, start=1):
             if progress_callback:
                 progress_callback(
                     f"Running matcher: {matcher.display_name}",
-                    idx,
+                    idx - 1,
                     max(1, total_matchers),
                 )
 
@@ -324,9 +339,14 @@ class DeduplicationPipeline:
             candidates = [f for f in all_files if f.path not in matched_paths]
             supported = matcher.filter_supported(candidates)
 
+            print(f" [>] Tier {idx}/{total_matchers}: {matcher.display_name} (Priority {matcher.priority_order})...")
+
             if not supported:
+                print(f"     [-] No matching candidate files for {matcher.plugin_id}. Skipped.")
                 continue
 
+            print(f"     Evaluating {len(supported):,} candidate files against {matcher.plugin_id}...")
+            t_mat = time.time()
             context: dict[str, Any] = {
                 "start_cluster_id": next_cluster_id,
                 "num_workers": self.num_workers,
@@ -338,6 +358,9 @@ class DeduplicationPipeline:
                 all_clusters.append(cluster)
                 next_cluster_id += 1
 
+            print(f"     [✓] Tier {idx} complete: Found {len(clusters):,} duplicate cluster(s) in {time.time() - t_mat:.1f}s.")
+
+        print("\n[*] Stage 3/3: Evaluating Keepers & Designating Duplicates...")
         if progress_callback:
             progress_callback(
                 "Processing duplicate clusters",
