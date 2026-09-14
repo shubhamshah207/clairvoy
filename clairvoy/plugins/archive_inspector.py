@@ -19,7 +19,17 @@ from clairvoy.core.plugins import BaseMatcherPlugin, DuplicateCluster
 
 logger = logging.getLogger(__name__)
 
-ARCHIVE_SUFFIXES = (".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2")
+ARCHIVE_SUFFIXES = (
+    ".zip",
+    ".jar",
+    ".apk",
+    ".tar",
+    ".tar.gz",
+    ".tgz",
+    ".tar.bz2",
+    ".tbz2",
+    ".rar",
+)
 
 
 class ArchiveInspectorMatcherPlugin(BaseMatcherPlugin):
@@ -103,8 +113,8 @@ class ArchiveInspectorMatcherPlugin(BaseMatcherPlugin):
             archive_path = archive_entry.path
             lower_path = archive_path.lower()
 
-            # Handle ZIP archives
-            if lower_path.endswith(".zip"):
+            # Handle ZIP, JAR, and APK archives
+            if lower_path.endswith((".zip", ".jar", ".apk")):
                 try:
                     with zipfile.ZipFile(archive_path, "r") as zf:
                         for zinfo in zf.infolist():
@@ -188,5 +198,12 @@ class ArchiveInspectorMatcherPlugin(BaseMatcherPlugin):
                                     cluster_counter += 1
                 except (tarfile.TarError, OSError, PermissionError, EOFError) as err:
                     logger.debug("Skipping invalid or corrupt tar archive %s: %s", archive_path, err)
+
+            # Handle RAR archives
+            elif lower_path.endswith(".rar"):
+                logger.debug(
+                    "RAR archive detected at %s. In-memory inspection requires optional unrar/rarfile.",
+                    archive_path,
+                )
 
         return clusters
