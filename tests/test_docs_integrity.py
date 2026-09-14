@@ -61,12 +61,15 @@ def test_screenshot_generation_script_exists():
 
 
 def test_project_level_skills_exist():
-    """Verifies that viral-readme and diagrams-as-code skills exist at project level."""
+    """Verifies that viral-readme, diagrams-as-code, and maintaining-agents-md skills exist."""
     skill_readme = REPO_ROOT / ".agents" / "skills" / "viral-readme" / "SKILL.md"
     assert skill_readme.is_file(), "Project-level skill .agents/skills/viral-readme/SKILL.md must exist"
 
     skill_diagrams = REPO_ROOT / ".agents" / "skills" / "diagrams-as-code" / "SKILL.md"
     assert skill_diagrams.is_file(), "Project-level skill .agents/skills/diagrams-as-code/SKILL.md must exist"
+
+    skill_maintaining = REPO_ROOT / ".agents" / "skills" / "maintaining-agents-md" / "SKILL.md"
+    assert skill_maintaining.is_file(), "Project-level skill .agents/skills/maintaining-agents-md/SKILL.md must exist"
 
 
 def test_architecture_diagram_and_generator_exist():
