@@ -17,6 +17,7 @@ from typing import Any
 
 from PIL import Image
 
+from clairvoy.core.format_utils import is_motion_photo_video, is_mpeg_ts
 from clairvoy.core.models import FileEntry, MatchType
 from clairvoy.core.plugins import BaseMatcherPlugin, DuplicateCluster
 from clairvoy.engines.vision_engine import DisjointSetUnion
@@ -32,6 +33,8 @@ SUPPORTED_VIDEO_EXTENSIONS = {
     ".flv",
     ".wmv",
     ".m4v",
+    ".ts",
+    ".mp",
 }
 
 
@@ -62,14 +65,19 @@ class VideoKeyframeMatcherPlugin(BaseMatcherPlugin):
         return False, "ffprobe, ffmpeg, or OpenCV cv2 not found in system."
 
     def filter_supported(self, files: list[FileEntry]) -> list[FileEntry]:
-        """Filter files matching supported video extensions."""
+        """Filter files matching supported video extensions, validating stream headers for ambiguous extensions."""
         supported: list[FileEntry] = []
         for f in files:
             if f.size_bytes <= 0:
                 continue
             ext = Path(f.path).suffix.lower()
-            if ext in SUPPORTED_VIDEO_EXTENSIONS:
-                supported.append(f)
+            if ext not in SUPPORTED_VIDEO_EXTENSIONS:
+                continue
+            if ext == ".ts" and not is_mpeg_ts(f.path):
+                continue
+            if ext == ".mp" and not is_motion_photo_video(f.path):
+                continue
+            supported.append(f)
         return supported
 
     def extract_duration(self, path: str) -> float | None:
