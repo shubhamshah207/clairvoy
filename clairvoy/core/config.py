@@ -39,6 +39,9 @@ SUPPORTED_IMAGE_EXTENSIONS = {
     ".webp",
     ".bmp",
     ".tiff",
+    ".tif",
+    ".heic",
+    ".psd",
 }
 
 # DINOv2 ONNX Model Configuration

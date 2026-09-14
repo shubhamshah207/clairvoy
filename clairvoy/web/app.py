@@ -7,6 +7,7 @@ hardened thumbnail streaming, in-memory caching, and 1-click safe quarantine/res
 import io
 import threading
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
@@ -22,6 +23,7 @@ from clairvoy.core.config import (
 from clairvoy.core.security import SecurityError, resolve_safe_path, resolve_safe_paths
 from clairvoy.engines.quarantine import QuarantineEngine
 from clairvoy.engines.storage_engine import StorageEngine
+from clairvoy.engines.vision_engine import VisionEngine
 
 app = FastAPI(
     title="Clairvoy Web",
@@ -88,12 +90,23 @@ class RestoreActionRequest(BaseModel):
 # In-memory thumbnail cache (max 1024 entries)
 @lru_cache(maxsize=1024)
 def _generate_thumbnail_bytes(resolved_path_str: str) -> bytes:
-    with Image.open(resolved_path_str) as img:
-        img = ImageOps.exif_transpose(img)
-        img.thumbnail((256, 256), Image.Resampling.BILINEAR)
-        buf = io.BytesIO()
-        img.convert("RGB").save(buf, format="JPEG", quality=82, optimize=True)
-        return buf.getvalue()
+    img: Image.Image | None = None
+    try:
+        img = Image.open(resolved_path_str)
+        img.load()
+    except Exception:
+        ext = Path(resolved_path_str).suffix.lower()
+        if ext in {".heic", ".heif"}:
+            img = VisionEngine._extract_frame_via_ffmpeg(resolved_path_str)
+
+    if img is None:
+        raise ValueError(f"Unable to decode image for thumbnail: {resolved_path_str}")
+
+    img = ImageOps.exif_transpose(img)
+    img.thumbnail((256, 256), Image.Resampling.BILINEAR)
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=82, optimize=True)
+    return buf.getvalue()
 
 
 def _run_scan_worker(directories: list[str], enable_ml: bool, threshold: float):
