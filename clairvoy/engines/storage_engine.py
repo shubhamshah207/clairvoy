@@ -7,6 +7,7 @@ parallel QuickHash/SHA-256 content verification, and Vision AI clustering.
 import csv
 import hashlib
 import json
+import logging
 import os
 import re
 import time
@@ -32,6 +33,8 @@ from clairvoy.core.models import (
 from clairvoy.core.security import generate_hardened_quarantine_script, resolve_safe_paths
 from clairvoy.engines.classifier_engine import ClassifierEngine
 from clairvoy.engines.vision_engine import HAS_ML, VisionEngine
+
+logger = logging.getLogger(__name__)
 
 
 class StorageEngine:
@@ -467,6 +470,13 @@ class StorageEngine:
         # Write JSON Summary
         with open(summary.summary_json, "w", encoding="utf-8") as f:
             json.dump(summary.model_dump(), f, indent=2)
+
+        try:
+            from clairvoy.core.run_manager import RunManager
+
+            RunManager().register_run(summary)
+        except Exception as e:
+            logger.warning("Failed to register run with RunManager: %s", e)
 
         print(f"\n[✓] Scan completed in {elapsed:.1f}s across {len(self.target_paths)} path(s)")
         print(f" • Exact Duplicate Sets: {len(exact_duplicate_groups)}")

@@ -534,6 +534,13 @@ class DeduplicationPipeline:
         with open(summary_json_path, "w", encoding="utf-8") as f:
             json.dump(summary.model_dump(), f, indent=2)
 
+        try:
+            from clairvoy.core.run_manager import RunManager
+
+            RunManager().register_run(summary)
+        except Exception as e:
+            logger.warning("Failed to register run with RunManager: %s", e)
+
         self._last_summary = summary
         return summary
 

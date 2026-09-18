@@ -381,3 +381,20 @@ def test_pipeline_document_matcher_integration(temp_workspace):
     assert keeper.category == ImageCategory.DOCUMENT
     assert dupe.category == ImageCategory.DOCUMENT
     assert summary.category_breakdown.get(ImageCategory.DOCUMENT.value, 0) == 1
+
+
+def test_pipeline_registers_run(sample_dataset, monkeypatch, tmp_path):
+    """Verifies that running pipeline registers the scan run with RunManager."""
+    from clairvoy.core.run_manager import RunManager
+
+    test_history = tmp_path / "custom_runs.json"
+    manager = RunManager(history_file=test_history)
+    monkeypatch.setattr("clairvoy.core.run_manager.RunManager", lambda *args, **kwargs: manager)
+
+    root = sample_dataset["root"]
+    pipeline = DeduplicationPipeline(paths=[root])
+    pipeline.run_scan()
+
+    runs = manager.list_runs(auto_discover=False)
+    assert len(runs) >= 1
+    assert runs[0].total_duplicate_groups == 1
