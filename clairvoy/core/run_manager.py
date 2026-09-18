@@ -78,6 +78,14 @@ class RunManager:
         ts_now = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_id = f"run_{ts_now}"
 
+        runs = self._read_history()
+        existing_ids = {r.get("run_id") for r in runs}
+        if run_id in existing_ids:
+            counter = 1
+            while f"{run_id}_{counter}" in existing_ids:
+                counter += 1
+            run_id = f"{run_id}_{counter}"
+
         # Resolve paths
         scanned = data.get("scanned_paths")
         if not scanned:
@@ -119,11 +127,17 @@ class RunManager:
             self.auto_discover_reports(search_dirs=auto_discover_dirs)
         raw_runs = self._read_history()
         records: list[RunRecord] = []
+        valid_runs: list[dict[str, Any]] = []
         for r in raw_runs:
             try:
-                records.append(RunRecord(**r))
+                summary_path = r.get("summary_json")
+                if summary_path and Path(summary_path).is_file():
+                    records.append(RunRecord(**r))
+                    valid_runs.append(r)
             except Exception:
                 continue
+        if len(valid_runs) != len(raw_runs):
+            self._write_history(valid_runs[:50])
         return records[:limit]
 
     def get_run(self, run_id: str, auto_discover: bool = False) -> RunRecord | None:

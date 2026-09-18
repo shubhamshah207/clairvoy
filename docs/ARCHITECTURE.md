@@ -286,3 +286,54 @@ Clairvoy automatically maintains scan run history and provides instant report hy
   - `GET /api/runs`: Lists available runs ordered by newest first.
   - `POST /api/runs/load`: Dynamically swaps the active dashboard state and updates path traversal whitelists for media thumbnails.
   - Automatically loads the latest run on page load if the server was idle.
+
+---
+
+## 8. Premier Storage Optimization Studio UX Architecture
+
+Inspired by industry benchmarks **CleanMyMac X** and **Immich**, Clairvoy features a modern, responsive, 100% offline storage optimization studio designed for rapid review and safe curation across tens of thousands of duplicate clusters:
+
+```
++-----------------------------------------------------------------------------------------+
+|                                CLAIRVOY PREMIER WEB STUDIO                              |
++-----------------------------------------------------------------------------------------+
+|                                                                                         |
+|  [Header Bar]  Logo  |  📂 Past Runs Switcher  |  [+ New Scan Drawer Toggle]            |
+|                                                                                         |
+|  +-----------------------------------------------------------------------------------+  |
+|  | HERO STORAGE RECLAMATION METER                                                    |  |
+|  | Recoverable Space: 68.22 GB  |  Total Scanned: 43,086  |  Duplicates: 10,463      |  |
+|  | [=== Photos: 52GB ===][== Screencaps: 8GB ==][= Docs: 5GB =][= Files: 3GB =]      |  |
+|  +-----------------------------------------------------------------------------------+  |
+|                                                                                         |
+|  +-----------------------------------------------------------------------------------+  |
+|  | MULTI-FACET FILTER & SORT TOOLBAR                                                 |  |
+|  | Tabs: [All (10.4k)] [Photos (6.7k)] [Screenshots (786)] [Docs (355)] [Files]      |  |
+|  | Search: [ Filter path/name... ]  |  Type: [All / Exact / Vision]  | Sort: [Size]  |  |
+|  +-----------------------------------------------------------------------------------+  |
+|                                                                                         |
+|  +-----------------------------------------------------------------------------------+  |
+|  | HIGH-PERFORMANCE PAGINATED CLUSTER CARDS (25 / 50 / 100 per page)                 |  |
+|  | Cluster #102: Exact Hash (100% Match) - Wasted: 45.2 MB                           |  |
+|  |   [★ KEEPER CARD]             [DUPLICATE CARD]            [DUPLICATE CARD]        |  |
+|  |   Emerald Border              Amber/Rose Border           Amber/Rose Border       |  |
+|  |   Thumbnail + Meta            Thumbnail + Meta            Thumbnail + Meta        |  |
+|  |   [Current Keeper]            [★ Make Keeper]             [★ Make Keeper]         |  |
+|  |                               [Compare Side-by-Side]      [Compare Side-by-Side]  |  |
+|  +-----------------------------------------------------------------------------------+  |
+|                                                                                         |
+|  +-----------------------------------------------------------------------------------+  |
+|  | FLOATING STICKY ACTION DOCK                                                       |  |
+|  | Staged: 10,463 Files (68.22 GB)  |  [CSV Report]  [Shell Script]  [Safe Quarantine]|  |
+|  +-----------------------------------------------------------------------------------+  |
++-----------------------------------------------------------------------------------------+
+```
+
+### Key Capabilities:
+- **CleanMyMac Hero Storage Meter**: Visualizes total recoverable disk space with multi-colored segmented proportion bars (Photos: Cyan, Screenshots: Purple, Documents: Amber, Graphics: Pink, Files: Slate).
+- **Modality Categorization Tabs**: Instant 1-click filtering by category with dynamic counter badges.
+- **Client-Side High-Performance Pagination**: Paginates 10,000+ clusters (25, 50, or 100 per page) to ensure smooth 60fps scrolling with zero DOM lag.
+- **Interactive Keeper Swapping (`POST /api/clusters/override-keeper`)**: Allows users to swap designated `KEEP` vs `DUPLICATE` records dynamically, updating actions in place.
+- **Side-by-Side Comparison Lightbox Modal**: High-resolution image/document preview modal comparing the current Keeper against any duplicate candidate with synchronized metadata diffs (file size, resolution, modification date, file path).
+- **Sticky Action Dock**: Persistent bottom dock tracking staged quarantine count and gigabytes with direct CSV export (`GET /api/reports/csv`), Shell script download (`GET /api/reports/script`), and reversible quarantine staging.
+

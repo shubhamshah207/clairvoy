@@ -5,12 +5,25 @@ Integration Tests for FastAPI Web Application Endpoints
 import pytest
 from fastapi.testclient import TestClient
 
+from clairvoy.core.run_manager import RunManager
 from clairvoy.web.app import app
 
 
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolate_runs_history(tmp_path, monkeypatch):
+    test_runs_file = tmp_path / "test_runs.json"
+    orig_init = RunManager.__init__
+
+    def mock_init(self, history_file=None):
+        orig_init(self, history_file=history_file or test_runs_file)
+
+    monkeypatch.setattr(RunManager, "__init__", mock_init)
+    monkeypatch.setattr(RunManager, "auto_discover_reports", lambda self, search_dirs=None: [])
 
 
 def test_index_page(client):
@@ -174,3 +187,17 @@ def test_override_keeper_endpoint(client, tmp_path):
     file_b = next(g for g in groups if g["path"] == str(tmp_path / "file_b.txt"))
     assert file_b["action"] == "KEEP"
     assert file_a["action"] == "DUPLICATE"
+
+
+def test_download_reports_endpoints(client, tmp_path):
+    # With active summary loaded from previous test or newly loaded
+    csv_res = client.get("/api/reports/csv")
+    assert csv_res.status_code == 200
+    assert "group_id" in csv_res.text
+    assert "file_a.txt" in csv_res.text or "file_b.txt" in csv_res.text
+
+    sh_res = client.get("/api/reports/script")
+    assert sh_res.status_code == 200
+    assert "#!/usr/bin/env bash" in sh_res.text
+    assert "mv -n --" in sh_res.text
+
