@@ -173,6 +173,65 @@ def handle_plugin_info(plugin_id: str, registry: PluginRegistry) -> None:
     print(f" • Description: {plugin.description}")
 
 
+def handle_runs_list(limit: int = 10) -> None:
+    """Lists past scan runs in a clean ASCII table."""
+    from clairvoy.core.run_manager import RunManager
+
+    manager = RunManager()
+    runs = manager.list_runs(limit=limit)
+    if not runs:
+        print("[*] No past scan runs found. Run 'clairvoy scan <path>' to execute a scan.")
+        return
+
+    print_banner()
+    print(f"[*] Past Scan Runs ({len(runs)} found):")
+    headers = ["Run ID", "Date", "Target Paths", "Duplicates", "Space Recoverable", "Summary File"]
+    rows = []
+    for r in runs:
+        target = ", ".join(r.scanned_paths) if r.scanned_paths else "-"
+        if len(target) > 26:
+            target = target[:23] + "..."
+        date_str = r.timestamp[:19].replace("T", " ")
+        summary_name = Path(r.summary_json).name if r.summary_json else "-"
+        space_str = f"{r.wasted_mb:.1f} MB ({r.wasted_gb:.3f} GB)"
+        rows.append([r.run_id, date_str, target, str(r.total_duplicate_groups), space_str, summary_name])
+
+    print(format_ascii_table(headers, rows))
+    print("\n[*] Inspect run:  clairvoy runs show <RUN_ID>")
+    print("[*] Launch in UI: clairvoy ui --run <RUN_ID>")
+
+
+def handle_runs_show(run_id: str) -> None:
+    """Displays detailed metrics for a specific scan run."""
+    from clairvoy.core.run_manager import RunManager
+
+    manager = RunManager()
+    run = manager.get_run(run_id)
+    if not run:
+        print(f"[!] Error: Run '{run_id}' not found.")
+        sys.exit(1)
+
+    print_banner()
+    print(f"[*] Run Details: {run.run_id}")
+    print(f" • Timestamp:              {run.timestamp}")
+    print(f" • Scanned Target Paths:   {', '.join(run.scanned_paths)}")
+    print(f" • Total Files Scanned:    {run.total_files_scanned:,}")
+    print(f" • Total Duplicate Groups: {run.total_duplicate_groups:,}")
+    print(f" • Exact Duplicate Groups: {run.exact_duplicate_groups:,}")
+    print(f" • Visual AI Groups:       {run.visual_ai_groups:,}")
+    print(f" • Content Duplicates:     {run.content_duplicate_groups:,}")
+    print(f" • Total Space Recovered:  {run.wasted_mb:.1f} MB ({run.wasted_gb:.3f} GB)")
+    if run.category_breakdown:
+        cat_str = " | ".join(f"{k}: {v}" for k, v in run.category_breakdown.items())
+        print(f" • Duplicates by Category: {cat_str}")
+    print(f" • Summary JSON:           {run.summary_json}")
+    if run.csv_report:
+        print(f" • CSV Report:             {run.csv_report}")
+    if run.quarantine_script:
+        print(f" • Quarantine Script:      {run.quarantine_script}")
+    print(f"\n[*] To view in browser: clairvoy ui --run {run.run_id}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build and configure the CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -257,6 +316,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     plugin_info_parser.add_argument("plugin_id", help="Identifier of the plugin to inspect")
 
+    # --- Runs Command ---
+    runs_parser = subparsers.add_parser(
+        "runs", help="Inspect, list, and manage past deduplication scan runs"
+    )
+    runs_subparsers = runs_parser.add_subparsers(
+        dest="runs_command", help="Runs subcommand (list, show)"
+    )
+    runs_list_parser = runs_subparsers.add_parser(
+        "list", help="List recent deduplication scan runs"
+    )
+    runs_list_parser.add_argument(
+        "--limit", "-n", type=int, default=10, help="Maximum runs to display (default: 10)"
+    )
+    runs_show_parser = runs_subparsers.add_parser(
+        "show", help="Show detailed metrics for a specific scan run"
+    )
+    runs_show_parser.add_argument("run_id", help="Identifier of the scan run (e.g. run_20260914_093245)")
+
     # --- UI Command ---
     ui_parser = subparsers.add_parser(
         "ui", help="Launch the local interactive Web Application dashboard"
@@ -272,6 +349,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--host",
         default="127.0.0.1",
         help="Web server host binding (default: 127.0.0.1)",
+    )
+    ui_parser.add_argument(
+        "--report",
+        "-r",
+        default=None,
+        help="Path to an existing clairvoy_summary.json report to load immediately",
+    )
+    ui_parser.add_argument(
+        "--run",
+        default=None,
+        help="Identifier of a past scan run to load immediately",
     )
 
     # --- Quarantine Command ---
@@ -398,6 +486,18 @@ def main(argv: list[str] | None = None) -> None:
             print("Usage: clairvoy plugins [list|info <plugin_id>]")
             sys.exit(0)
 
+    elif args.command == "runs":
+        runs_command = getattr(args, "runs_command", None)
+        if runs_command == "list":
+            handle_runs_list(limit=getattr(args, "limit", 10))
+            sys.exit(0)
+        elif runs_command == "show":
+            handle_runs_show(args.run_id)
+            sys.exit(0)
+        else:
+            print("Usage: clairvoy runs [list|show <run_id>]")
+            sys.exit(0)
+
     elif args.command == "ui":
         print_banner()
         print(f"[*] Starting Clairvoy Web Server at http://{args.host}:{args.port} ...")
@@ -405,7 +505,11 @@ def main(argv: list[str] | None = None) -> None:
         try:
             import uvicorn
 
-            from clairvoy.web.app import app
+            from clairvoy.web.app import app, load_initial_run
+
+            # Pre-load requested run or auto-discover recent run
+            run_target = getattr(args, "run", None) or getattr(args, "report", None)
+            load_initial_run(run_target)
 
             uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
         except ImportError:

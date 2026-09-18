@@ -43,6 +43,48 @@ SCAN_STATE: dict[str, Any] = {
 SCAN_LOCK = threading.Lock()
 
 
+def load_initial_run(run_target: str | None = None) -> bool:
+    """
+    Pre-loads a scan summary into SCAN_STATE.
+    If run_target is given (path or run_id), loads that run.
+    If run_target is None, auto-discovers and loads the most recent run if available.
+    """
+    from clairvoy.core.run_manager import RunManager
+
+    manager = RunManager()
+    summary_data = None
+    if run_target:
+        try:
+            summary_data = manager.load_run_summary(run_target)
+        except Exception as e:
+            print(f"[!] Warning: Could not load requested run '{run_target}': {e}")
+            return False
+    else:
+        runs = manager.list_runs(limit=1, auto_discover=True)
+        if runs:
+            try:
+                summary_data = manager.load_run_summary(runs[0].run_id)
+            except Exception as e:
+                print(f"[!] Warning: Could not auto-load recent run '{runs[0].run_id}': {e}")
+                return False
+
+    if summary_data:
+        with SCAN_LOCK:
+            SCAN_STATE["status"] = "completed"
+            scanned = summary_data.get("scanned_paths") or [summary_data.get("scanned_dir", "")]
+            SCAN_STATE["target_paths"] = scanned
+            SCAN_STATE["target_dir"] = scanned[0] if scanned else ""
+            groups_count = summary_data.get("total_duplicate_groups", 0)
+            wasted_gb = summary_data.get("wasted_gb", 0.0)
+            SCAN_STATE["message"] = (
+                f"Loaded scan summary ({groups_count:,} duplicate groups, {wasted_gb:.2f} GB recoverable)"
+            )
+            SCAN_STATE["summary"] = summary_data
+            SCAN_STATE["error"] = None
+        return True
+    return False
+
+
 class ScanRequest(BaseModel):
     paths: list[str] | str | None = Field(
         default=None,
