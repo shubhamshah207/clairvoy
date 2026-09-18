@@ -35,7 +35,10 @@ Tests are run using `pytest` with `pytest-asyncio`. Python 3.12+ in the project 
 - [`tests/test_security.py`](file:///home/shubhamshah207/clairvoy/tests/test_security.py): Enterprise security tests: path traversal, root safety, shell argument escaping.
 - [`tests/test_storage_engine.py`](file:///home/shubhamshah207/clairvoy/tests/test_storage_engine.py): Multi-threaded file scanner, 128KB QuickHash, SHA-256 digests.
 - [`tests/test_vision_engine.py`](file:///home/shubhamshah207/clairvoy/tests/test_vision_engine.py): ONNX Runtime embedding inference, cosine distance, DSU clustering.
-- [`tests/test_web_api.py`](file:///home/shubhamshah207/clairvoy/tests/test_web_api.py): FastAPI backend endpoints, thumbnail security, scan triggers.
+- [`tests/test_document_matcher.py`](file:///home/shubhamshah207/clairvoy/tests/test_document_matcher.py): Tier 5 document text and tabular row-permutation matching (.pdf, .docx, .csv, .tsv).
+- [`tests/test_run_manager.py`](file:///home/shubhamshah207/clairvoy/tests/test_run_manager.py): Persistent RunManager, history recording, and report auto-discovery.
+- [`tests/test_cli_runs.py`](file:///home/shubhamshah207/clairvoy/tests/test_cli_runs.py): CLI commands `clairvoy runs list`, `clairvoy runs show`, and UI run preloading flags.
+- [`tests/test_web_api.py`](file:///home/shubhamshah207/clairvoy/tests/test_web_api.py): FastAPI backend endpoints, thumbnail security, scan triggers, runs listing, and report loading.
 - [`tests/test_docs_integrity.py`](file:///home/shubhamshah207/clairvoy/tests/test_docs_integrity.py): Verification of README, screenshots, AGENTS.md, symlinks, diagrams.
 
 ---

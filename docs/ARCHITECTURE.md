@@ -245,3 +245,44 @@ When duplicate clusters are identified, `CompositeKeeperStrategy` determines whi
 4. **Directory Seniority / Clean Path Bonus**: Shorter, cleaner directory paths receive preference over deeply nested temp folders.
 5. **Modification Time Tie-Breaking**: When scores are identical, the oldest original file is preserved.
 6. **Document Categorization**: Clusters tagged with `MatchType.CONTENT_NEAR_DUPLICATE` are classified as `ImageCategory.DOCUMENT` in duplicate records and scan summaries.
+
+---
+
+## 7. Persistent Run Management & History Architecture
+
+Clairvoy automatically maintains scan run history and provides instant report hydration across CLI and Web environments via [`RunManager`](file:///home/shubhamshah207/clairvoy/clairvoy/core/run_manager.py).
+
+```
++-----------------------------------------------------------------------------------------+
+|                               RUN MANAGEMENT ARCHITECTURE                               |
++-----------------------------------------------------------------------------------------+
+|                                                                                         |
+|   Scan Completion (CLI / Web Engine)                                                    |
+|          |                                                                              |
+|          v                                                                              |
+|   RunManager.register_run(summary)                                                      |
+|          |                                                                              |
+|          v                                                                              |
+|   Persistent Storage (~/.clairvoy/runs.json) <---> Auto-Discovery (known directories)   |
+|          |                                                                              |
+|          +--------------------------------------+---------------------------------------+
+|          |                                                              |
+|          v                                                              v
+|   CLI Interface (`clairvoy runs list / show`)              Web UI API (`/api/runs`, `/load`)
+|   * Clean ASCII table listing past scan runs              * Top header "📂 Runs:" dropdown
+|   * Deep inspection of run metrics                        * 1-click run switching without rescan
+|   * Launch UI loaded to specific run (`--run`)            * Auto-hydrates latest run on load
++-----------------------------------------------------------------------------------------+
+```
+
+### Key Components:
+- **`RunRecord` Schema**: Serializes `run_id`, ISO timestamp, `scanned_paths`, duplicate counts, recoverable space (MB/GB), category breakdown, and paths to `clairvoy_summary.json`, `clairvoy_duplicates.csv`, and `clairvoy_quarantine.sh`.
+- **Auto-Discovery**: Automatically inspects well-known directories (`~/clairvoy_drive_e_reports`, `./_dedupe_reports`, `~/.clairvoy/reports`) to index preexisting scan runs without requiring manual re-scanning.
+- **CLI Commands**:
+  - `clairvoy runs list`: Formats past scan runs in an ASCII table.
+  - `clairvoy runs show <RUN_ID>`: Displays detailed metrics, breakdown, and file paths.
+  - `clairvoy ui --report <PATH>` / `clairvoy ui --run <RUN_ID>`: Pre-loads specific scan data into the web dashboard.
+- **Web UI Hydration**:
+  - `GET /api/runs`: Lists available runs ordered by newest first.
+  - `POST /api/runs/load`: Dynamically swaps the active dashboard state and updates path traversal whitelists for media thumbnails.
+  - Automatically loads the latest run on page load if the server was idle.

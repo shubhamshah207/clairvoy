@@ -16,6 +16,10 @@ All agents operating in this repository **MUST read this document** and **MUST m
 - **CLI Commands:**
   ```bash
   /home/shubhamshah207/miniconda3/bin/clairvoy scan /path/to/folder
+  /home/shubhamshah207/miniconda3/bin/clairvoy runs list
+  /home/shubhamshah207/miniconda3/bin/clairvoy runs show <RUN_ID>
+  /home/shubhamshah207/miniconda3/bin/clairvoy ui --report /path/to/clairvoy_summary.json
+  /home/shubhamshah207/miniconda3/bin/clairvoy ui --run <RUN_ID>
   /home/shubhamshah207/miniconda3/bin/clairvoy plugins list
   /home/shubhamshah207/miniconda3/bin/clairvoy plugins info exact_hash
   /home/shubhamshah207/miniconda3/bin/clairvoy plugins info document_matcher
