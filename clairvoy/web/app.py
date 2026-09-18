@@ -20,6 +20,7 @@ from clairvoy.core.config import (
     SUPPORTED_IMAGE_EXTENSIONS,
     VERSION,
 )
+from clairvoy.core.models import ActionType
 from clairvoy.core.security import SecurityError, resolve_safe_path, resolve_safe_paths
 from clairvoy.engines.quarantine import QuarantineEngine
 from clairvoy.engines.storage_engine import StorageEngine
@@ -132,6 +133,11 @@ class RestoreActionRequest(BaseModel):
 class LoadRunRequest(BaseModel):
     run_id: str | None = Field(default=None, description="Run ID to load")
     path: str | None = Field(default=None, description="Direct path to summary JSON to load")
+
+
+class KeeperOverrideRequest(BaseModel):
+    group_id: int
+    new_keeper_path: str
 
 
 # In-memory thumbnail cache (max 1024 entries)
@@ -804,4 +810,40 @@ async def load_run(req: LoadRunRequest):
         SCAN_STATE["error"] = None
 
     return {"status": "loaded", "summary": summary_data}
+
+
+@app.post("/api/clusters/override-keeper")
+async def override_cluster_keeper(req: KeeperOverrideRequest):
+    """
+    Overrides the designated KEEP file within a specific duplicate cluster.
+    Updates the active in-memory summary so that the target file is marked KEEP
+    and all other members of the cluster are marked DUPLICATE.
+    """
+    with SCAN_LOCK:
+        summary = SCAN_STATE.get("summary")
+        if not summary or "groups" not in summary:
+            raise HTTPException(status_code=400, detail="No active scan summary available.")
+
+        groups = summary["groups"]
+        cluster_found = False
+        target_found = False
+
+        for item in groups:
+            if item.get("group_id") == req.group_id:
+                cluster_found = True
+                if item.get("path") == req.new_keeper_path:
+                    item["action"] = ActionType.KEEP.value
+                    target_found = True
+                else:
+                    item["action"] = ActionType.DUPLICATE.value
+
+        if not cluster_found:
+            raise HTTPException(status_code=404, detail=f"Cluster #{req.group_id} not found.")
+        if not target_found:
+            raise HTTPException(
+                status_code=404, detail=f"Path '{req.new_keeper_path}' not found in cluster #{req.group_id}."
+            )
+
+        return {"status": "updated", "group_id": req.group_id, "new_keeper": req.new_keeper_path}
+
 

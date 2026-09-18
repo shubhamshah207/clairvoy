@@ -110,3 +110,67 @@ def test_runs_list_and_load_endpoints(client, tmp_path):
     status_data = status_res.json()
     assert status_data["status"] == "completed"
     assert status_data["summary"]["total_duplicate_groups"] == 5
+
+
+def test_override_keeper_endpoint(client, tmp_path):
+    import json
+
+    from clairvoy.core.run_manager import RunManager
+
+    summary_file = tmp_path / "clairvoy_summary.json"
+    data = {
+        "scanned_paths": [str(tmp_path)],
+        "total_files_scanned": 2,
+        "total_duplicate_groups": 1,
+        "wasted_bytes": 1024,
+        "wasted_mb": 0.001,
+        "wasted_gb": 0.0,
+        "summary_json": str(summary_file),
+        "groups": [
+            {
+                "group_id": 1,
+                "match_type": "EXACT_HASH",
+                "action": "KEEP",
+                "similarity": "100%",
+                "similarity_score": 1.0,
+                "size_mb": 0.001,
+                "path": str(tmp_path / "file_a.txt"),
+                "category": "FILE",
+            },
+            {
+                "group_id": 1,
+                "match_type": "EXACT_HASH",
+                "action": "DUPLICATE",
+                "similarity": "100%",
+                "similarity_score": 1.0,
+                "size_mb": 0.001,
+                "path": str(tmp_path / "file_b.txt"),
+                "category": "FILE",
+            },
+        ],
+    }
+    summary_file.write_text(json.dumps(data), encoding="utf-8")
+
+    manager = RunManager()
+    rec = manager.register_run(data)
+
+    # Load into active state
+    load_res = client.post("/api/runs/load", json={"run_id": rec.run_id})
+    assert load_res.status_code == 200
+
+    # Override keeper to file_b.txt
+    override_res = client.post(
+        "/api/clusters/override-keeper",
+        json={"group_id": 1, "new_keeper_path": str(tmp_path / "file_b.txt")},
+    )
+    assert override_res.status_code == 200
+    res_data = override_res.json()
+    assert res_data["status"] == "updated"
+
+    # Check that file_b.txt is now KEEP and file_a.txt is DUPLICATE
+    status_res = client.get("/api/status")
+    groups = status_res.json()["summary"]["groups"]
+    file_a = next(g for g in groups if g["path"] == str(tmp_path / "file_a.txt"))
+    file_b = next(g for g in groups if g["path"] == str(tmp_path / "file_b.txt"))
+    assert file_b["action"] == "KEEP"
+    assert file_a["action"] == "DUPLICATE"
