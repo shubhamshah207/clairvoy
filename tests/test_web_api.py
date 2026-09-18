@@ -17,6 +17,7 @@ def test_index_page(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "Clairvoy" in response.text
+    assert "runsDropdown" in response.text
 
 
 def test_status_endpoint(client):

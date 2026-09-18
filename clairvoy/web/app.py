@@ -205,9 +205,15 @@ async def serve_index():
                     </h1>
                     <p class="text-xs text-slate-400 mt-1">Multi-Path Storage Deduplication & Cross-Folder Vision AI (Meta DINOv2)</p>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center bg-slate-950/80 border border-slate-700/80 rounded-2xl px-3 py-1.5 shadow-sm">
+                        <span class="text-xs font-mono text-indigo-400 mr-2 flex items-center gap-1">📂 <span>Runs:</span></span>
+                        <select id="runsDropdown" onchange="onRunSelected(this.value)" class="bg-transparent text-xs text-slate-200 focus:outline-none font-mono cursor-pointer">
+                            <option value="" class="bg-slate-900 text-slate-400">Loading past runs...</option>
+                        </select>
+                    </div>
                     <span class="text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-full font-mono flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Multi-Tree Parallel Active
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Multi-Tree Active
                     </span>
                     <a href="https://github.com/shubhamshah207/clairvoy" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-1.5 rounded-full text-slate-300 transition">
                         GitHub ↗
@@ -539,6 +545,97 @@ async def serve_index():
                     btn.innerText = "Move Duplicates to Quarantine";
                 }}
             }}
+
+            async function loadPastRunsList(selectedRunId = null) {{
+                const dropdown = document.getElementById('runsDropdown');
+                try {{
+                    const res = await fetch('/api/runs?limit=30');
+                    if (!res.ok) return;
+                    const runs = await res.json();
+                    dropdown.innerHTML = '';
+                    if (runs.length === 0) {{
+                        dropdown.innerHTML = '<option value="">No past runs recorded</option>';
+                    }} else {{
+                        for (const r of runs) {{
+                            const opt = document.createElement('option');
+                            opt.value = r.run_id;
+                            opt.className = "bg-slate-900 text-slate-100";
+                            const target = r.scanned_paths && r.scanned_paths.length > 0 ? r.scanned_paths[0] : "Run";
+                            const shortTarget = target.length > 22 ? target.slice(0, 19) + "..." : target;
+                            const dateStr = r.timestamp ? r.timestamp.slice(0, 10) : "";
+                            opt.innerText = `${{shortTarget}} • ${{r.wasted_gb.toFixed(2)}} GB (${{r.total_duplicate_groups}} dupes) [${{dateStr}}]`;
+                            dropdown.appendChild(opt);
+                        }}
+                    }}
+                    const customOpt = document.createElement('option');
+                    customOpt.value = "__custom__";
+                    customOpt.className = "bg-slate-900 text-indigo-400 font-bold";
+                    customOpt.innerText = "➕ Load custom report path...";
+                    dropdown.appendChild(customOpt);
+
+                    if (selectedRunId) {{
+                        dropdown.value = selectedRunId;
+                    }}
+                }} catch (e) {{
+                    console.error("Failed to load past runs:", e);
+                }}
+            }}
+
+            async function onRunSelected(val) {{
+                if (!val) return;
+                if (val === "__custom__") {{
+                    const path = prompt("Enter full absolute path to clairvoy_summary.json:");
+                    if (!path) {{
+                        await loadPastRunsList();
+                        return;
+                    }}
+                    await loadRunReport({{ path: path.trim() }});
+                }} else {{
+                    await loadRunReport({{ run_id: val }});
+                }}
+            }}
+
+            async function loadRunReport(payload) {{
+                updateStatus("running", "Loading scan report...");
+                try {{
+                    const res = await fetch('/api/runs/load', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify(payload)
+                    }});
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || "Failed to load run");
+                    currentSummary = data.summary;
+                    renderSummary(data.summary);
+                    updateStatus("completed", `Loaded: ${{data.summary.scanned_paths ? data.summary.scanned_paths[0] : ""}} (${{data.summary.total_duplicate_groups}} groups, ${{data.summary.wasted_gb}} GB recoverable)`);
+                    await loadPastRunsList(payload.run_id);
+                }} catch (e) {{
+                    updateStatus("failed", "Error loading report: " + e.message);
+                }}
+            }}
+
+            window.addEventListener('DOMContentLoaded', async () => {{
+                await loadPastRunsList();
+                try {{
+                    const res = await fetch('/api/status');
+                    const state = await res.json();
+                    if (state.status === "completed" && state.summary) {{
+                        currentSummary = state.summary;
+                        renderSummary(state.summary);
+                        updateStatus("completed", state.message);
+                    }} else if (state.status === "running") {{
+                        pollTimer = setInterval(pollScanStatus, 1000);
+                        updateStatus("running", state.message);
+                    }} else {{
+                        const dropdown = document.getElementById('runsDropdown');
+                        if (dropdown && dropdown.value && dropdown.value !== "__custom__") {{
+                            await onRunSelected(dropdown.value);
+                        }}
+                    }}
+                }} catch (e) {{
+                    console.error("Initial status check failed:", e);
+                }}
+            }});
         </script>
     </body>
     </html>
