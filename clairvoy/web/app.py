@@ -129,6 +129,11 @@ class RestoreActionRequest(BaseModel):
     manifest_file: str
 
 
+class LoadRunRequest(BaseModel):
+    run_id: str | None = Field(default=None, description="Run ID to load")
+    path: str | None = Field(default=None, description="Direct path to summary JSON to load")
+
+
 # In-memory thumbnail cache (max 1024 entries)
 @lru_cache(maxsize=1024)
 def _generate_thumbnail_bytes(resolved_path_str: str) -> bytes:
@@ -659,4 +664,47 @@ async def restore_quarantine(req: RestoreActionRequest):
         raise HTTPException(status_code=404, detail="Manifest file not found.") from None
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Restore failed: {e!s}") from e
+
+
+@app.get("/api/runs")
+async def list_runs(limit: int = Query(default=20, ge=1, le=100)):
+    """Returns list of past scan runs ordered by newest first."""
+    from clairvoy.core.run_manager import RunManager
+
+    manager = RunManager()
+    runs = manager.list_runs(limit=limit, auto_discover=True)
+    return [r.model_dump() for r in runs]
+
+
+@app.post("/api/runs/load")
+async def load_run(req: LoadRunRequest):
+    """Loads a specific run into SCAN_STATE by run_id or direct JSON path."""
+    target = req.run_id or req.path
+    if not target:
+        raise HTTPException(status_code=400, detail="Must provide either run_id or path.")
+
+    from clairvoy.core.run_manager import RunManager
+
+    manager = RunManager()
+    try:
+        summary_data = manager.load_run_summary(target)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=404, detail=str(fnf)) from fnf
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load run: {e!s}") from e
+
+    with SCAN_LOCK:
+        SCAN_STATE["status"] = "completed"
+        scanned = summary_data.get("scanned_paths") or [summary_data.get("scanned_dir", "")]
+        SCAN_STATE["target_paths"] = scanned
+        SCAN_STATE["target_dir"] = scanned[0] if scanned else ""
+        groups_count = summary_data.get("total_duplicate_groups", 0)
+        wasted_gb = summary_data.get("wasted_gb", 0.0)
+        SCAN_STATE["message"] = (
+            f"Loaded scan summary ({groups_count:,} duplicate groups, {wasted_gb:.2f} GB recoverable)"
+        )
+        SCAN_STATE["summary"] = summary_data
+        SCAN_STATE["error"] = None
+
+    return {"status": "loaded", "summary": summary_data}
 
