@@ -17,7 +17,7 @@ def get_index_html() -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clairvoy Photos | Google Storage & Multimodal Deduplication</title>
+    <title>Clairvoy | Multimodal Storage Optimization & Deduplication Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {{
@@ -219,7 +219,7 @@ def get_index_html() -> str:
                 <div class="flex items-baseline gap-2">
                     <span class="text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
                         Clairvoy
-                        <span class="text-xs font-semibold text-[#8ab4f8] bg-[#1a3860] px-2 py-0.5 rounded-full">Photos</span>
+                        <span id="topBrandBadge" class="text-xs font-semibold text-[#8ab4f8] bg-[#1a3860] px-2 py-0.5 rounded-full">Studio</span>
                     </span>
                     <span class="hidden md:inline text-[11px] font-mono text-[#8e918f]">v{VERSION}</span>
                 </div>
@@ -232,7 +232,7 @@ def get_index_html() -> str:
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
                     <input type="text" id="searchInput" oninput="onSearchInput(this.value)"
-                           placeholder="Search duplicate photos, documents, filenames..."
+                           placeholder="Search duplicate photos, videos, documents, files..."
                            class="w-full bg-transparent text-sm text-[#e3e3e3] placeholder-[#8e918f] focus:outline-none">
                     <button id="clearSearchBtn" onclick="clearSearch()" class="hidden text-[#8e918f] hover:text-white ml-2 text-sm">✕</button>
                 </div>
@@ -352,7 +352,7 @@ def get_index_html() -> str:
 
                 <!-- Category 1: Photos -->
                 <button onclick="setModalityCategory('PHOTO')" id="catBtn_PHOTO"
-                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8] group">
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group">
                     <div class="flex items-center gap-2.5 min-w-0">
                         <span class="text-base">🖼️</span>
                         <span class="truncate">Photos</span>
@@ -422,7 +422,7 @@ def get_index_html() -> str:
 
                 <!-- Category 6: All Duplicates -->
                 <button onclick="setModalityCategory('ALL')" id="catBtn_ALL"
-                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group">
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8] group">
                     <div class="flex items-center gap-2.5 min-w-0">
                         <span class="text-base">🌐</span>
                         <span class="truncate">All Duplicates</span>
@@ -606,8 +606,8 @@ def get_index_html() -> str:
                 <!-- Left: Active Category Breadcrumb & Filter Reset Cross Chip -->
                 <div class="flex items-center gap-3">
                     <div class="flex items-center gap-2">
-                        <span id="activeCategoryIcon" class="text-xl">🖼️</span>
-                        <h2 id="activeCategoryTitle" class="text-base md:text-lg font-bold text-white tracking-tight">Photos</h2>
+                        <span id="activeCategoryIcon" class="text-xl">🌐</span>
+                        <h2 id="activeCategoryTitle" class="text-base md:text-lg font-bold text-white tracking-tight">All Duplicates</h2>
                         <span id="activeCategoryCount" class="text-xs text-[#8e918f] font-mono">(0 sets)</span>
                     </div>
 
@@ -969,14 +969,14 @@ def get_index_html() -> str:
         let currentSummary = null;
         let allClusters = [];
         let filteredClusters = [];
-        let activeModality = 'PHOTO'; // Default to authentic Photos view
+        let activeModality = 'ALL'; // Default to all duplicates across all modalities
         let activeSortOrder = 'SIZE_DESC';
         let searchQuery = '';
         let currentPage = 1;
         let perPage = 25;
         let viewMode = 'grid'; // 'grid' (Photos) | 'list' (Drive)
         let thumbnailSize = 'medium'; // 'small' | 'medium' | 'large'
-        let currentNav = 'PHOTOS'; // 'PHOTOS' | 'DRIVE' | 'CLEANUP' | 'TRASH'
+        let currentNav = 'ALL'; // 'ALL' | 'DRIVE' | 'CLEANUP' | 'TRASH'
         let pollTimer = null;
 
         // Tracks excluded file paths from batch actions (set of paths)
@@ -1301,12 +1301,8 @@ def get_index_html() -> str:
             renderHeroStorageMeter(summary);
             renderModalityTabCounts(summary);
 
-            // Default to PHOTO tab when in Photos view
-            if (currentNav === 'PHOTOS') {{
-                setModalityTab('PHOTO');
-            }} else {{
-                applyFiltersAndSort();
-            }}
+            // Default to ALL duplicates category across all modalities
+            setModalityCategory('ALL');
             updateTopSelectionBar();
         }}
 
@@ -1455,7 +1451,7 @@ def get_index_html() -> str:
 
         function setModalityCategory(cat) {{
             activeModality = cat;
-            currentNav = 'PHOTOS';
+            currentNav = 'GALLERY';
 
             // Reset and update category buttons in left sidebar
             const categories = ['PHOTO', 'VIDEO', 'SCREENSHOT', 'DOCUMENT', 'FILE', 'ALL'];
