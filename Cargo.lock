@@ -90,6 +90,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "clairvoy-engine"
+version = "0.2.0"
+dependencies = [
+ "clairvoy-core",
+ "clairvoy-plugins",
+ "clairvoy-scanner",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "clairvoy-model"
 version = "0.2.0"
 dependencies = [
