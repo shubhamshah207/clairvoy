@@ -1728,7 +1728,7 @@
             }, 200);
         });
 
-        window.addEventListener('DOMContentLoaded', async () => {
+        async function initializeApp() {
             await loadPastRunsList();
             await refreshTelemetryData();
             logActivityEvent('system', 'Clairvoy ambient telemetry initialized');
@@ -1756,76 +1756,81 @@
             } catch (e) {
                 console.error("Initial status error:", e);
             }
-        });
+        }
 
-            // Global keyboard navigation & shortcuts
-            window.addEventListener('keydown', (e) => {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-                    return;
-                }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
 
-                const studioModal = document.getElementById('comparisonStudioModal') || document.getElementById('photoLightboxModal');
-                const isStudioOpen = studioModal && !studioModal.classList.contains('hidden');
+        // Global keyboard navigation & shortcuts
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+                return;
+            }
 
-                if (e.key === '?') {
-                    toggleShortcutsModal();
+            const studioModal = document.getElementById('comparisonStudioModal') || document.getElementById('photoLightboxModal');
+            const isStudioOpen = studioModal && !studioModal.classList.contains('hidden');
+
+            if (e.key === '?') {
+                toggleShortcutsModal();
+                e.preventDefault();
+                return;
+            }
+
+            if (isStudioOpen) {
+                if (e.key === 'Escape') {
+                    closeComparisonStudio();
                     e.preventDefault();
-                    return;
+                } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                    navigateStudioCluster(-1);
+                    e.preventDefault();
+                } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                    navigateStudioCluster(1);
+                    e.preventDefault();
+                } else if (e.key === ' ' || e.code === 'Space') {
+                    toggleStudioCandidateSelection();
+                    e.preventDefault();
+                } else if (e.key === 'k' || e.key === 'K' || e.code === 'KeyK') {
+                    swapKeeperFromStudio();
+                    e.preventDefault();
+                } else if (e.key === '1') {
+                    setStudioZoom(1);
+                    e.preventDefault();
+                } else if (e.key === '2') {
+                    setStudioZoom(2);
+                    e.preventDefault();
+                } else if (e.key === '4') {
+                    setStudioZoom(4);
+                    e.preventDefault();
+                } else if (e.key === 'i' || e.key === 'I') {
+                    toggleStudioInfo();
+                    e.preventDefault();
                 }
-
-                if (isStudioOpen) {
-                    if (e.key === 'Escape') {
-                        closeComparisonStudio();
-                        e.preventDefault();
-                    } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-                        navigateStudioCluster(-1);
-                        e.preventDefault();
-                    } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-                        navigateStudioCluster(1);
-                        e.preventDefault();
-                    } else if (e.key === ' ' || e.code === 'Space') {
-                        toggleStudioCandidateSelection();
-                        e.preventDefault();
-                    } else if (e.key === 'k' || e.key === 'K' || e.code === 'KeyK') {
-                        swapKeeperFromStudio();
-                        e.preventDefault();
-                    } else if (e.key === '1') {
-                        setStudioZoom(1);
-                        e.preventDefault();
-                    } else if (e.key === '2') {
-                        setStudioZoom(2);
-                        e.preventDefault();
-                    } else if (e.key === '4') {
-                        setStudioZoom(4);
-                        e.preventDefault();
-                    } else if (e.key === 'i' || e.key === 'I') {
-                        toggleStudioInfo();
-                        e.preventDefault();
+            } else {
+                if (e.key === 'Escape') {
+                    closeTrashDialog();
+                    closePermanentDeleteDialog();
+                    closeQuarantineModal();
+                    closeNewScanModal();
+                    closeDriveBrowserModal();
+                    closeHardlinkDialog();
+                    closeCleanProgressModal();
+                    if (document.getElementById('activityDrawerModal')) {
+                        document.getElementById('activityDrawerModal').classList.add('hidden');
                     }
-                } else {
-                    if (e.key === 'Escape') {
-                        closeTrashDialog();
-                        closePermanentDeleteDialog();
-                        closeQuarantineModal();
-                        closeNewScanModal();
-                        closeDriveBrowserModal();
-                        closeHardlinkDialog();
-                        closeCleanProgressModal();
-                        if (document.getElementById('activityDrawerModal')) {
-                            document.getElementById('activityDrawerModal').classList.add('hidden');
-                        }
-                        const scModal = document.getElementById('shortcutsModal');
-                        if (scModal && !scModal.classList.contains('hidden')) toggleShortcutsModal();
-                        const scDrawer = document.getElementById('scanDrawer');
-                        if (scDrawer && !scDrawer.classList.contains('hidden')) toggleScanDrawer();
-                    } else if (e.key === 'ArrowLeft') {
-                        if (currentPage > 1) changePage(currentPage - 1);
-                    } else if (e.key === 'ArrowRight') {
-                        const totalPages = Math.max(1, Math.ceil(filteredClusters.length / perPage));
-                        if (currentPage < totalPages) changePage(currentPage + 1);
-                    }
+                    const scModal = document.getElementById('shortcutsModal');
+                    if (scModal && !scModal.classList.contains('hidden')) toggleShortcutsModal();
+                    const scDrawer = document.getElementById('scanDrawer');
+                    if (scDrawer && !scDrawer.classList.contains('hidden')) toggleScanDrawer();
+                } else if (e.key === 'ArrowLeft') {
+                    if (currentPage > 1) changePage(currentPage - 1);
+                } else if (e.key === 'ArrowRight') {
+                    const totalPages = Math.max(1, Math.ceil(filteredClusters.length / perPage));
+                    if (currentPage < totalPages) changePage(currentPage + 1);
                 }
-            });
+            }
         });
 
         function showToast(msg, icon = '✓') {
