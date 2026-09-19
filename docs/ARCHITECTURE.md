@@ -352,19 +352,19 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
 |  [Selection Mode]   [✕] 14 selected (248.5 MB)   |   [Select All] [Clear] [🗑️ Trash] [⚠️ Delete] [📦 Quaran]|
 |                                                                                                         |
 |  +--------------------+  +---------------------------------------------------------------------------+  |
-|  | GOOGLE NAV RAIL    |  | GOOGLE ONE CLEAN-UP HERO                                                  |  |
-|  |                    |  | Clean up space: 68.22 GB used by duplicates                               |  |
-|  | [🖼️ Photos]       |  | [=== Photos: 52GB ===][== Screencaps: 8GB ==][= Docs: 5GB =][= Files =]    |  |
-|  | [📁 Drive List]    |  +---------------------------------------------------------------------------+  |
-|  | [🧹 Clean up]      |                                                                              |  |
-|  | [🗑️ Trash / Audit] |  +---------------------------------------------------------------------------+  |
-|  |                    |  | SECTION: Duplicate Set #1 • Visual AI (98.4%) • 24.5 MB      [🔍 Compare]  |  |
-|  |                    |  | +-----------------------------------------------------------------------+ |  |
-|  |                    |  | | [✓] [IMG]    [✓] [IMG]    [✓] [IMG]    [✓] [IMG]    [✓] [IMG]         | |  |
-|  |                    |  | |  ★ Keeper     98.4%        98.4%        98.4%        98.4%          | |  |
+|  | GOOGLE NAV RAIL    |  | TOOLBAR: [Photos View] [Drive List] [Trash Audit]    Size: [ S | M | L ]  |  |
+|  |                    |  +---------------------------------------------------------------------------+  |
+|  | [🖼️ Photos]       |  | SECTION: Duplicate Set #1 • Visual AI (98.4%) • 24.5 MB      [🔍 Compare]  |  |
+|  | [📁 Drive List]    |  | +-----------------------------------------------------------------------+ |  |
+|  | [🧹 Clean up]      |  | | [✓] [IMG]    [✓] [▶ VIDEO]   [✓] [IMG]    [✓] [▶ VIDEO]   [✓] [IMG]   | |  |
+|  | [🗑️ Trash / Audit] |  | |  ★ Keeper     98.4% Match     98.4% Match  100% Match      98.4% Match | |  |
 |  |                    |  | +-----------------------------------------------------------------------+ |  |
 |  |                    |  +---------------------------------------------------------------------------+  |
-|  +--------------------+  +---------------------------------------------------------------------------+  |
+|  |--------------------|                                                                                 |
+|  | STORAGE USAGE      |                                                                                 |
+|  | [68.22 GB Wasted]  |                                                                                 |
+|  | [==== 68.22 GB ====]                                                                                 |
+|  +--------------------+                                                                                 |
 +---------------------------------------------------------------------------------------------------------+
                                         |
                  +----------------------+----------------------+
@@ -381,16 +381,21 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
 - **Google Photos Top Selection Bar (Zero Floating Windows)**:
   - Eliminates obstructing bottom floating docks or modal pill bars.
   - When 1 or more photos/files are selected, the Top App Bar smoothly morphs into the Google Photos Selection Bar (`[✕]` Deselect, `{count} selected ({size})`, `[Select All]`, `[🗑️ Move to Trash]`, `[⚠️ Delete Permanently]`, `[📦 Quarantine]`, `[📄 CSV]`).
-- **Google Photos Fluid Edge-to-Edge Grid**:
-  - Borderless, aspect-square photo tiles grouped under clean cluster section headers.
-  - Top-left circular checkmark (`gp-check-circle`) that appears on hover and stays filled with Google Blue when selected.
-  - Cluster-level header checkmark allows 1-click selection of all duplicate copies in a set.
-- **Google Photos Full-Screen Lightbox Viewer**:
+- **Left-Bottom Persistent Storage Widget**:
+  - Storage consumption and recoverable gigabytes pinned strictly to the bottom-left sidebar navigation drawer (mirroring Google Drive and Google Photos storage indicator), keeping the gallery clean and focused on media.
+- **Dynamic Thumbnail & Icon Size Controls**:
+  - Segmented `Small`, `Medium`, and `Large` controls allowing users to switch between dense compact browsing (8-10 columns), balanced Google Photos grid (4-6 columns), or high-detail preview cards (2-4 columns).
+- **Comprehensive Video Thumbnail Extraction & Streaming**:
+  - Video keyframe thumbnail extraction via `ffmpeg` pipeline at 0.5s–1.0s cached in LRU memory (`GET /api/thumbnail`).
+  - Native media streaming endpoint (`GET /api/media`) with `accept-ranges: bytes` and video MIME headers (`video/mp4`, `video/webm`, `video/quicktime`, etc.).
+  - Video badges (`▶ VIDEO`) rendered over video tiles in the grid.
+- **Google Photos Full-Screen Lightbox Viewer & Video Diff**:
   - Full-screen pitch-black viewer with top action bar (`[← Back]`, `[★ Make Keeper]`, `[⇄ Side-by-Side Diff]`, `[ℹ️ Details]`).
-  - Instant side-by-side comparison mode comparing keeper against duplicate candidates with synchronized dimensions, size, and paths.
+  - Renders native `<video controls autoplay>` for video files and high-resolution `<img>` for photos.
+  - Instant side-by-side comparison mode comparing keeper against duplicate candidates with synchronized dimensions, size, and paths for both photos and video playback.
   - Arrow navigation (`‹` and `›`) and keyboard shortcuts (`Esc`, `ArrowLeft`, `ArrowRight`).
 - **Google Drive List View**:
-  - Tabular view for reviewing documents, archives, and spreadsheets with synced selection state.
+  - Tabular view for reviewing documents, archives, and spreadsheets with synced selection state and thumbnail previews.
 - **Safe Deletion Engine (`DeleteEngine`)**:
   - **Mode A: Soft Delete (Move to Trash)**: Isolates files to `.clairvoy_trash/` with a rollback manifest for 1-click restoration via `POST /api/delete/restore`.
   - **Mode B: Permanent Deletion**: Unlinks duplicate files permanently while enforcing hard assertions that `KEEP` files can never be deleted, producing an immutable audit log.

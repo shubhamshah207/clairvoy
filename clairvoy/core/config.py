@@ -44,6 +44,23 @@ SUPPORTED_IMAGE_EXTENSIONS = {
     ".psd",
 }
 
+# Supported video media formats
+SUPPORTED_VIDEO_EXTENSIONS = {
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".webm",
+    ".flv",
+    ".wmv",
+    ".m4v",
+    ".ts",
+    ".mp",
+}
+
+# Unified media extensions
+SUPPORTED_MEDIA_EXTENSIONS = SUPPORTED_IMAGE_EXTENSIONS | SUPPORTED_VIDEO_EXTENSIONS
+
 # DINOv2 ONNX Model Configuration
 MODEL_DOWNLOAD_URL = (
     "https://huggingface.co/onnx-community/dinov2-small/resolve/main/onnx/model_quantized.onnx"

@@ -3,6 +3,7 @@ Integration Tests for FastAPI Web Application Endpoints
 """
 
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -71,6 +72,52 @@ def test_thumbnail_valid_image(client, sample_images):
     response = client.get("/api/thumbnail", params={"path": red_img})
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
+
+
+def test_media_valid_image(client, sample_images):
+    red_img = str(sample_images["red1"])
+    response = client.get("/api/media", params={"path": red_img})
+    assert response.status_code == 200
+    assert "image" in response.headers["content-type"]
+
+
+def test_media_security_invalid_extension(client, temp_workspace):
+    txt_file = temp_workspace / "dummy.txt"
+    txt_file.write_text("not media")
+    response = client.get("/api/media", params={"path": str(txt_file)})
+    assert response.status_code == 403
+
+
+def test_thumbnail_and_media_video(client, temp_workspace):
+    import shutil
+    import subprocess
+
+    ffmpeg_bin = shutil.which("ffmpeg") or "/home/shubhamshah207/.local/bin/ffmpeg"
+    if not shutil.which("ffmpeg") and not Path(ffmpeg_bin).is_file():
+        pytest.skip("ffmpeg not found on system")
+
+    vid_path = temp_workspace / "sample_test.mp4"
+    cmd = [
+        ffmpeg_bin, "-y", "-f", "lavfi",
+        "-i", "testsrc=duration=1:size=64x64:rate=10",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        str(vid_path),
+    ]
+    res = subprocess.run(cmd, capture_output=True)
+    if res.returncode != 0:
+        pytest.skip("Failed to generate test video")
+
+    # Test /api/thumbnail on video
+    resp_thumb = client.get("/api/thumbnail", params={"path": str(vid_path)})
+    assert resp_thumb.status_code == 200
+    assert resp_thumb.headers["content-type"] == "image/jpeg"
+    assert len(resp_thumb.content) > 0
+
+    # Test /api/media on video
+    resp_media = client.get("/api/media", params={"path": str(vid_path)})
+    assert resp_media.status_code == 200
+    assert resp_media.headers["content-type"] == "video/mp4"
+    assert len(resp_media.content) > 0
 
 
 def test_scan_invalid_directory(client):

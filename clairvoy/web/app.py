@@ -6,6 +6,8 @@ hardened thumbnail streaming, in-memory caching, and 1-click safe quarantine/res
 
 import csv
 import io
+import shutil
+import subprocess
 import threading
 from functools import lru_cache
 from pathlib import Path
@@ -18,7 +20,8 @@ from pydantic import BaseModel, Field
 
 from clairvoy.core.config import (
     DEFAULT_SIMILARITY_THRESHOLD,
-    SUPPORTED_IMAGE_EXTENSIONS,
+    SUPPORTED_MEDIA_EXTENSIONS,
+    SUPPORTED_VIDEO_EXTENSIONS,
     VERSION,
 )
 from clairvoy.core.models import ActionType
@@ -156,23 +159,51 @@ class RestoreTrashRequest(BaseModel):
 
 
 
-# In-memory thumbnail cache (max 1024 entries)
-@lru_cache(maxsize=1024)
+# In-memory thumbnail cache (max 2048 entries)
+@lru_cache(maxsize=2048)
 def _generate_thumbnail_bytes(resolved_path_str: str) -> bytes:
+    ext = Path(resolved_path_str).suffix.lower()
     img: Image.Image | None = None
-    try:
-        img = Image.open(resolved_path_str)
-        img.load()
-    except Exception:
-        ext = Path(resolved_path_str).suffix.lower()
-        if ext in {".heic", ".heif"}:
-            img = VisionEngine._extract_frame_via_ffmpeg(resolved_path_str)
+
+    # 1. Video files: extract keyframe using ffmpeg
+    if ext in SUPPORTED_VIDEO_EXTENSIONS:
+        ffmpeg_bin = shutil.which("ffmpeg") or "/home/shubhamshah207/.local/bin/ffmpeg"
+        if ffmpeg_bin:
+            try:
+                cmd = [
+                    ffmpeg_bin,
+                    "-ss",
+                    "0.5",
+                    "-i",
+                    resolved_path_str,
+                    "-vframes",
+                    "1",
+                    "-f",
+                    "image2pipe",
+                    "-vcodec",
+                    "mjpeg",
+                    "pipe:1",
+                ]
+                res = subprocess.run(cmd, capture_output=True, timeout=8)
+                if res.returncode == 0 and res.stdout:
+                    img = Image.open(io.BytesIO(res.stdout))
+            except Exception as exc:
+                print(f"[!] ffmpeg video thumbnail extraction error for {resolved_path_str}: {exc}")
+
+    # 2. Image files
+    if img is None:
+        try:
+            img = Image.open(resolved_path_str)
+            img.load()
+        except Exception:
+            if ext in {".heic", ".heif"}:
+                img = VisionEngine._extract_frame_via_ffmpeg(resolved_path_str)
 
     if img is None:
-        raise ValueError(f"Unable to decode image for thumbnail: {resolved_path_str}")
+        raise ValueError(f"Unable to decode media for thumbnail: {resolved_path_str}")
 
     img = ImageOps.exif_transpose(img)
-    img.thumbnail((256, 256), Image.Resampling.BILINEAR)
+    img.thumbnail((320, 320), Image.Resampling.BILINEAR)
     buf = io.BytesIO()
     img.convert("RGB").save(buf, format="JPEG", quality=82, optimize=True)
     return buf.getvalue()
@@ -212,13 +243,14 @@ async def get_thumbnail(path: str = Query(..., description="Absolute path to med
     """
     Serves a downscaled, securely validated thumbnail image with LRU caching.
     Guarantees strict directory traversal and extension bounds checking across all scanned roots.
+    Supports both images and videos.
     """
     try:
         allowed = SCAN_STATE.get("target_paths") or None
         safe_path = resolve_safe_path(
             user_path=path,
             allowed_roots=allowed,
-            allowed_extensions=SUPPORTED_IMAGE_EXTENSIONS,
+            allowed_extensions=SUPPORTED_MEDIA_EXTENSIONS,
             must_exist=True,
         )
     except SecurityError as se:
@@ -235,6 +267,27 @@ async def get_thumbnail(path: str = Query(..., description="Absolute path to med
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Image decode error: {e!s}") from e
+
+
+@app.get("/api/media")
+async def get_raw_media(path: str = Query(..., description="Absolute path to media file")):
+    """Streams the raw media file (images or video) for in-browser playback/preview."""
+    try:
+        allowed = SCAN_STATE.get("target_paths") or None
+        safe_path = resolve_safe_path(
+            user_path=path,
+            allowed_roots=allowed,
+            allowed_extensions=SUPPORTED_MEDIA_EXTENSIONS,
+            must_exist=True,
+        )
+    except SecurityError as se:
+        raise HTTPException(status_code=403, detail=str(se)) from se
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found") from None
+
+    ext = safe_path.suffix.lower()
+    media_type = "video/mp4" if ext == ".mp4" else ("image/jpeg" if ext in {".jpg", ".jpeg"} else None)
+    return FileResponse(safe_path, media_type=media_type)
 
 
 @app.post("/api/scan")

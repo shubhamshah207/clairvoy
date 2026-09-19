@@ -107,3 +107,18 @@ def multi_root_dataset(temp_workspace):
         "shared_file_a": file_a1,
         "shared_file_b": file_b1,
     }
+
+
+@pytest.fixture(autouse=True)
+def isolate_global_runs_history(tmp_path, monkeypatch):
+    """Prevents tests from modifying ~/.clairvoy/runs.json in the user's real home directory."""
+    from clairvoy.core.run_manager import RunManager
+
+    orig_init = RunManager.__init__
+    test_runs_file = tmp_path / "pytest_isolated_runs.json"
+
+    def mock_init(self, history_file=None):
+        orig_init(self, history_file=history_file or test_runs_file)
+
+    monkeypatch.setattr(RunManager, "__init__", mock_init)
+

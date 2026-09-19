@@ -3,7 +3,8 @@ Clairvoy Web UI Component
 Google Material Design 3 (M3) Storage Optimization & Photos Deduplication Studio.
 Inspired by Google Photos, Google Drive, Google Files, and Google One.
 100% offline, zero-dependency, ultra-minimal code with fluid Photos Grid, Drive List,
-morphing Top Selection Bar, persistent Left-Bottom Storage Manager, and Small/Medium/Large thumbnail controls.
+morphing Top Selection Bar, persistent Left-Bottom Storage Manager, Small/Medium/Large thumbnail controls,
+real-time video keyframe previews, and native HTML5 video side-by-side playback.
 """
 
 from clairvoy.core.config import VERSION
@@ -386,20 +387,20 @@ def get_index_html() -> str:
                 <!-- Category Mini-Breakdown -->
                 <div class="space-y-1.5 text-[11px] text-[#c4c7c5] font-mono mb-3 pb-2.5 border-b border-[#28292a]">
                     <div class="flex justify-between items-center">
-                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#8ab4f8]"></span> Photos</span>
-                        <strong id="sideLegendPhoto" class="text-white font-mono">0</strong>
+                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#8ab4f8]"></span> Photos & Videos</span>
+                        <strong id="sideLegendPhoto" class="text-white">0</strong>
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#fdd663]"></span> Screenshots</span>
-                        <strong id="sideLegendScreenshot" class="text-white font-mono">0</strong>
+                        <strong id="sideLegendScreenshot" class="text-white">0</strong>
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#81c995]"></span> Documents</span>
-                        <strong id="sideLegendDocument" class="text-white font-mono">0</strong>
+                        <strong id="sideLegendDocument" class="text-white">0</strong>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#f28b82]"></span> Files</span>
-                        <strong id="sideLegendFile" class="text-white font-mono">0</strong>
+                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#f28b82]"></span> Other Files</span>
+                        <strong id="sideLegendFile" class="text-white">0</strong>
                     </div>
                 </div>
 
@@ -433,7 +434,7 @@ def get_index_html() -> str:
 
                 <!-- Google Multi-Colored Storage Meter -->
                 <div class="w-full bg-[#131314] rounded-full h-3 overflow-hidden flex border border-[#3c4043] mb-4">
-                    <div id="segPhoto" class="bg-[#8ab4f8] h-full transition-all duration-500" style="width: 0%;" title="Photos"></div>
+                    <div id="segPhoto" class="bg-[#8ab4f8] h-full transition-all duration-500" style="width: 0%;" title="Photos & Videos"></div>
                     <div id="segScreenshot" class="bg-[#fdd663] h-full transition-all duration-500" style="width: 0%;" title="Screenshots"></div>
                     <div id="segDocument" class="bg-[#81c995] h-full transition-all duration-500" style="width: 0%;" title="Documents"></div>
                     <div id="segFile" class="bg-[#f28b82] h-full transition-all duration-500" style="width: 0%;" title="Large / Other Files"></div>
@@ -443,7 +444,7 @@ def get_index_html() -> str:
                 <div class="flex flex-wrap gap-4 text-xs font-medium text-[#c4c7c5]">
                     <div class="flex items-center gap-1.5">
                         <span class="w-2.5 h-2.5 rounded-full bg-[#8ab4f8]"></span>
-                        <span>Photos: <strong id="legendPhoto" class="text-white font-mono">0</strong></span>
+                        <span>Photos & Videos: <strong id="legendPhoto" class="text-white font-mono">0</strong></span>
                     </div>
                     <div class="flex items-center gap-1.5">
                         <span class="w-2.5 h-2.5 rounded-full bg-[#fdd663]"></span>
@@ -464,11 +465,14 @@ def get_index_html() -> str:
             <section class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-1">
                 <!-- Modality Filter Chips (Google Style) -->
                 <div class="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-                    <button onclick="setModalityTab('ALL')" id="tab_ALL" class="m3-chip active">
-                        All <span id="tabCount_ALL" class="text-[11px] font-mono opacity-80">0</span>
+                    <button onclick="setModalityTab('PHOTO')" id="tab_PHOTO" class="m3-chip active" title="Photos and Image Duplicates">
+                        🖼️ Photos <span id="tabCount_PHOTO" class="text-[11px] font-mono opacity-80">0</span>
                     </button>
-                    <button onclick="setModalityTab('PHOTO')" id="tab_PHOTO" class="m3-chip">
-                        Photos <span id="tabCount_PHOTO" class="text-[11px] font-mono opacity-80">0</span>
+                    <button onclick="setModalityTab('VIDEO')" id="tab_VIDEO" class="m3-chip" title="Video Duplicates">
+                        🎥 Videos <span id="tabCount_VIDEO" class="text-[11px] font-mono opacity-80">0</span>
+                    </button>
+                    <button onclick="setModalityTab('ALL')" id="tab_ALL" class="m3-chip">
+                        All <span id="tabCount_ALL" class="text-[11px] font-mono opacity-80">0</span>
                     </button>
                     <button onclick="setModalityTab('SCREENSHOT')" id="tab_SCREENSHOT" class="m3-chip">
                         Screenshots <span id="tabCount_SCREENSHOT" class="text-[11px] font-mono opacity-80">0</span>
@@ -598,9 +602,9 @@ def get_index_html() -> str:
                 ›
             </button>
 
-            <!-- Single Photo View -->
+            <!-- Single Photo / Video View -->
             <div id="lbSingleView" class="flex-1 flex items-center justify-center p-4 min-w-0">
-                <div id="lbImageContainer" class="max-w-full max-h-[80vh] flex items-center justify-center"></div>
+                <div id="lbImageContainer" class="max-w-full max-h-[80vh] flex items-center justify-center w-full"></div>
             </div>
 
             <!-- Side-by-Side Diff View -->
@@ -777,7 +781,7 @@ def get_index_html() -> str:
         let currentSummary = null;
         let allClusters = [];
         let filteredClusters = [];
-        let activeModality = 'ALL';
+        let activeModality = 'PHOTO'; // Default to authentic Photos view
         let activeSortOrder = 'SIZE_DESC';
         let searchQuery = '';
         let currentPage = 1;
@@ -795,6 +799,21 @@ def get_index_html() -> str:
         let lbItemIndex = 0;
         let lbIsDiff = false;
         let lbIsInfoOpen = false;
+
+        // Extension check helpers
+        function isImageFile(path) {{
+            const exts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif', '.heic', '.psd'];
+            return exts.some(e => path.toLowerCase().endsWith(e));
+        }}
+
+        function isVideoFile(path) {{
+            const exts = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v', '.ts', '.mp'];
+            return exts.some(e => path.toLowerCase().endsWith(e));
+        }}
+
+        function isMediaFile(path) {{
+            return isImageFile(path) || isVideoFile(path);
+        }}
 
         // Initialization
         window.addEventListener('DOMContentLoaded', async () => {{
@@ -949,10 +968,23 @@ def get_index_html() -> str:
             currentSummary = summary;
             excludedPaths.clear();
 
+            // Enrich records with video categorization if marked as generic file
+            for (const item of (summary.groups || [])) {{
+                if (isVideoFile(item.path) && (!item.category || item.category === 'FILE')) {{
+                    item.category = 'VIDEO';
+                }}
+            }}
+
             allClusters = groupRecordsIntoClusters(summary.groups || []);
             renderHeroStorageMeter(summary);
             renderModalityTabCounts(summary);
-            applyFiltersAndSort();
+
+            // Default to PHOTO tab when in Photos view
+            if (currentNav === 'PHOTOS') {{
+                setModalityTab('PHOTO');
+            }} else {{
+                applyFiltersAndSort();
+            }}
             updateTopSelectionBar();
         }}
 
@@ -1011,7 +1043,7 @@ def get_index_html() -> str:
 
             const cb = summary.category_breakdown || {{}};
             const totalDupes = Math.max(1, (summary.groups ? summary.groups.filter(g => g.action === 'DUPLICATE').length : 1));
-            const pPhoto = ((cb.PHOTO || 0) / totalDupes) * 100;
+            const pPhoto = (((cb.PHOTO || 0) + (cb.VIDEO || 0)) / totalDupes) * 100;
             const pScreens = ((cb.SCREENSHOT || 0) / totalDupes) * 100;
             const pDoc = ((cb.DOCUMENT || 0) / totalDupes) * 100;
             const pFile = Math.max(0, 100 - (pPhoto + pScreens + pDoc));
@@ -1035,10 +1067,10 @@ def get_index_html() -> str:
             }});
 
             // Legend Numbers
-            const photoCount = `${{cb.PHOTO || 0}} files`;
-            const screenCount = `${{cb.SCREENSHOT || 0}} files`;
-            const docCount = `${{cb.DOCUMENT || 0}} files`;
-            const fileCount = `${{cb.FILE || 0}} files`;
+            const photoCount = `${{((cb.PHOTO || 0) + (cb.VIDEO || 0)).toLocaleString()}} files`;
+            const screenCount = `${{(cb.SCREENSHOT || 0).toLocaleString()}} files`;
+            const docCount = `${{(cb.DOCUMENT || 0).toLocaleString()}} files`;
+            const fileCount = `${{(cb.FILE || 0).toLocaleString()}} files`;
 
             ['legendPhoto', 'sideLegendPhoto'].forEach(id => {{
                 const el = document.getElementById(id);
@@ -1059,13 +1091,32 @@ def get_index_html() -> str:
         }}
 
         function renderModalityTabCounts(summary) {{
-            const cb = summary.category_breakdown || {{}};
-            const total = summary.total_duplicate_groups || allClusters.length;
+            const total = allClusters.length;
+            let photoCount = 0;
+            let videoCount = 0;
+            let screenCount = 0;
+            let docCount = 0;
+            let fileCount = 0;
+
+            for (const c of allClusters) {{
+                const hasPhoto = c.items.some(i => i.category === 'PHOTO' || isImageFile(i.path));
+                const hasVideo = c.items.some(i => i.category === 'VIDEO' || isVideoFile(i.path));
+                const hasScreen = c.items.some(i => i.category === 'SCREENSHOT');
+                const hasDoc = c.items.some(i => i.category === 'DOCUMENT');
+
+                if (hasPhoto) photoCount++;
+                if (hasVideo) videoCount++;
+                if (hasScreen) screenCount++;
+                if (hasDoc) docCount++;
+                if (!hasPhoto && !hasVideo && !hasScreen && !hasDoc) fileCount++;
+            }}
+
             document.getElementById('tabCount_ALL').innerText = total.toLocaleString();
-            document.getElementById('tabCount_PHOTO').innerText = (cb.PHOTO || 0).toLocaleString();
-            document.getElementById('tabCount_SCREENSHOT').innerText = (cb.SCREENSHOT || 0).toLocaleString();
-            document.getElementById('tabCount_DOCUMENT').innerText = (cb.DOCUMENT || 0).toLocaleString();
-            document.getElementById('tabCount_FILE').innerText = (cb.FILE || 0).toLocaleString();
+            document.getElementById('tabCount_PHOTO').innerText = photoCount.toLocaleString();
+            document.getElementById('tabCount_VIDEO').innerText = videoCount.toLocaleString();
+            document.getElementById('tabCount_SCREENSHOT').innerText = screenCount.toLocaleString();
+            document.getElementById('tabCount_DOCUMENT').innerText = docCount.toLocaleString();
+            document.getElementById('tabCount_FILE').innerText = fileCount.toLocaleString();
         }}
 
         function setModalityTab(tab) {{
@@ -1103,10 +1154,17 @@ def get_index_html() -> str:
 
         function applyFiltersAndSort() {{
             filteredClusters = allClusters.filter(c => {{
-                if (activeModality !== 'ALL') {{
+                if (activeModality === 'PHOTO') {{
+                    const matches = c.items.some(i => i.category === 'PHOTO' || isImageFile(i.path));
+                    if (!matches) return false;
+                }} else if (activeModality === 'VIDEO') {{
+                    const matches = c.items.some(i => i.category === 'VIDEO' || isVideoFile(i.path));
+                    if (!matches) return false;
+                }} else if (activeModality !== 'ALL') {{
                     const matchesCategory = c.items.some(i => i.category === activeModality);
                     if (!matchesCategory) return false;
                 }}
+
                 if (searchQuery) {{
                     const matches = c.items.some(i => i.path.toLowerCase().includes(searchQuery));
                     if (!matches) return false;
@@ -1174,12 +1232,7 @@ def get_index_html() -> str:
             window.scrollTo({{ top: document.getElementById('clustersGallery').offsetTop - 90, behavior: 'smooth' }});
         }}
 
-        function isImageFile(path) {{
-            const exts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif', '.heic', '.psd'];
-            return exts.some(e => path.toLowerCase().endsWith(e));
-        }}
-
-        // Authentic Google Photos Section with Edge-to-Edge Grid
+        // Authentic Google Photos Section with Edge-to-Edge Fluid Grid
         function createGooglePhotosCard(cluster) {{
             const section = document.createElement('section');
             section.className = "space-y-3";
@@ -1231,6 +1284,8 @@ def get_index_html() -> str:
             const isKeeper = (item.action === 'KEEP');
             const isExcluded = excludedPaths.has(item.path);
             const isChecked = !isKeeper && !isExcluded;
+            const isVideo = isVideoFile(item.path);
+            const isMedia = isMediaFile(item.path);
 
             const fname = item.path.split('/').pop();
             const parentDir = item.path.substring(0, item.path.lastIndexOf('/'));
@@ -1244,13 +1299,13 @@ def get_index_html() -> str:
                     <div onclick="openPhotoLightbox(${{groupId}}, '${{encodeURIComponent(item.path)}}')"
                          class="group relative aspect-square rounded-xl overflow-hidden cursor-pointer bg-[#1e1f20] border ${{isKeeper ? 'border-[#81c995] shadow' : 'border-white/10'}} transition duration-200 hover:border-white/40">
 
-                        ${{isImageFile(item.path) ? `
+                        ${{isMedia ? `
                             <img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}"
                                  class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                                  loading="lazy" alt="${{fname}}"
                                  onerror="this.parentElement.querySelector('.fallback-thumb').classList.remove('hidden'); this.remove();">
                             <div class="fallback-thumb hidden w-full h-full flex items-center justify-center bg-[#131314] text-[#8e918f]">
-                                <span class="text-xs">🖼️</span>
+                                <span class="text-xs">${{isVideo ? '🎥' : '🖼️'}}</span>
                             </div>
                         ` : `
                             <div class="w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f] p-1 text-center">
@@ -1276,6 +1331,12 @@ def get_index_html() -> str:
                             `}}
                         </div>
 
+                        ${{isVideo ? `
+                            <div class="absolute bottom-1 right-1 z-20">
+                                <span class="text-[8px] bg-black/80 text-white px-1 rounded font-mono">▶</span>
+                            </div>
+                        ` : ''}}
+
                         <!-- Bottom Minimal Size -->
                         <div class="absolute bottom-1 inset-x-1.5 z-20 text-[9px] text-[#c4c7c5] font-mono truncate">
                             ${{sizeStr}}
@@ -1290,14 +1351,14 @@ def get_index_html() -> str:
                     <div onclick="openPhotoLightbox(${{groupId}}, '${{encodeURIComponent(item.path)}}')"
                          class="group relative aspect-square rounded-3xl overflow-hidden cursor-pointer bg-[#1e1f20] border-2 ${{isKeeper ? 'border-[#81c995] shadow-lg shadow-[#81c995]/15' : 'border-white/10'}} transition duration-300 hover:border-white/40">
 
-                        ${{isImageFile(item.path) ? `
+                        ${{isMedia ? `
                             <img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}"
                                  class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                  loading="lazy" alt="${{fname}}"
                                  onerror="this.parentElement.querySelector('.fallback-thumb').classList.remove('hidden'); this.remove();">
                             <div class="fallback-thumb hidden w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f]">
-                                <span class="text-4xl mb-2">🖼️</span>
-                                <span class="text-xs font-mono uppercase">Image File</span>
+                                <span class="text-4xl mb-2">${{isVideo ? '🎥' : '🖼️'}}</span>
+                                <span class="text-xs font-mono uppercase">${{isVideo ? 'Video File' : 'Image File'}}</span>
                             </div>
                         ` : `
                             <div class="w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f] p-6 text-center">
@@ -1329,6 +1390,12 @@ def get_index_html() -> str:
                                 `}}
                             </div>
                             <div class="flex items-center gap-1.5">
+                                ${{isVideo ? `
+                                    <span class="text-xs font-mono bg-black/80 text-white px-2.5 py-1 rounded-full border border-white/20 flex items-center gap-1">
+                                        <svg class="w-3 h-3 fill-white" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                        <span>VIDEO</span>
+                                    </span>
+                                ` : ''}}
                                 ${{!isKeeper ? `
                                     <span class="text-xs font-mono text-[#8ab4f8] bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 font-bold">
                                         ${{item.similarity || '100%'}} Match
@@ -1363,14 +1430,14 @@ def get_index_html() -> str:
                      class="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer bg-[#1e1f20] border ${{isKeeper ? 'border-[#81c995]/80 shadow-md shadow-[#81c995]/10' : 'border-white/10'}} transition duration-200 hover:border-white/30">
 
                     <!-- High-Res Thumbnail Preview -->
-                    ${{isImageFile(item.path) ? `
+                    ${{isMedia ? `
                         <img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}"
                              class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                              loading="lazy" alt="${{fname}}"
                              onerror="this.parentElement.querySelector('.fallback-thumb').classList.remove('hidden'); this.remove();">
                         <div class="fallback-thumb hidden w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f]">
-                            <span class="text-xl">🖼️</span>
-                            <span class="text-[10px] font-mono mt-1">PHOTO</span>
+                            <span class="text-xl">${{isVideo ? '🎥' : '🖼️'}}</span>
+                            <span class="text-[10px] font-mono mt-1">${{isVideo ? 'VIDEO' : 'PHOTO'}}</span>
                         </div>
                     ` : `
                         <div class="w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f] p-3 text-center">
@@ -1401,14 +1468,20 @@ def get_index_html() -> str:
                         `}}
                     </div>
 
-                    <!-- Top Right: Similarity Tag -->
-                    ${{!isKeeper ? `
-                        <div class="absolute top-2.5 right-2.5 z-20">
+                    <!-- Top Right: Video play badge or similarity tag -->
+                    <div class="absolute top-2.5 right-2.5 z-20 flex items-center gap-1">
+                        ${{isVideo ? `
+                            <span class="text-[10px] font-mono bg-black/70 text-white px-2 py-0.5 rounded-full border border-white/20 flex items-center gap-1">
+                                <svg class="w-2.5 h-2.5 fill-white" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                <span>VIDEO</span>
+                            </span>
+                        ` : ''}}
+                        ${{!isKeeper ? `
                             <span class="text-[10px] font-mono text-[#8ab4f8] bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10">
                                 ${{item.similarity || '100%'}}
                             </span>
-                        </div>
-                    ` : ''}}
+                        ` : ''}}
+                    </div>
 
                     <!-- Bottom Details Bar -->
                     <div class="absolute bottom-2 inset-x-2.5 z-20 flex flex-col justify-end">
@@ -1483,6 +1556,7 @@ def get_index_html() -> str:
             const isKeeper = (item.action === 'KEEP');
             const isExcluded = excludedPaths.has(item.path);
             const isChecked = !isKeeper && !isExcluded;
+            const isMedia = isMediaFile(item.path);
             const fname = item.path.split('/').pop();
             const padClass = (thumbnailSize === 'small') ? 'py-1 px-2 text-[11px]' : 'py-2 px-2';
 
@@ -1497,7 +1571,7 @@ def get_index_html() -> str:
                     ${{thumbnailSize === 'large' ? `
                         <td class="${{padClass}}">
                             <div class="w-12 h-12 rounded-lg bg-black overflow-hidden flex items-center justify-center border border-white/10">
-                                ${{isImageFile(item.path) ? `
+                                ${{isMedia ? `
                                     <img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}" class="w-full h-full object-cover" loading="lazy">
                                 ` : `
                                     <span class="text-xs">📄</span>
@@ -1544,12 +1618,10 @@ def get_index_html() -> str:
 
             const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
             if (allDupesSelected) {{
-                // Deselect all duplicates in this cluster
                 for (const d of cluster.duplicates) {{
                     excludedPaths.add(d.path);
                 }}
             }} else {{
-                // Select all duplicates in this cluster
                 for (const d of cluster.duplicates) {{
                     excludedPaths.delete(d.path);
                 }}
@@ -1691,10 +1763,12 @@ def get_index_html() -> str:
             const item = lbCluster.items[lbItemIndex];
             const keeper = lbCluster.keeper || lbCluster.items[0];
             const isKeeper = (item.action === 'KEEP');
+            const fname = item.path.split('/').pop();
+            const sizeStr = `${{(item.size_mb || 0).toFixed(2)}} MB`;
 
             document.getElementById('lbClusterTitle').innerText = `Cluster #${{lbCluster.group_id}} (${{lbItemIndex + 1}} of ${{lbCluster.items.length}})`;
             document.getElementById('lbMatchType').innerText = lbCluster.match_type;
-            document.getElementById('lbFileName').innerText = item.path.split('/').pop();
+            document.getElementById('lbFileName').innerText = fname;
 
             const makeKeeperBtn = document.getElementById('lbMakeKeeperBtn');
             if (isKeeper) {{
@@ -1717,9 +1791,11 @@ def get_index_html() -> str:
                 document.getElementById('lbDiffKeeperPath').innerText = keeper.path;
                 document.getElementById('lbDiffKeeperSize').innerText = `${{(keeper.size_mb || 0).toFixed(2)}} MB`;
                 document.getElementById('lbDiffKeeperDim').innerText = keeper.dimensions ? `${{keeper.dimensions[0]}}x${{keeper.dimensions[1]}}` : 'N/A';
-                document.getElementById('lbDiffKeeperCat').innerText = keeper.category || 'PHOTO';
+                document.getElementById('lbDiffKeeperCat').innerText = keeper.category || 'MEDIA';
                 const kpPreview = document.getElementById('lbDiffKeeperPreview');
-                if (isImageFile(keeper.path)) {{
+                if (isVideoFile(keeper.path)) {{
+                    kpPreview.innerHTML = `<video src="/api/media?path=${{encodeURIComponent(keeper.path)}}" controls class="w-full h-full object-contain bg-black"></video>`;
+                }} else if (isImageFile(keeper.path)) {{
                     kpPreview.innerHTML = `<img src="/api/thumbnail?path=${{encodeURIComponent(keeper.path)}}" class="w-full h-full object-contain" alt="keeper">`;
                 }} else {{
                     kpPreview.innerHTML = `<span class="text-xs font-mono text-[#8e918f] uppercase">${{keeper.path.split('.').pop()}} FILE</span>`;
@@ -1733,7 +1809,9 @@ def get_index_html() -> str:
                 document.getElementById('lbDiffDupeDim').innerText = dupeItem.dimensions ? `${{dupeItem.dimensions[0]}}x${{dupeItem.dimensions[1]}}` : 'N/A';
                 document.getElementById('lbDiffDupeSim').innerText = dupeItem.similarity || '100% Match';
                 const dpPreview = document.getElementById('lbDiffDupePreview');
-                if (isImageFile(dupeItem.path)) {{
+                if (isVideoFile(dupeItem.path)) {{
+                    dpPreview.innerHTML = `<video src="/api/media?path=${{encodeURIComponent(dupeItem.path)}}" controls class="w-full h-full object-contain bg-black"></video>`;
+                }} else if (isImageFile(dupeItem.path)) {{
                     dpPreview.innerHTML = `<img src="/api/thumbnail?path=${{encodeURIComponent(dupeItem.path)}}" class="w-full h-full object-contain" alt="dupe">`;
                 }} else {{
                     dpPreview.innerHTML = `<span class="text-xs font-mono text-[#8e918f] uppercase">${{dupeItem.path.split('.').pop()}} FILE</span>`;
@@ -1743,14 +1821,23 @@ def get_index_html() -> str:
                 singleView.classList.remove('hidden');
 
                 const container = document.getElementById('lbImageContainer');
-                if (isImageFile(item.path)) {{
-                    container.innerHTML = `<img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}" class="max-h-[80vh] max-w-full object-contain rounded-xl shadow-2xl" alt="lightbox photo">`;
+                if (isVideoFile(item.path)) {{
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center max-w-full">
+                            <video controls autoplay src="/api/media?path=${{encodeURIComponent(item.path)}}"
+                                   class="max-h-[75vh] max-w-full rounded-2xl shadow-2xl bg-black border border-white/10">
+                            </video>
+                            <div class="text-xs text-[#8e918f] font-mono mt-2">${{fname}} (${{sizeStr}})</div>
+                        </div>
+                    `;
+                }} else if (isImageFile(item.path)) {{
+                    container.innerHTML = `<img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}" class="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl" alt="lightbox photo">`;
                 }} else {{
                     container.innerHTML = `
-                        <div class="text-center p-12 bg-[#1e1f20] rounded-2xl border border-[#3c4043]">
-                            <span class="text-5xl block mb-3">📄</span>
-                            <div class="font-bold text-white text-base">${{item.path.split('/').pop()}}</div>
-                            <div class="text-xs text-[#8e918f] font-mono mt-1">${{(item.size_mb || 0).toFixed(2)}} MB</div>
+                        <div class="text-center p-12 bg-[#1e1f20] rounded-3xl border border-[#3c4043] max-w-md">
+                            <span class="text-6xl block mb-3">📄</span>
+                            <div class="font-bold text-white text-base break-all">${{fname}}</div>
+                            <div class="text-xs text-[#8e918f] font-mono mt-1">${{sizeStr}}</div>
                         </div>
                     `;
                 }}
