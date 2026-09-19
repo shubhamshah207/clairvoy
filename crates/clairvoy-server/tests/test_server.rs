@@ -121,3 +121,18 @@ async fn test_custom_shared_state() {
     assert_eq!(status_body["progress_pct"], 42);
     assert_eq!(status_body["files_indexed"], 100);
 }
+
+#[tokio::test]
+async fn test_server_live_progress_state() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res_status = server.get("/api/status").await;
+    assert_eq!(res_status.status_code(), 200);
+    let body: serde_json::Value = res_status.json();
+    assert!(body["stage"].is_string());
+    assert!(body["progress_pct"].is_number());
+    assert!(body["files_indexed"].is_number());
+    assert!(body["elapsed_seconds"].is_number());
+}
+
