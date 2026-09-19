@@ -424,3 +424,87 @@ async fn test_server_drive_structured_view_elements() {
     assert!(html.contains("tableSortColumn"));
 }
 
+#[tokio::test]
+async fn test_server_ambient_telemetry_dock_elements() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("bottomTelemetryDock"));
+    assert!(html.contains("toggleActivityDrawer"));
+}
+
+#[tokio::test]
+async fn test_server_hardlink_execute() {
+    use clairvoy_core::models::{ActionType, DuplicateRecord, ImageCategory, MatchType, ScanSummary};
+
+    let tmp = std::env::temp_dir().join("clairvoy_test_hardlink");
+    let _ = std::fs::create_dir_all(&tmp);
+    let keeper_file = tmp.join("keeper.txt");
+    let dupe_file = tmp.join("dupe.txt");
+    std::fs::write(&keeper_file, "hello hardlink").unwrap();
+    std::fs::write(&dupe_file, "hello hardlink").unwrap();
+
+    let summary = ScanSummary {
+        scanned_paths: vec![tmp.to_string_lossy().to_string()],
+        groups: vec![
+            DuplicateRecord {
+                group_id: 1,
+                match_type: MatchType::ExactHash,
+                action: ActionType::Keep,
+                category: ImageCategory::File,
+                similarity: "100%".to_string(),
+                similarity_score: 1.0,
+                size_mb: 0.001,
+                path: keeper_file.to_string_lossy().to_string(),
+                dimensions: None,
+            },
+            DuplicateRecord {
+                group_id: 1,
+                match_type: MatchType::ExactHash,
+                action: ActionType::Duplicate,
+                category: ImageCategory::File,
+                similarity: "100%".to_string(),
+                similarity_score: 1.0,
+                size_mb: 0.001,
+                path: dupe_file.to_string_lossy().to_string(),
+                dimensions: None,
+            },
+        ],
+        wasted_bytes: 14,
+        ..Default::default()
+    };
+
+    let state = Arc::new(Mutex::new(AppScanState {
+        summary: Some(summary),
+        ..Default::default()
+    }));
+
+    let app = build_router_with_state(state);
+    let server = TestServer::new(app).unwrap();
+
+    let payload = json!({
+        "paths": [dupe_file.to_string_lossy()],
+        "mode": "hardlink",
+    });
+
+    let res = server.post("/api/delete/execute").json(&payload).await;
+    assert_eq!(res.status_code(), 200);
+    let body: serde_json::Value = res.json();
+    assert_eq!(body["status"], "success");
+    assert_eq!(body["total_files_freed"], 1);
+    assert_eq!(body["mode"], "hardlink");
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let keeper_meta = std::fs::metadata(&keeper_file).unwrap();
+        let dupe_meta = std::fs::metadata(&dupe_file).unwrap();
+        assert_eq!(keeper_meta.ino(), dupe_meta.ino());
+    }
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+

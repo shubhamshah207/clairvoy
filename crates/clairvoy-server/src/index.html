@@ -256,6 +256,10 @@
                 <button onclick="applySelectionRule('ALL')" class="m3-button-secondary !py-1.5 !px-3 text-xs">Select All</button>
                 <button onclick="applySelectionRule('NONE')" class="m3-button-secondary !py-1.5 !px-3 text-xs">Clear</button>
 
+                <button onclick="openHardlinkDialog()" class="m3-button-secondary !py-1.5 !px-3.5 text-xs text-[#81c995] border-[#81c995]/40 hover:bg-[#81c995]/10" title="Safely replace duplicates with hardlinks to keepers (zero storage overhead, preserves file access)">
+                    <span>🔗 Hardlink</span>
+                </button>
+
                 <button onclick="openTrashDialog()" class="m3-button-secondary !py-1.5 !px-3.5 text-xs text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10" title="Safely move duplicates to .clairvoy_trash/">
                     <span>🗑️ Move to Trash</span>
                 </button>
@@ -1347,6 +1351,12 @@
                 <span id="trashModalCount" class="font-bold text-white">Selected duplicate files</span> will be safely moved into <code class="text-xs bg-[#131314] px-2 py-0.5 rounded text-[#8ab4f8]">.clairvoy_trash/</code>.
                 You can restore them back to their original locations at any time.
             </p>
+            <div class="bg-[#131314] rounded-xl p-3 border border-[#81c995]/30 mb-5 flex items-center justify-between text-xs">
+                <span class="text-[#c4c7c5]">Want zero file moves? Consolidate disk blocks:</span>
+                <button onclick="closeTrashDialog(); openHardlinkDialog();" class="text-[#81c995] hover:underline font-bold whitespace-nowrap ml-2">
+                    Convert to Hardlinks →
+                </button>
+            </div>
             <div class="flex justify-end gap-3">
                 <button onclick="closeTrashDialog()" class="m3-button-secondary text-xs">Cancel</button>
                 <button onclick="executeConfirmedDelete('trash')" id="confirmTrashBtn" class="m3-button-primary text-xs">
@@ -1369,9 +1379,15 @@
             <p class="text-sm text-[#c4c7c5] leading-relaxed mb-4">
                 This action <strong class="text-white font-semibold">cannot be undone</strong>. <span id="permanentDeleteModalCount" class="font-bold text-white">All selected duplicate copies</span> will be permanently unlinked from storage.
             </p>
-            <div class="bg-[#131314] rounded-xl p-3 border border-[#3c4043] text-xs font-mono text-[#8e918f] mb-5">
+            <div class="bg-[#131314] rounded-xl p-3 border border-[#3c4043] text-xs font-mono text-[#8e918f] mb-4">
                 • Designated Keeper files are strictly protected and never touched.<br>
                 • An immutable audit log will be saved to <span class="text-white">_dedupe_reports/</span>.
+            </div>
+            <div class="bg-[#131314] rounded-xl p-3 border border-[#81c995]/30 mb-5 flex items-center justify-between text-xs">
+                <span class="text-[#c4c7c5]">Safer alternative: Reclaim storage without unlinking:</span>
+                <button onclick="closePermanentDeleteDialog(); openHardlinkDialog();" class="text-[#81c995] hover:underline font-bold whitespace-nowrap ml-2">
+                    Convert to Hardlinks →
+                </button>
             </div>
             <div class="flex justify-end gap-3">
                 <button onclick="closePermanentDeleteDialog()" class="m3-button-secondary text-xs">Cancel</button>
@@ -1404,16 +1420,44 @@
         </div>
     </div>
 
+    <!-- Hardlink Safety Ladder Modal -->
+    <div id="hardlinkDialog" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#1e1f20] border border-[#81c995]/40 rounded-3xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-[#81c995]/20 text-[#81c995] flex items-center justify-center text-lg">🔗</div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">Convert to Hardlinks?</h3>
+                    <p class="text-xs text-[#81c995]">Zero Data Loss • Storage Block Consolidation</p>
+                </div>
+            </div>
+            <p class="text-sm text-[#c4c7c5] leading-relaxed mb-4">
+                <span id="hardlinkModalCount" class="font-bold text-white">Selected duplicate files</span> will be replaced with native filesystem hardlinks pointing directly to their designated keeper files.
+            </p>
+            <div class="bg-[#131314] rounded-xl p-3.5 border border-[#3c4043] text-xs font-mono text-[#8e918f] mb-5 space-y-1.5">
+                <div class="text-[#c4c7c5] font-semibold mb-1">Safety Ladder Guarantees:</div>
+                <div>• Preserves filenames, directory paths, and applications' read access.</div>
+                <div>• Consolidates redundant disk blocks onto identical filesystem inodes.</div>
+                <div>• Instantly frees physical storage without removing files from view.</div>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeHardlinkDialog()" class="m3-button-secondary text-xs">Cancel</button>
+                <button onclick="executeHardlinkAction()" id="confirmHardlinkBtn" class="m3-button-primary text-xs !bg-[#81c995] !text-[#131314] hover:!bg-[#a8dab5]">
+                    Convert to Hardlinks
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Pill -->
     <div id="toastNotification"
-         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1e1f20]/95 text-white border border-white/20 backdrop-blur-xl px-5 py-2.5 rounded-full shadow-2xl text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 pointer-events-none opacity-0 translate-y-4">
+         class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 bg-[#1e1f20]/95 text-white border border-white/20 backdrop-blur-xl px-5 py-2.5 rounded-full shadow-2xl text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 pointer-events-none opacity-0 translate-y-4">
         <span>✓</span>
         <span>Notification message</span>
     </div>
 
     <!-- Floating Google-Style Undo Snackbar -->
     <div id="undoSnackbar"
-         class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#2d2f31] text-[#e3e3e3] border border-[#444746] rounded-xl shadow-2xl px-4 py-3 flex items-center gap-4 transition-all duration-300 opacity-0 pointer-events-none translate-y-4 max-w-lg w-auto">
+         class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 bg-[#2d2f31] text-[#e3e3e3] border border-[#444746] rounded-xl shadow-2xl px-4 py-3 flex items-center gap-4 transition-all duration-300 opacity-0 pointer-events-none translate-y-4 max-w-lg w-auto">
         <span id="undoSnackbarIcon" class="text-base text-[#81c995]">🗑️</span>
         <span id="undoSnackbarMessage" class="text-xs font-medium truncate">Deleted items moved to Trash</span>
         <button id="undoSnackbarBtn" onclick="executeUndoTrash()" class="text-xs font-bold text-[#8ab4f8] hover:text-[#a8c7fa] hover:underline uppercase tracking-wider px-2 py-1 rounded transition ml-auto">
@@ -1422,6 +1466,117 @@
         <button onclick="dismissUndoSnackbar()" class="text-[#8e918f] hover:text-white text-xs px-1" title="Dismiss">
             ✕
         </button>
+    </div>
+
+    <!-- Google Cloud Ambient Telemetry Dock -->
+    <div id="bottomTelemetryDock" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2 bg-[#1e1f20]/95 backdrop-blur-md border border-white/10 rounded-full shadow-2xl text-xs text-[#c4c7c5] transition-all max-w-[95vw] overflow-x-auto whitespace-nowrap">
+        <!-- Watcher Badge -->
+        <div id="telemetryWatcherBadge" class="flex items-center gap-1.5 font-medium">
+            <span id="telemetryWatcherDot" class="w-2 h-2 rounded-full bg-[#81c995] animate-pulse"></span>
+            <span id="telemetryWatcherText">🟢 Watcher: Monitoring 0 dirs</span>
+        </div>
+        <span class="text-white/10">|</span>
+        <!-- Inotify Status -->
+        <div id="telemetryInotifyStatus" class="flex items-center gap-1 text-[#8ab4f8]">
+            <span>⚡</span>
+            <span id="telemetryInotifyText">Inotify: Active</span>
+        </div>
+        <span class="text-white/10">|</span>
+        <!-- SQLite WAL Sync Status -->
+        <div id="telemetrySqliteStatus" class="flex items-center gap-1 text-[#fdd663]">
+            <span>💾</span>
+            <span>SQLite WAL</span>
+        </div>
+        <span class="text-white/10">|</span>
+        <!-- Last Scan Timestamp / Sync Indicator -->
+        <div id="telemetryLastSync" class="flex items-center gap-1 text-[#8e918f] font-mono">
+            <span>⏱️</span>
+            <span id="telemetrySyncText">Sync: Idle</span>
+        </div>
+        <!-- Activity Drawer Trigger Button -->
+        <button id="telemetryActivityBtn" onclick="toggleActivityDrawer()" class="ml-1 flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white font-semibold transition cursor-pointer text-[11px]" title="Open Activity & Surveillance Audit Trail">
+            <span>^</span>
+            <span>Activity Log</span>
+        </button>
+    </div>
+
+    <!-- Collapsible Activity Drawer Modal -->
+    <div id="activityDrawerModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex flex-col justify-end transition-opacity duration-300">
+        <div class="bg-[#1e1f20] border-t border-[#3c4043] rounded-t-3xl max-w-5xl w-full mx-auto max-h-[82vh] flex flex-col shadow-2xl overflow-hidden">
+            <!-- Drawer Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[#28292a] bg-[#1a1b1c]">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-2xl bg-[#1a3860] border border-[#8ab4f8]/30 flex items-center justify-center text-base font-bold text-[#8ab4f8]">
+                        ⚡
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-base font-bold text-white">System Activity & Surveillance Drawer</h3>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#81c995]/20 text-[#81c995] border border-[#81c995]/30">REAL-TIME TELEMETRY</span>
+                        </div>
+                        <p class="text-xs text-[#8e918f]">Real-time kernel inotify events, watcher surveillance audit trail, and background scan history</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="refreshActivityDrawer()" class="m3-button-secondary !py-1 !px-3 text-xs" title="Refresh events and surveillance targets">
+                        <span>🔄 Refresh</span>
+                    </button>
+                    <button onclick="toggleActivityDrawer()" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white text-base transition" title="Close activity drawer">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Drawer Status Sub-Header -->
+            <div class="flex items-center justify-between px-6 py-2.5 bg-[#131314] border-b border-[#28292a] text-xs">
+                <div class="flex items-center gap-4 text-[#c4c7c5]">
+                    <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#81c995]"></span> Inotify Subsystem: <strong class="text-white">Active</strong></span>
+                    <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#fdd663]"></span> SQLite Mode: <strong class="text-white">WAL Journal (Zero-Clobber)</strong></span>
+                </div>
+                <div id="activityDrawerStats" class="text-[#8e918f] font-mono text-[11px]">
+                    Continuous Surveillance Active
+                </div>
+            </div>
+
+            <!-- Drawer Body -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                <!-- Section 1: Real-Time Event Stream Log -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-white uppercase tracking-wider">Real-Time Event Stream</span>
+                            <span id="activityLogCount" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-[#c4c7c5]">0 events</span>
+                        </div>
+                        <button onclick="clearActivityLogs()" class="text-[11px] text-[#8ab4f8] hover:underline">Clear logs</button>
+                    </div>
+                    <div id="activityLogStream" class="bg-[#131314] rounded-2xl p-4 border border-[#28292a] font-mono text-xs text-[#c4c7c5] space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                        <div class="text-[#8e918f] italic">Listening for filesystem events and background pipeline triggers...</div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Active Watcher Targets Audit Trail -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-white uppercase tracking-wider">Autonomous Surveillance Targets</span>
+                        <button onclick="toggleActivityDrawer(); openDriveBrowserModal();" class="text-[11px] text-[#8ab4f8] hover:underline">+ Add Target</button>
+                    </div>
+                    <div id="activityWatchedTargets" class="bg-[#131314] rounded-2xl p-3 border border-[#28292a] text-xs">
+                        <div class="text-[#8e918f] py-2 text-center">Loading watched targets...</div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Recent Optimization Runs History -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-white uppercase tracking-wider">Recent Optimization Runs</span>
+                        <a href="/api/runs" target="_blank" class="text-[11px] text-[#8ab4f8] hover:underline">View Raw JSON</a>
+                    </div>
+                    <div id="activityScanHistory" class="bg-[#131314] rounded-2xl p-3 border border-[#28292a] text-xs">
+                        <div class="text-[#8e918f] py-2 text-center">Loading scan history...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Keyboard Shortcuts Cheat Sheet Modal -->
@@ -1532,6 +1687,8 @@
         window.addEventListener('DOMContentLoaded', async () => {
             initStatusStream();
             await loadPastRunsList();
+            await refreshTelemetryData();
+            logActivityEvent('system', 'Clairvoy ambient telemetry initialized');
             try {
                 const res = await fetch('/api/status');
                 const state = await res.json();
@@ -4332,6 +4489,217 @@
             `;
         }
 
+        // --- Google Cloud Ambient Telemetry Dock & Activity Drawer Operations ---
+
+        let activityLogEntries = [];
+        let telemetryWatchedCount = 0;
+        let telemetryLastScanTimestamp = '';
+
+        function logActivityEvent(type, message) {
+            const time = new Date().toLocaleTimeString();
+            activityLogEntries.unshift({ time, type, message });
+            if (activityLogEntries.length > 60) {
+                activityLogEntries.pop();
+            }
+            renderActivityLogs();
+        }
+
+        function renderActivityLogs() {
+            const container = document.getElementById('activityLogStream');
+            const countBadge = document.getElementById('activityLogCount');
+            if (countBadge) {
+                countBadge.innerText = `${activityLogEntries.length} event${activityLogEntries.length === 1 ? '' : 's'}`;
+            }
+            if (!container) return;
+            if (activityLogEntries.length === 0) {
+                container.innerHTML = `<div class="text-[#8e918f] italic">Listening for filesystem events, kernel inotify triggers, and background pipeline runs...</div>`;
+                return;
+            }
+
+            let html = '';
+            for (const item of activityLogEntries) {
+                let badgeColor = 'bg-white/10 text-white';
+                let icon = '⚡';
+                if (item.type === 'watcher') { badgeColor = 'bg-[#81c995]/20 text-[#81c995]'; icon = '👁️'; }
+                else if (item.type === 'hardlink') { badgeColor = 'bg-[#81c995]/20 text-[#81c995]'; icon = '🔗'; }
+                else if (item.type === 'trash' || item.type === 'delete') { badgeColor = 'bg-[#f28b82]/20 text-[#f28b82]'; icon = '🗑️'; }
+                else if (item.type === 'quarantine') { badgeColor = 'bg-[#fdd663]/20 text-[#fdd663]'; icon = '📦'; }
+                else if (item.type === 'scan') { badgeColor = 'bg-[#8ab4f8]/20 text-[#8ab4f8]'; icon = '🔍'; }
+
+                html += `
+                    <div class="flex items-start gap-2.5 py-1 border-b border-white/5 hover:bg-white/5 px-1.5 rounded transition">
+                        <span class="text-[11px] text-[#8e918f] font-mono whitespace-nowrap">${item.time}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeColor} uppercase tracking-wider flex items-center gap-1 shrink-0">
+                            <span>${icon}</span> <span>${item.type}</span>
+                        </span>
+                        <span class="text-xs text-[#c4c7c5] break-words">${item.message}</span>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
+        function clearActivityLogs() {
+            activityLogEntries = [];
+            renderActivityLogs();
+        }
+
+        function updateTelemetryDock(statusState, watchedList) {
+            if (Array.isArray(watchedList)) {
+                telemetryWatchedCount = watchedList.filter(p => p.enabled !== false).length;
+            }
+
+            // Watcher Badge
+            const watcherDot = document.getElementById('telemetryWatcherDot');
+            const watcherText = document.getElementById('telemetryWatcherText');
+            if (watcherText) {
+                if (watcherDaemonPaused) {
+                    watcherText.innerText = "⏸️ Watcher: Paused";
+                    if (watcherDot) {
+                        watcherDot.className = "w-2 h-2 rounded-full bg-[#fdd663]";
+                    }
+                } else {
+                    watcherText.innerText = `🟢 Watcher: Monitoring ${telemetryWatchedCount} dir${telemetryWatchedCount === 1 ? '' : 's'}`;
+                    if (watcherDot) {
+                        watcherDot.className = "w-2 h-2 rounded-full bg-[#81c995] animate-pulse";
+                    }
+                }
+            }
+
+            // Inotify Status
+            const inotifyText = document.getElementById('telemetryInotifyText');
+            if (inotifyText) {
+                inotifyText.innerText = watcherDaemonPaused ? "Inotify: Standby" : "Inotify: Active";
+            }
+
+            // Last Scan / Sync Indicator
+            const syncText = document.getElementById('telemetrySyncText');
+            if (syncText) {
+                if (statusState?.status === 'running') {
+                    syncText.innerHTML = `<span class="text-[#8ab4f8] animate-pulse">Scanning (${statusState.progress_pct || 0}%)</span>`;
+                } else if (statusState?.status === 'completed') {
+                    telemetryLastScanTimestamp = new Date().toLocaleTimeString();
+                    syncText.innerText = `Last Scan: ${telemetryLastScanTimestamp}`;
+                } else if (telemetryLastScanTimestamp) {
+                    syncText.innerText = `Last Scan: ${telemetryLastScanTimestamp}`;
+                } else {
+                    syncText.innerText = "Sync: Idle";
+                }
+            }
+        }
+
+        async function refreshTelemetryData() {
+            try {
+                const [statusRes, watchRes] = await Promise.all([
+                    fetch('/api/status').catch(() => null),
+                    fetch('/api/watch/paths').catch(() => null)
+                ]);
+
+                let statusState = null;
+                if (statusRes && statusRes.ok) {
+                    statusState = await statusRes.json();
+                }
+
+                let watchedPaths = [];
+                if (watchRes && watchRes.ok) {
+                    watchedPaths = await watchRes.json();
+                }
+
+                updateTelemetryDock(statusState, watchedPaths);
+            } catch (e) {
+                console.warn("refreshTelemetryData error:", e);
+            }
+        }
+
+        function toggleActivityDrawer() {
+            const drawer = document.getElementById('activityDrawerModal');
+            if (!drawer) return;
+            if (drawer.classList.contains('hidden')) {
+                drawer.classList.remove('hidden');
+                refreshActivityDrawer();
+            } else {
+                drawer.classList.add('hidden');
+            }
+        }
+
+        async function refreshActivityDrawer() {
+            renderActivityLogs();
+
+            // Refresh watched targets in drawer
+            const targetsContainer = document.getElementById('activityWatchedTargets');
+            const statsEl = document.getElementById('activityDrawerStats');
+            try {
+                const paths = await loadWatchedPaths();
+                updateTelemetryDock(null, paths);
+                if (targetsContainer) {
+                    if (!paths || paths.length === 0) {
+                        targetsContainer.innerHTML = `<div class="text-[#8e918f] py-2 text-center text-xs">No active directory targets under background surveillance.</div>`;
+                    } else {
+                        let html = '<div class="divide-y divide-[#28292a]">';
+                        for (const p of paths) {
+                            html += `
+                                <div class="py-2 px-1 flex items-center justify-between text-xs">
+                                    <div class="flex items-center gap-2 truncate">
+                                        <span class="text-base">${p.enabled ? '🟢' : '⏸️'}</span>
+                                        <span class="font-mono text-white truncate" title="${p.path}">${p.path}</span>
+                                        ${p.recursive ? '<span class="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-[#c4c7c5]">recursive</span>' : ''}
+                                    </div>
+                                    <span class="text-[11px] text-[#8e918f] font-mono shrink-0 ml-2">${p.enabled ? 'Active' : 'Paused'}</span>
+                                </div>
+                            `;
+                        }
+                        html += '</div>';
+                        targetsContainer.innerHTML = html;
+                    }
+                }
+                if (statsEl) {
+                    statsEl.innerText = `Monitoring ${paths.filter(p => p.enabled).length} of ${paths.length} target(s) • SQLite WAL Active`;
+                }
+            } catch (e) {
+                if (targetsContainer) {
+                    targetsContainer.innerHTML = `<div class="text-[#f28b82] py-2 text-center text-xs">Failed to load surveillance targets: ${e.message}</div>`;
+                }
+            }
+
+            // Refresh runs in drawer
+            const historyContainer = document.getElementById('activityScanHistory');
+            try {
+                const runsRes = await fetch('/api/runs?limit=5');
+                if (runsRes.ok) {
+                    const runs = await runsRes.json();
+                    if (historyContainer) {
+                        if (!runs || runs.length === 0) {
+                            historyContainer.innerHTML = `<div class="text-[#8e918f] py-2 text-center text-xs">No past scan runs recorded.</div>`;
+                        } else {
+                            let html = '<div class="divide-y divide-[#28292a]">';
+                            for (const r of runs.slice(0, 5)) {
+                                const wasted = r.wasted_bytes ? (r.wasted_bytes / (1024 * 1024)).toFixed(2) + ' MB' : (r.wasted_mb ? r.wasted_mb.toFixed(2) + ' MB' : '0 MB');
+                                const runTime = r.created_at || (r.timestamp ? new Date(r.timestamp * 1000).toLocaleString() : 'Recent');
+                                html += `
+                                    <div class="py-2 px-1 flex items-center justify-between text-xs">
+                                        <div class="flex items-center gap-2 truncate">
+                                            <span class="font-mono text-[#8ab4f8]">${r.run_id ? r.run_id.substring(0, 8) : 'run'}</span>
+                                            <span class="text-[#8e918f] truncate" title="${r.scanned_path || ''}">${r.scanned_path || 'Multiple paths'}</span>
+                                        </div>
+                                        <div class="flex items-center gap-3 shrink-0 ml-2">
+                                            <span class="text-[#f28b82] font-mono font-semibold">${wasted} dupe</span>
+                                            <span class="text-[#8e918f] text-[11px] font-mono">${runTime}</span>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                            html += '</div>';
+                            historyContainer.innerHTML = html;
+                        }
+                    }
+                }
+            } catch (e) {
+                if (historyContainer) {
+                    historyContainer.innerHTML = `<div class="text-[#8e918f] py-2 text-center text-xs">Could not fetch recent scan runs.</div>`;
+                }
+            }
+        }
+
         // --- Autonomous Watcher & Storage Surveillance Operations ---
 
         function initStatusStream() {
@@ -4348,6 +4716,7 @@
                                 loadSummaryState(state.summary, state.message);
                             }
                         }
+                        updateTelemetryDock(state);
                     } catch (e) {
                         // Ignore JSON parse jitter
                     }
@@ -4433,6 +4802,8 @@
                 const data = await res.json();
                 watcherDaemonPaused = !!data.paused;
                 updateWatcherDaemonBadgeAndButton(watcherDaemonPaused);
+                updateTelemetryDock(null, null);
+                logActivityEvent('watcher', watcherDaemonPaused ? 'Autonomous Watcher paused' : 'Autonomous Watcher resumed & listening');
                 showToast(watcherDaemonPaused ? "Autonomous Watcher paused." : "Autonomous Watcher active & listening.", "👁️");
             } catch (e) {
                 alert("Error toggling watcher daemon: " + e.message);
@@ -4644,6 +5015,78 @@
         }
         function closeQuarantineModal() {
             document.getElementById('quarantineModal').classList.add('hidden');
+        }
+
+        function openHardlinkDialog() {
+            if (!currentSummary) return;
+            if (selectedPaths.size === 0) {
+                applySelectionPreset('AUTO');
+            }
+            const countEl = document.getElementById('hardlinkModalCount');
+            if (countEl) countEl.innerText = `${selectedPaths.size.toLocaleString()} selected duplicate file${selectedPaths.size === 1 ? '' : 's'}`;
+            const modal = document.getElementById('hardlinkDialog');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeHardlinkDialog() {
+            const modal = document.getElementById('hardlinkDialog');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function executeHardlinkAction() {
+            closeHardlinkDialog();
+
+            const targetPaths = [];
+            for (const item of (currentSummary?.groups || [])) {
+                if (item.action === 'DUPLICATE' && selectedPaths.has(item.path)) {
+                    targetPaths.push(item.path);
+                }
+            }
+
+            if (targetPaths.length === 0) {
+                showToast("No duplicate files are currently selected.", "⚠️");
+                return;
+            }
+
+            try {
+                showToast("Converting duplicates to hardlinks...", "🔗");
+                logActivityEvent('hardlink', `Converting ${targetPaths.length} duplicates to hardlinks`);
+
+                const res = await fetch('/api/delete/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        paths: targetPaths,
+                        mode: 'hardlink',
+                        base_dir: currentSummary.scanned_paths?.[0] || currentSummary.scanned_dir
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || data.detail || "Hardlink execution failed");
+
+                const freedMb = ((data.total_bytes_freed || 0) / (1024 * 1024)).toFixed(2);
+                showToast(`Converted ${data.total_files_freed || targetPaths.length} duplicates to hardlinks (${freedMb} MB reclaimed)!`, "✓");
+                logActivityEvent('hardlink', `Replaced ${data.total_files_freed || targetPaths.length} duplicates with hardlinks (${freedMb} MB storage consolidated)`);
+
+                for (const p of targetPaths) {
+                    selectedPaths.delete(p);
+                }
+
+                // UI state reload
+                const statusRes = await fetch('/api/status');
+                if (statusRes.ok) {
+                    const state = await statusRes.json();
+                    if (state.summary) {
+                        loadSummaryState(state.summary, `Hardlinked ${targetPaths.length} duplicate files (${freedMb} MB freed).`);
+                    }
+                }
+                updateTopSelectionBar();
+                await refreshTelemetryData();
+            } catch (e) {
+                showToast("Hardlink error: " + e.message, "⚠️");
+                logActivityEvent('hardlink', `Hardlink conversion error: ${e.message}`);
+                console.error("executeHardlinkAction error:", e);
+            }
         }
 
         async function executeConfirmedDelete(mode) {

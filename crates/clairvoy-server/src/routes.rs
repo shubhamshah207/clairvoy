@@ -11,7 +11,7 @@ use axum::Router;
 use clairvoy_core::db::{Database, DuplicateClusterRecord, WatchedPathRecord};
 use clairvoy_engine::watcher::AutonomousWatcher;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -747,6 +747,7 @@ pub async fn handle_delete_execute(
     let mut freed_bytes: u64 = 0;
     let mut deleted_paths = HashSet::new();
 
+    let is_hardlink = payload.mode == "hardlink";
     let trash_dir = if payload.mode == "trash" {
         let base = payload.base_dir.clone().unwrap_or_else(|| ".".to_string());
         let t_dir = PathBuf::from(base).join(".clairvoy_trash");
@@ -754,6 +755,31 @@ pub async fn handle_delete_execute(
         Some(t_dir)
     } else {
         None
+    };
+
+    let keeper_map: HashMap<String, String> = if is_hardlink {
+        let s = state.scan_state.lock().unwrap();
+        if let Some(ref summary) = s.summary {
+            let mut group_to_keeper = HashMap::new();
+            for g in &summary.groups {
+                if g.action == clairvoy_core::models::ActionType::Keep {
+                    group_to_keeper.insert(g.group_id, g.path.clone());
+                }
+            }
+            let mut map = HashMap::new();
+            for g in &summary.groups {
+                if g.action == clairvoy_core::models::ActionType::Duplicate {
+                    if let Some(k_path) = group_to_keeper.get(&g.group_id) {
+                        map.insert(g.path.clone(), k_path.clone());
+                    }
+                }
+            }
+            map
+        } else {
+            HashMap::new()
+        }
+    } else {
+        HashMap::new()
     };
 
     for path_str in &payload.paths {
@@ -764,6 +790,24 @@ pub async fn handle_delete_execute(
                 let file_name = p.file_name().unwrap_or_default();
                 let dst = t_dir.join(file_name);
                 std::fs::rename(p, dst).is_ok()
+            } else if is_hardlink {
+                if let Some(keeper_str) = keeper_map.get(path_str) {
+                    let keeper = Path::new(keeper_str);
+                    if keeper.is_file() && keeper != p {
+                        let temp_name = format!("{}.clairvoy_hl_tmp", path_str);
+                        let temp_p = Path::new(&temp_name);
+                        let _ = std::fs::remove_file(temp_p);
+                        if std::fs::hard_link(keeper, temp_p).is_ok() {
+                            std::fs::rename(temp_p, p).is_ok()
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
             } else {
                 std::fs::remove_file(p).is_ok()
             };
