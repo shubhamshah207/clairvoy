@@ -578,3 +578,31 @@ async fn test_server_audits_section_elements() {
     assert!(html.contains("inspectHistoricalRun"));
     assert!(!html.contains("runsDropdown"));
 }
+
+#[tokio::test]
+async fn test_server_full_scan_and_clean_left_nav_elements() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+
+    // 1. Full Scan button in header
+    assert!(html.contains("headerFullScanBtn"));
+    assert!(html.contains("openFullScanModal"));
+    assert!(html.contains("⚡ Full Scan"));
+
+    // 2. Mini progress indicator removed from left nav rail
+    assert!(!html.contains("sideScanIndicator"));
+    assert!(!html.contains("sideScanProgressBar"));
+
+    // 3. No number pills inside category button spans
+    assert!(!html.contains("<span id=\"tabCount_ALL\""));
+    assert!(!html.contains("<span id=\"tabCount_PHOTO\""));
+    assert!(!html.contains("<span id=\"matchCount_EXACT\""));
+
+    // 4. Neutral non-autoselected initial category state
+    assert!(html.contains("id=\"catBtn_ALL\""));
+    assert!(!html.contains("id=\"catBtn_ALL\"\n                        class=\"nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition bg-[#1a3860]"));
+}
