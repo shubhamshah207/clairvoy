@@ -19,7 +19,7 @@ pub enum Commands {
     },
     /// Launch the web dashboard server
     Ui {
-        #[arg(short, long, default_value = "8080")]
+        #[arg(short, long, default_value = "8000")]
         port: u16,
         #[arg(long, default_value = "0.0.0.0")]
         host: String,
@@ -77,7 +77,7 @@ mod tests {
         let cli = Cli::try_parse_from(args).expect("Should parse ui command defaults");
         match cli.command {
             Commands::Ui { port, host } => {
-                assert_eq!(port, 8080);
+                assert_eq!(port, 8000);
                 assert_eq!(host, "0.0.0.0");
             }
             _ => panic!("Expected Commands::Ui"),
