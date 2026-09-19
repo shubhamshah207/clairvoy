@@ -289,9 +289,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(Arc::new(w))
             };
 
-            println!("[*] Starting Clairvoy Rust Web Server at http://{} ...", addr);
+            let listener = if host == "0.0.0.0" {
+                // Dual-stack bind [::]:port so Windows host browser can connect via localhost (::1 and 127.0.0.1)
+                match tokio::net::TcpListener::bind(format!("[::]:{}", port)).await {
+                    Ok(l) => {
+                        println!("[*] Starting Clairvoy Rust Web Server at http://localhost:{} (dual-stack [::]:{}) ...", port, port);
+                        l
+                    }
+                    Err(_) => {
+                        println!("[*] Starting Clairvoy Rust Web Server at http://{}:{} ...", host, port);
+                        tokio::net::TcpListener::bind(addr).await?
+                    }
+                }
+            } else {
+                println!("[*] Starting Clairvoy Rust Web Server at http://{}:{} ...", host, port);
+                tokio::net::TcpListener::bind(addr).await?
+            };
+
             let app = clairvoy_server::build_router_with_services(scan_state, db, watcher);
-            let listener = tokio::net::TcpListener::bind(addr).await?;
             axum::serve(listener, app).await?;
         }
     }

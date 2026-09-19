@@ -225,10 +225,12 @@ fn get_system_shortcuts(home: &Path) -> Vec<SystemShortcut> {
 }
 
 pub async fn handle_index() -> Html<&'static str> {
+    eprintln!("[HTTP] GET / (serving index.html)");
     Html(INDEX_HTML)
 }
 
 pub async fn handle_tailwind_js() -> impl axum::response::IntoResponse {
+    eprintln!("[HTTP] GET /static/tailwind.js (serving offline tailwind bundle)");
     (
         [
             (header::CONTENT_TYPE, "application/javascript; charset=utf-8"),
@@ -239,6 +241,7 @@ pub async fn handle_tailwind_js() -> impl axum::response::IntoResponse {
 }
 
 pub async fn handle_status(State(state): State<ServerState>) -> Json<AppScanState> {
+    eprintln!("[HTTP] GET /api/status");
     let mut s = state.scan_state.lock().unwrap().clone();
     if s.status == "idle" || s.status == "completed" {
         if let Ok(db_guard) = state.db.lock() {
