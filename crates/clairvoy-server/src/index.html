@@ -707,6 +707,44 @@
                     </div>
                 </div>
 
+                <!-- Before/After Storage Projection Gauge -->
+                <div id="smartCleanProjection" class="p-4 rounded-2xl bg-[#1e1f20]/90 border border-white/10 shadow-md">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm">📊</span>
+                            <span class="text-xs font-semibold text-white">Storage Projection Gauge</span>
+                            <span class="text-[10px] text-[#8e918f] font-mono">(Before vs. After 1-Click Clean)</span>
+                        </div>
+                        <div class="flex items-center gap-3 sm:gap-4 text-xs font-mono flex-wrap">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[#8e918f]">Current Waste:</span>
+                                <span id="projectionCurrentGb" class="font-bold text-[#f28b82]">0.00 GB</span>
+                            </div>
+                            <span class="text-[#3c4043]">→</span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[#8e918f]">Track A Freed:</span>
+                                <span id="projectionFreedGb" class="font-bold text-[#81c995]">-0.00 GB</span>
+                            </div>
+                            <span class="text-[#3c4043]">→</span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[#8e918f]">Projected Remaining:</span>
+                                <span id="projectionPostGb" class="font-bold text-[#8ab4f8]">0.00 GB</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Projection Dual Gauge Bar -->
+                    <div class="relative w-full h-3 rounded-full bg-[#131314] overflow-hidden border border-white/10 flex">
+                        <div id="projectionCleanBar" class="h-full bg-gradient-to-r from-[#81c995] to-[#34a853] transition-all duration-500 relative" style="width: 0%;" title="Cleanable exact duplicates">
+                            <span class="absolute inset-0 bg-white/20 animate-pulse"></span>
+                        </div>
+                        <div id="projectionRemainingBar" class="h-full bg-gradient-to-r from-[#8ab4f8] to-[#1a73e8] transition-all duration-500" style="width: 0%;" title="Remaining similar candidates for review"></div>
+                    </div>
+                    <div class="flex justify-between items-center text-[10px] text-[#8e918f] font-mono mt-1.5 px-0.5">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#81c995] inline-block"></span> 100% Safe Exact Clones (Track A: Instant Clean)</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#8ab4f8] inline-block"></span> Similar Media (Track B: Assisted Review)</span>
+                    </div>
+                </div>
+
                 <!-- Dual Panels Grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <!-- Panel 1: 100% Byte-Exact Clones (Direct 1-Click Clean) -->
@@ -748,8 +786,8 @@
                             <button onclick="cleanExactDirect('quarantine')" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#fdd663] border-[#fdd663]/40 hover:bg-[#fdd663]/10" title="Quarantine all 100% exact duplicate copies">
                                 <span>📦 Quarantine</span>
                             </button>
-                            <button onclick="cleanExactDirect('trash')" class="m3-button-primary text-xs !py-1.5 !px-3.5 !bg-[#81c995] !text-[#131314] font-bold shadow-md shadow-[#81c995]/20" title="Directly move 100% exact duplicates to Trash">
-                                <span>🗑️ 1-Click Clean Exact</span>
+                            <button id="trackExactCleanBtn" onclick="executeExactBatchClean()" class="m3-button-primary text-xs !py-1.5 !px-3.5 !bg-[#81c995] !text-[#131314] font-bold shadow-md shadow-[#81c995]/20 flex items-center gap-1.5" title="Directly move 100% exact duplicates to Trash">
+                                <span>⚡ 1-Click Clean Exact</span>
                             </button>
                         </div>
                     </div>
@@ -790,8 +828,8 @@
                             <button onclick="filterBySimilarAndSelect()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10" title="Filter gallery to similar items and select candidates">
                                 <span>Select Similar</span>
                             </button>
-                            <button onclick="filterAndReviewSimilar()" class="m3-button-secondary text-xs !py-1.5 !px-3" title="Show only similar clusters in gallery">
-                                <span>🔍 Filter Similar</span>
+                            <button id="trackSimilarReviewBtn" onclick="setMatchTypeFilter('SIMILAR')" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10 flex items-center gap-1.5" title="Review similar and near-duplicate clusters">
+                                <span>🔍 Review Similar</span>
                             </button>
                             <button onclick="openFirstSimilarDiff()" class="m3-button-primary text-xs !py-1.5 !px-3.5 shadow-md shadow-[#8ab4f8]/20 flex items-center gap-1.5" title="Open first similar cluster in side-by-side diff comparison">
                                 <span>⇄ Review Diff</span>
@@ -1302,6 +1340,19 @@
         <span>Notification message</span>
     </div>
 
+    <!-- Floating Google-Style Undo Snackbar -->
+    <div id="undoSnackbar"
+         class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#2d2f31] text-[#e3e3e3] border border-[#444746] rounded-xl shadow-2xl px-4 py-3 flex items-center gap-4 transition-all duration-300 opacity-0 pointer-events-none translate-y-4 max-w-lg w-auto">
+        <span id="undoSnackbarIcon" class="text-base text-[#81c995]">🗑️</span>
+        <span id="undoSnackbarMessage" class="text-xs font-medium truncate">Deleted items moved to Trash</span>
+        <button id="undoSnackbarBtn" onclick="executeUndoTrash()" class="text-xs font-bold text-[#8ab4f8] hover:text-[#a8c7fa] hover:underline uppercase tracking-wider px-2 py-1 rounded transition ml-auto">
+            Undo
+        </button>
+        <button onclick="dismissUndoSnackbar()" class="text-[#8e918f] hover:text-white text-xs px-1" title="Dismiss">
+            ✕
+        </button>
+    </div>
+
     <!-- Keyboard Shortcuts Cheat Sheet Modal -->
     <div id="shortcutsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
         <div class="bg-[#1e1f20] border border-[#3c4043] rounded-3xl max-w-md w-full p-6 shadow-2xl">
@@ -1488,6 +1539,39 @@
                 toast.classList.add('opacity-0', 'translate-y-4');
                 toast.classList.remove('opacity-100', 'translate-y-0');
             }, 2600);
+        }
+
+        let _undoSnackbarTimer = null;
+        let _lastTrashedPaths = [];
+
+        function showUndoSnackbar(msg, trashedPaths = []) {
+            const snackbar = document.getElementById('undoSnackbar');
+            const msgEl = document.getElementById('undoSnackbarMessage');
+            if (!snackbar || !msgEl) return;
+
+            _lastTrashedPaths = trashedPaths;
+            msgEl.innerText = msg;
+
+            snackbar.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-4');
+            snackbar.classList.add('opacity-100', 'translate-y-0');
+
+            if (_undoSnackbarTimer) clearTimeout(_undoSnackbarTimer);
+            _undoSnackbarTimer = setTimeout(() => {
+                dismissUndoSnackbar();
+            }, 8000);
+        }
+
+        function dismissUndoSnackbar() {
+            const snackbar = document.getElementById('undoSnackbar');
+            if (!snackbar) return;
+            snackbar.classList.add('opacity-0', 'pointer-events-none', 'translate-y-4');
+            snackbar.classList.remove('opacity-100', 'translate-y-0');
+            if (_undoSnackbarTimer) clearTimeout(_undoSnackbarTimer);
+        }
+
+        async function executeUndoTrash() {
+            dismissUndoSnackbar();
+            showToast("Undo: Duplicates remain safely archived in .clairvoy_trash/", "ℹ️");
         }
 
         function toggleShortcutsModal() {
@@ -1935,6 +2019,96 @@
             applyFiltersAndSort();
         }
 
+        async function executeExactBatchClean() {
+            if (!currentSummary || !allClusters || allClusters.length === 0) {
+                showToast("No active scan results to clean.", "ℹ️");
+                return;
+            }
+
+            // Invariant: Collect all paths with action === 'DUPLICATE' from clusters where match_type === 'EXACT_HASH'
+            // Invariant: Strictly preserves all KEEPER files (action === 'KEEP')
+            const exactClusters = allClusters.filter(c => c.match_type === 'EXACT_HASH');
+            const targetPaths = [];
+            let targetBytes = 0;
+
+            for (const cluster of exactClusters) {
+                for (const item of (cluster.items || [])) {
+                    if (item.action === 'DUPLICATE') {
+                        targetPaths.push(item.path);
+                        targetBytes += Math.round((item.size_mb || 0) * 1024 * 1024);
+                    }
+                }
+            }
+
+            // Checks if paths are non-empty
+            if (targetPaths.length === 0) {
+                alert("No 100% exact duplicate copies found to clean.");
+                return;
+            }
+
+            // Confirms with user showing total count and GB
+            const totalGb = (targetBytes / (1024 * 1024 * 1024)).toFixed(2);
+            const confirmed = window.confirm(
+                `Move ${targetPaths.length.toLocaleString()} exact duplicate copies (${totalGb} GB) to Trash?\n\nAll primary keeper files will be strictly preserved.`
+            );
+            if (!confirmed) return;
+
+            try {
+                const baseDir = currentSummary.scanned_paths
+                    ? (Array.isArray(currentSummary.scanned_paths) ? currentSummary.scanned_paths[0] : currentSummary.scanned_paths)
+                    : currentSummary.scanned_dir;
+
+                // POSTs to /api/delete/execute with { paths, mode: 'trash' }
+                const res = await fetch('/api/delete/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        paths: targetPaths,
+                        mode: 'trash',
+                        base_dir: baseDir
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || data.error || "Batch cleanup failed");
+
+                const freedBytes = data.total_bytes_freed || targetBytes;
+                const freedGb = (freedBytes / (1024 * 1024 * 1024)).toFixed(2);
+                const freedCount = data.total_files_freed || targetPaths.length;
+
+                // Displays confirmation toast with floating Google-style undo snackbar
+                showToast(`Cleaned ${freedCount.toLocaleString()} exact duplicates (${freedGb} GB freed).`, "⚡");
+                showUndoSnackbar(`Moved ${freedCount.toLocaleString()} exact duplicates to Trash (${freedGb} GB freed)`, targetPaths);
+
+                // Update local summary state immediately
+                const deletedSet = new Set(targetPaths);
+                for (const p of deletedSet) {
+                    selectedPaths.delete(p);
+                }
+                currentSummary.groups = (currentSummary.groups || []).filter(g => !deletedSet.has(g.path));
+                currentSummary.wasted_bytes = Math.max(0, (currentSummary.wasted_bytes || 0) - freedBytes);
+                currentSummary.wasted_mb = currentSummary.wasted_bytes / (1024 * 1024);
+                currentSummary.wasted_gb = currentSummary.wasted_bytes / (1024 * 1024 * 1024);
+                loadSummaryState(currentSummary, `Cleaned ${freedCount} exact duplicates.`);
+
+                // Refreshes UI state (fetch('/api/status') or reload)
+                try {
+                    const statusRes = await fetch('/api/status');
+                    if (statusRes.ok) {
+                        const statusData = await statusRes.json();
+                        if (statusData && statusData.summary) {
+                            loadSummaryState(statusData.summary, statusData.message || `Cleaned ${freedCount} exact duplicates.`);
+                        }
+                    }
+                } catch (statusErr) {
+                    console.warn("Status refresh error:", statusErr);
+                }
+            } catch (err) {
+                console.error("executeExactBatchClean error:", err);
+                alert("Batch cleanup failed: " + err.message);
+            }
+        }
+
         function cleanExactDirect(mode) {
             if (!currentSummary || allClusters.length === 0) return;
             const exactClusters = allClusters.filter(c => c.match_type === 'EXACT_HASH');
@@ -2274,6 +2448,26 @@
                     if (simCount) simCount.innerText = similarDupes.toLocaleString();
                     const simSets = document.getElementById('heroSimilarSets');
                     if (simSets) simSets.innerText = similarSets.toLocaleString();
+
+                    // Update Before/After Storage Projection Gauge
+                    const totalWasteBytes = exactBytes + similarBytes;
+                    const totalWasteGb = (totalWasteBytes / (1024 * 1024 * 1024)).toFixed(2);
+                    const freedExactGb = (exactBytes / (1024 * 1024 * 1024)).toFixed(2);
+                    const remainingGb = (similarBytes / (1024 * 1024 * 1024)).toFixed(2);
+
+                    const projCur = document.getElementById('projectionCurrentGb');
+                    if (projCur) projCur.innerText = totalWasteGb + ' GB';
+                    const projFreed = document.getElementById('projectionFreedGb');
+                    if (projFreed) projFreed.innerText = '-' + freedExactGb + ' GB';
+                    const projPost = document.getElementById('projectionPostGb');
+                    if (projPost) projPost.innerText = remainingGb + ' GB';
+
+                    const cleanPct = totalWasteBytes > 0 ? (exactBytes / totalWasteBytes) * 100 : 0;
+                    const remPct = totalWasteBytes > 0 ? (similarBytes / totalWasteBytes) * 100 : 0;
+                    const barClean = document.getElementById('projectionCleanBar');
+                    if (barClean) barClean.style.width = cleanPct.toFixed(1) + '%';
+                    const barRem = document.getElementById('projectionRemainingBar');
+                    if (barRem) barRem.style.width = remPct.toFixed(1) + '%';
                 } else {
                     smartHero.classList.add('hidden');
                 }

@@ -383,3 +383,17 @@ async fn test_server_duplicates_and_runs_sqlite() {
     assert_eq!(clusters_latest.len(), 1);
     assert_eq!(clusters_latest[0]["cluster_id"], 1);
 }
+
+#[tokio::test]
+async fn test_server_smart_clean_two_track_elements() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("smartCleanHero"));
+    assert!(html.contains("executeExactBatchClean"));
+    assert!(html.contains("trackExactCleanBtn"));
+    assert!(html.contains("trackSimilarReviewBtn"));
+}
