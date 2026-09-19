@@ -1,0 +1,15 @@
+[package]
+name = "clairvoy-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clairvoy-core = { path = "../clairvoy-core" }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+image_hasher = "3.0"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
