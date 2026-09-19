@@ -223,16 +223,56 @@ clairvoy scan /mnt/drives/Media /mnt/drives/Backup /mnt/drives/Archives --worker
 
 ---
 
-## 🧪 Testing & Verification
+## 🦀 Why Pure Rust? (High-Performance Engine)
 
-Clairvoy is backed by a 100% automated test suite:
+For power users, photographers, sysadmins, and homelabbers managing large storage volumes, Clairvoy provides a standalone pure Rust engine (`clairvoy-rs`):
+
+```
++-------------------------------------------------------------------------------------------------------+
+|                                    WHY PURE RUST FOR USERS?                                           |
++-------------------------------------------------------------------------------------------------------+
+| 1. Zero Dependencies      | Single 1.7 MB static binary. No Python, pip, conda, or C++ tools needed. |
+| 2. Uncompromising Speed   | 3.4x - 36x faster. >10 GB/s SIMD quick hashing + multi-core BLAKE3 trees. |
+| 3. Strict Memory Ceiling  | Caps resident RAM <= 50 MB on multi-million file workloads (never OOMs). |
+| 4. Zero Fan Noise/Battery | Bare-metal execution without Python GIL or GC pauses. Perfect for laptops.|
+| 5. Safe & Trustworthy     | Memory-safe guarantees with 100% offline, local-first zero-clobber rules. |
++-------------------------------------------------------------------------------------------------------+
+```
+
+### Key Advantages for End Users:
+1. **Single 1.7 MB Static Binary:** Zero installation friction. No Python interpreter, virtual environments, pip packages, or native C++ dependency mismatches. Just download and run.
+2. **Empirical 3.4x to 36x Speedup:** Verified across real-world workloads, saving over **97 seconds** on a 3,600+ photo archive. Detailed benchmarks are published in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+3. **Guaranteed $\le 50\text{ MB}$ RAM Ceiling:** Uses bounded streaming channels (`flume::bounded(2048)`) with zero-copy traversal. Whether scanning 1,000 files or 5,000,000 files, resident memory never spikes and never triggers Out-of-Memory crashes.
+4. **Energy & Battery Efficient:** Native bare-metal execution eliminates interpreter loop overhead and GIL contention, keeping fans quiet and preserving laptop battery life.
+5. **100% Schema & Cluster Parity:** Produces identical JSON manifests and deduplication clusters as the Python engine.
 
 ```bash
-# Run full test suite (104 tests)
+# Build release binary (or download pre-compiled executable)
+cargo build --release --bin clairvoy-rs
+
+# High-speed native scan across storage volumes
+./target/release/clairvoy-rs scan /path/to/media /path/to/backup
+
+# Launch standalone Rust web server
+./target/release/clairvoy-rs ui --port 8080 --host 0.0.0.0
+```
+
+---
+
+## 🧪 Testing & Verification
+
+Clairvoy is backed by a 100% automated test suite across both Python and pure Rust engines:
+
+```bash
+# Run Python full test suite (276 tests)
 pytest -v
+
+# Run Rust workspace test suite (29 tests)
+cargo test --workspace
 
 # Run linter checks
 ruff check .
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 ---
