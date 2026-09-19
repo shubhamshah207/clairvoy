@@ -839,6 +839,11 @@
                 </div>
             </section>
 
+            <!-- Breadcrumb Navigation Hierarchy -->
+            <nav id="workspaceBreadcrumbs" aria-label="Breadcrumbs" class="flex items-center gap-2 text-xs text-[#8e918f] font-mono mb-3 px-1 py-1.5 overflow-x-auto custom-scrollbar border-b border-[#28292a]">
+                <button onclick="setModalityCategory('ALL')" class="text-[#8ab4f8] font-bold bg-[#1a3860]/40 px-2 py-0.5 rounded-full border border-[#8ab4f8]/30 cursor-pointer">🏠 All Libraries</button>
+            </nav>
+
             <!-- Active Category Header & Gallery Controls -->
             <section class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5 pb-1">
                 <!-- Left: Active Category Breadcrumb & Filter Reset Cross Chip -->
@@ -903,15 +908,15 @@
                         </button>
                     </div>
 
-                    <!-- View Toggle Button (Photos Grid vs Drive List) -->
-                    <div class="flex items-center bg-[#202124] border border-[#3c4043] rounded-full p-0.5">
-                        <button onclick="setViewMode('grid')" id="viewModeGridBtn"
-                                class="px-3 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]" title="Google Photos Grid View">
-                            ▦ Photos
+                    <!-- View Density Switcher (Visual Grid vs Structured Table) -->
+                    <div class="flex items-center bg-[#202124] border border-[#3c4043] rounded-full p-0.5" title="View Density Layout">
+                        <button onclick="setViewLayout('grid')" id="btnViewGrid"
+                                class="px-3 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]" title="Visual Masonry Grid View">
+                            ▦ Grid
                         </button>
-                        <button onclick="setViewMode('list')" id="viewModeListBtn"
-                                class="px-3 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white" title="Google Drive List View">
-                            ☰ List
+                        <button onclick="setViewLayout('table')" id="btnViewTable"
+                                class="px-3 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white" title="High-Density Table View">
+                            ☰ Table
                         </button>
                     </div>
                 </div>
@@ -1476,7 +1481,10 @@
         let searchQuery = '';
         let currentPage = 1;
         let perPage = 25;
-        let viewMode = 'grid'; // 'grid' (Photos) | 'list' (Drive)
+        let currentViewLayout = 'grid'; // 'grid' | 'table'
+        let viewMode = 'grid'; // backward compatibility
+        let tableSortState = { column: 'name', ascending: true };
+        let currentTableClusters = [];
         let thumbnailSize = 'medium'; // 'small' | 'medium' | 'large'
         let currentNav = 'ALL'; // 'ALL' | 'DRIVE' | 'CLEANUP' | 'TRASH' | 'WATCHER'
         let watcherDaemonPaused = false;
@@ -2257,18 +2265,26 @@
             }
         }
 
-        function setViewMode(mode) {
-            viewMode = mode;
-            const gridBtn = document.getElementById('viewModeGridBtn');
-            const listBtn = document.getElementById('viewModeListBtn');
-            if (mode === 'grid') {
-                gridBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]";
-                listBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white";
-            } else {
-                listBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]";
-                gridBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white";
+        function setViewLayout(layout) {
+            currentViewLayout = (layout === 'table' || layout === 'list') ? 'table' : 'grid';
+            viewMode = (currentViewLayout === 'table') ? 'list' : 'grid';
+
+            const gridBtn = document.getElementById('btnViewGrid') || document.getElementById('viewModeGridBtn');
+            const tableBtn = document.getElementById('btnViewTable') || document.getElementById('viewModeListBtn');
+            if (gridBtn && tableBtn) {
+                if (currentViewLayout === 'grid') {
+                    gridBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]";
+                    tableBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white";
+                } else {
+                    tableBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]";
+                    gridBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white";
+                }
             }
             renderCurrentPage();
+        }
+
+        function setViewMode(mode) {
+            setViewLayout(mode === 'list' || mode === 'table' ? 'table' : 'grid');
         }
 
         function setThumbnailSize(size) {
@@ -2813,6 +2829,8 @@
             document.getElementById('prevPageBtn').disabled = (currentPage <= 1);
             document.getElementById('nextPageBtn').disabled = (currentPage >= totalPages);
 
+            renderBreadcrumbs();
+
             const gallery = document.getElementById('clustersGallery');
             if (pageClusters.length === 0) {
                 gallery.innerHTML = `
@@ -2824,12 +2842,12 @@
                 return;
             }
 
-            gallery.innerHTML = '';
-            for (const c of pageClusters) {
-                if (viewMode === 'grid') {
+            if (currentViewLayout === 'table') {
+                renderTableView(pageClusters);
+            } else {
+                gallery.innerHTML = '';
+                for (const c of pageClusters) {
                     gallery.appendChild(createGooglePhotosCard(c));
-                } else {
-                    gallery.appendChild(createGoogleDriveListCard(c));
                 }
             }
         }
@@ -3242,6 +3260,375 @@
                         ` : '<span class="text-[#8e918f] text-[10px]">Keeper</span>'}
                     </td>
                 </tr>
+            `;
+        }
+
+        // =========================================================================
+        // Google Drive Structured Workspace & Density Switcher
+        // =========================================================================
+
+        function getFileIcon(path) {
+            if (!path) return '📄';
+            if (typeof isImageFile === 'function' && isImageFile(path)) return '🖼️';
+            if (typeof isVideoFile === 'function' && isVideoFile(path)) return '🎬';
+            const lower = path.toLowerCase();
+            if (lower.endsWith('.pdf') || lower.endsWith('.doc') || lower.endsWith('.docx') || lower.endsWith('.txt')) return '📄';
+            if (lower.endsWith('.zip') || lower.endsWith('.tar') || lower.endsWith('.gz') || lower.endsWith('.rar')) return '📦';
+            return '📁';
+        }
+
+        function copyFilePath(encodedPath, event) {
+            if (event) event.stopPropagation();
+            const path = decodeURIComponent(encodedPath);
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(path).then(() => {
+                    showToast("Copied path to clipboard", "📋");
+                }).catch(() => {
+                    prompt("File Path:", path);
+                });
+            } else {
+                prompt("File Path:", path);
+            }
+        }
+
+        function revealFileInDrive(encodedPath, event) {
+            if (event) event.stopPropagation();
+            const fullPath = decodeURIComponent(encodedPath);
+            const parentDir = fullPath.substring(0, fullPath.lastIndexOf('/')) || '/';
+            openDriveBrowserModal(parentDir);
+        }
+
+        function stageItemForTrash(encodedPath, event) {
+            if (event) event.stopPropagation();
+            const path = decodeURIComponent(encodedPath);
+            if (selectedPaths.has(path)) {
+                selectedPaths.delete(path);
+                showToast("Removed from trash selection", "ℹ️");
+            } else {
+                selectedPaths.add(path);
+                showToast("Staged for trash", "🗑️");
+            }
+            if (currentViewLayout === 'table') {
+                renderTableView(currentTableClusters);
+            } else {
+                renderCurrentPage();
+            }
+            updateTopSelectionBar();
+        }
+
+        function renderBreadcrumbs() {
+            const nav = document.getElementById('workspaceBreadcrumbs');
+            if (!nav) return;
+
+            const catLabels = {
+                'PHOTO': '📁 Photos',
+                'VIDEO': '📁 Videos',
+                'SCREENSHOT': '📁 Screenshots',
+                'DOCUMENT': '📁 Documents',
+                'FILE': '📁 Other Files'
+            };
+
+            let crumbs = [];
+            crumbs.push({
+                label: '🏠 All Libraries',
+                active: (activeModality === 'ALL'),
+                action: "setModalityCategory('ALL')"
+            });
+
+            if (activeModality !== 'ALL' && catLabels[activeModality]) {
+                crumbs.push({
+                    label: catLabels[activeModality],
+                    active: true,
+                    action: `setModalityCategory('${activeModality}')`
+                });
+            }
+
+            // Dynamic folder hierarchy context
+            let folderContext = null;
+            if (currentSummary && (currentSummary.scanned_paths || currentSummary.scanned_dir)) {
+                const raw = Array.isArray(currentSummary.scanned_paths)
+                    ? currentSummary.scanned_paths[0]
+                    : (currentSummary.scanned_paths || currentSummary.scanned_dir);
+                if (raw) {
+                    const parts = raw.split('/').filter(Boolean);
+                    if (parts.length > 0) {
+                        folderContext = {
+                            name: parts[parts.length - 1],
+                            path: raw
+                        };
+                    }
+                }
+            } else if (allClusters && allClusters.length > 0 && allClusters[0].items && allClusters[0].items.length > 0) {
+                const firstPath = allClusters[0].items[0].path;
+                const parent = firstPath.substring(0, firstPath.lastIndexOf('/'));
+                const parts = parent.split('/').filter(Boolean);
+                if (parts.length > 0) {
+                    folderContext = {
+                        name: parts[parts.length - 1],
+                        path: parent
+                    };
+                }
+            }
+
+            if (folderContext) {
+                crumbs.push({
+                    label: `📁 ${folderContext.name}`,
+                    active: false,
+                    action: `openDriveBrowserModal('${folderContext.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')`
+                });
+            }
+
+            nav.innerHTML = crumbs.map((c, i) => {
+                const isLast = (i === crumbs.length - 1);
+                const activeClass = isLast
+                    ? 'text-[#8ab4f8] font-bold bg-[#1a3860]/40 px-2.5 py-1 rounded-full border border-[#8ab4f8]/30'
+                    : 'text-[#c4c7c5] hover:text-white transition hover:underline px-1 py-0.5';
+                const crumbHtml = `<button onclick="${c.action}" class="${activeClass} cursor-pointer">${c.label}</button>`;
+                const sep = (!isLast) ? '<span class="text-[#5f6368] font-bold select-none">&gt;</span>' : '';
+                return `${crumbHtml} ${sep}`;
+            }).join(' ');
+        }
+
+        function tableSortColumn(col) {
+            if (tableSortState.column === col) {
+                tableSortState.ascending = !tableSortState.ascending;
+            } else {
+                tableSortState.column = col;
+                tableSortState.ascending = true;
+            }
+            renderTableView(currentTableClusters);
+        }
+
+        function toggleTableSelectAllPage(checked) {
+            if (!currentTableClusters || currentTableClusters.length === 0) return;
+            for (const c of currentTableClusters) {
+                const items = (c.items && c.items.length > 0) ? c.items : [c.keeper, ...(c.duplicates || [])].filter(Boolean);
+                for (const item of items) {
+                    if (item.action !== 'KEEP') {
+                        if (checked) {
+                            selectedPaths.add(item.path);
+                        } else {
+                            selectedPaths.delete(item.path);
+                        }
+                    }
+                }
+            }
+            renderTableView(currentTableClusters);
+            updateTopSelectionBar();
+        }
+
+        function renderTableView(clusters) {
+            if (clusters) {
+                currentTableClusters = clusters;
+            } else {
+                clusters = currentTableClusters || [];
+            }
+
+            const gallery = document.getElementById('clustersGallery');
+            if (!gallery) return;
+
+            if (!clusters || clusters.length === 0) {
+                gallery.innerHTML = `
+                    <div class="text-center py-20 m3-card text-[#8e918f]">
+                        <span class="text-3xl block mb-2">🔍</span>
+                        No duplicate clusters match the current filters.
+                    </div>
+                `;
+                return;
+            }
+
+            // Flatten all items from each cluster
+            let rows = [];
+            for (const c of clusters) {
+                const items = (c.items && c.items.length > 0) ? c.items : [c.keeper, ...(c.duplicates || [])].filter(Boolean);
+                for (const item of items) {
+                    rows.push({
+                        ...item,
+                        group_id: c.group_id,
+                        match_type: c.match_type,
+                        cluster_category: c.category
+                    });
+                }
+            }
+
+            // Clean sorting by active column and direction
+            rows.sort((a, b) => {
+                let valA, valB;
+                const col = tableSortState.column;
+                if (col === 'role') {
+                    valA = (a.action === 'KEEP') ? 0 : 1;
+                    valB = (b.action === 'KEEP') ? 0 : 1;
+                } else if (col === 'name') {
+                    valA = (a.path.split('/').pop() || '').toLowerCase();
+                    valB = (b.path.split('/').pop() || '').toLowerCase();
+                } else if (col === 'size') {
+                    valA = a.size_mb || 0;
+                    valB = b.size_mb || 0;
+                } else if (col === 'dimensions') {
+                    const dimA = (typeof parseDimensions === 'function') ? parseDimensions(a.dimensions) : null;
+                    const dimB = (typeof parseDimensions === 'function') ? parseDimensions(b.dimensions) : null;
+                    valA = dimA ? (dimA.w * dimA.h) : 0;
+                    valB = dimB ? (dimB.w * dimB.h) : 0;
+                } else if (col === 'score') {
+                    valA = a.similarity_score !== undefined ? a.similarity_score : (a.action === 'KEEP' ? 1.0 : (parseFloat(a.similarity) || 0) / 100);
+                    valB = b.similarity_score !== undefined ? b.similarity_score : (b.action === 'KEEP' ? 1.0 : (parseFloat(b.similarity) || 0) / 100);
+                } else {
+                    valA = a.path || '';
+                    valB = b.path || '';
+                }
+
+                if (valA < valB) return tableSortState.ascending ? -1 : 1;
+                if (valA > valB) return tableSortState.ascending ? 1 : -1;
+                return (a.path || '').localeCompare(b.path || '');
+            });
+
+            const nonKeeperRows = rows.filter(r => r.action !== 'KEEP');
+            const allPageSelected = nonKeeperRows.length > 0 && nonKeeperRows.every(r => selectedPaths.has(r.path));
+
+            const sortInd = (col) => {
+                if (tableSortState.column !== col) {
+                    return '<span class="text-[#5f6368] text-[10px] ml-1 opacity-50">⇅</span>';
+                }
+                return tableSortState.ascending
+                    ? '<span class="text-[#8ab4f8] text-[10px] ml-1 font-bold">▲</span>'
+                    : '<span class="text-[#8ab4f8] text-[10px] ml-1 font-bold">▼</span>';
+            };
+
+            const tbodyHtml = rows.map(r => {
+                const isKeeper = (r.action === 'KEEP');
+                const isChecked = selectedPaths.has(r.path);
+                const fname = r.path.split('/').pop() || r.path;
+                const parentDir = r.path.substring(0, r.path.lastIndexOf('/')) || '/';
+                const dim = (typeof parseDimensions === 'function') ? parseDimensions(r.dimensions) : null;
+                const dimText = dim
+                    ? `<span class="text-white font-mono text-xs">${dim.w}×${dim.h}</span> <span class="text-[#8e918f] text-[10px]">• ${dim.mp.toFixed(1)} MP</span>`
+                    : `<span class="text-[#8e918f] text-xs font-sans">${r.cluster_category || r.category || (fname.split('.').pop() || 'File').toUpperCase()}</span>`;
+
+                const isExact = (r.match_type === 'EXACT_HASH' || r.similarity === '100%' || r.similarity_score === 1.0);
+                const matchBadge = isExact
+                    ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#81c995]/20 text-[#81c995] border border-[#81c995]/30">⚡ 100% Exact</span>`
+                    : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#1a3860] text-[#8ab4f8] border border-[#8ab4f8]/30">🔍 ${r.similarity || (r.similarity_score ? (r.similarity_score * 100).toFixed(1) + '%' : 'Similar')}</span>`;
+
+                const roleChip = isKeeper
+                    ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#81c995]/15 text-[#81c995] border border-[#81c995]/30">★ KEEPER</span>`
+                    : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#fdd663]/15 text-[#fdd663] border border-[#fdd663]/30">⚠️ DUPLICATE</span>`;
+
+                const sizeMb = (r.size_mb || 0).toFixed(2);
+                const icon = getFileIcon(r.path);
+
+                return `
+                    <tr class="group hover:bg-[#28292a]/70 transition cursor-pointer ${isChecked ? 'bg-[#1a3860]/20' : ''}"
+                        onclick="openPhotoLightbox(${r.group_id}, '${encodeURIComponent(r.path)}')">
+                        <td class="py-2.5 px-3 text-center" onclick="event.stopPropagation()">
+                            <input type="checkbox"
+                                   onchange="toggleItemSelection('${encodeURIComponent(r.path)}', event)"
+                                   ${isChecked ? 'checked' : ''}
+                                   class="w-4 h-4 rounded accent-[#8ab4f8] cursor-pointer"
+                                   title="${isChecked ? 'Deselect file' : 'Select file'}">
+                        </td>
+                        <td class="py-2.5 px-3 whitespace-nowrap">
+                            ${roleChip}
+                        </td>
+                        <td class="py-2.5 px-3 min-w-0">
+                            <div class="flex items-center gap-2.5">
+                                <span class="text-base flex-shrink-0">${icon}</span>
+                                <div class="min-w-0 max-w-xs sm:max-w-sm md:max-w-md">
+                                    <div class="font-sans font-bold text-white text-xs truncate hover:text-[#8ab4f8] transition"
+                                         title="${fname}">
+                                        ${fname}
+                                    </div>
+                                    <div class="flex items-center gap-1.5 text-[11px] text-[#8e918f] font-mono truncate mt-0.5">
+                                        <span class="truncate" title="${parentDir}">${parentDir}</span>
+                                        <button onclick="copyFilePath('${encodeURIComponent(r.path)}', event)"
+                                                class="text-[#8e918f] hover:text-white p-0.5 rounded hover:bg-white/10 transition flex-shrink-0 cursor-pointer"
+                                                title="Copy full path to clipboard">
+                                            📋
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-2.5 px-3 text-[#c4c7c5] font-mono text-xs whitespace-nowrap">
+                            ${sizeMb} MB
+                        </td>
+                        <td class="py-2.5 px-3 whitespace-nowrap">
+                            ${dimText}
+                        </td>
+                        <td class="py-2.5 px-3 whitespace-nowrap">
+                            ${matchBadge}
+                        </td>
+                        <td class="py-2.5 px-4 text-right whitespace-nowrap" onclick="event.stopPropagation()">
+                            <div class="flex items-center justify-end gap-1.5 opacity-80 group-hover:opacity-100 transition">
+                                <button onclick="openComparisonStudio(${r.group_id}, '${encodeURIComponent(r.path)}'); event.stopPropagation();"
+                                        class="px-2 py-1 rounded-lg text-[11px] font-sans font-medium bg-[#28292a] hover:bg-[#303134] text-[#8ab4f8] border border-[#3c4043] flex items-center gap-1 transition cursor-pointer"
+                                        title="Open Top Shot Comparison Studio">
+                                    <span>👁️</span><span>Compare</span>
+                                </button>
+                                <button onclick="revealFileInDrive('${encodeURIComponent(r.path)}', event)"
+                                        class="px-2 py-1 rounded-lg text-[11px] font-sans font-medium bg-[#28292a] hover:bg-[#303134] text-[#c4c7c5] hover:text-white border border-[#3c4043] flex items-center gap-1 transition cursor-pointer"
+                                        title="Reveal folder in Drive browser modal">
+                                    <span>📁</span><span>Reveal</span>
+                                </button>
+                                <button onclick="stageItemForTrash('${encodeURIComponent(r.path)}', event)"
+                                        class="px-2 py-1 rounded-lg text-[11px] font-sans font-medium ${isChecked ? 'bg-[#f28b82]/20 text-[#f28b82] border-[#f28b82]/40' : 'bg-[#28292a] hover:bg-[#303134] text-[#f28b82] border-[#3c4043]'} flex items-center gap-1 transition cursor-pointer"
+                                        title="Toggle item for trash">
+                                    <span>🗑️</span><span>Trash</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            gallery.innerHTML = `
+                <div class="rounded-2xl border border-[#28292a] bg-[#1e1f20]/95 shadow-xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs font-mono border-collapse">
+                            <thead class="sticky top-0 z-10 bg-[#1e1f20] border-b border-[#28292a] text-[#8e918f] select-none shadow-sm">
+                                <tr>
+                                    <th class="py-3 px-3 w-10 text-center">
+                                        <input type="checkbox" id="tableSelectAllPageCheckbox"
+                                               onchange="toggleTableSelectAllPage(this.checked)"
+                                               ${allPageSelected ? 'checked' : ''}
+                                               class="w-4 h-4 rounded accent-[#8ab4f8] cursor-pointer"
+                                               title="Select all duplicates on this page">
+                                    </th>
+                                    <th class="py-3 px-3 w-28 cursor-pointer hover:text-white transition" onclick="tableSortColumn('role')" title="Click to sort by Role">
+                                        <div class="flex items-center gap-1 font-sans font-bold text-xs">
+                                            <span>Role</span>${sortInd('role')}
+                                        </div>
+                                    </th>
+                                    <th class="py-3 px-3 cursor-pointer hover:text-white transition" onclick="tableSortColumn('name')" title="Click to sort by Name & Location">
+                                        <div class="flex items-center gap-1 font-sans font-bold text-xs">
+                                            <span>Name & Location</span>${sortInd('name')}
+                                        </div>
+                                    </th>
+                                    <th class="py-3 px-3 w-28 cursor-pointer hover:text-white transition" onclick="tableSortColumn('size')" title="Click to sort by Size">
+                                        <div class="flex items-center gap-1 font-sans font-bold text-xs">
+                                            <span>Size</span>${sortInd('size')}
+                                        </div>
+                                    </th>
+                                    <th class="py-3 px-3 w-44 cursor-pointer hover:text-white transition" onclick="tableSortColumn('dimensions')" title="Click to sort by Resolution / Info">
+                                        <div class="flex items-center gap-1 font-sans font-bold text-xs">
+                                            <span>Resolution / Info</span>${sortInd('dimensions')}
+                                        </div>
+                                    </th>
+                                    <th class="py-3 px-3 w-36 cursor-pointer hover:text-white transition" onclick="tableSortColumn('score')" title="Click to sort by Match Confidence">
+                                        <div class="flex items-center gap-1 font-sans font-bold text-xs">
+                                            <span>Match Confidence</span>${sortInd('score')}
+                                        </div>
+                                    </th>
+                                    <th class="py-3 px-4 w-60 text-right font-sans font-bold text-xs text-[#8e918f]">
+                                        <span>Quick Actions</span>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[#28292a]/50">
+                                ${tbodyHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             `;
         }
 

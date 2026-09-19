@@ -411,3 +411,16 @@ async fn test_server_comparison_studio_elements() {
     assert!(html.contains("swapKeeperFromStudio"));
 }
 
+#[tokio::test]
+async fn test_server_drive_structured_view_elements() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("btnViewTable"));
+    assert!(html.contains("renderTableView"));
+    assert!(html.contains("tableSortColumn"));
+}
+
