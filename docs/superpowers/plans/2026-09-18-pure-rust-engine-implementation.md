@@ -1238,7 +1238,7 @@ git commit -m "feat(rust): implement deduplication pipeline with short-circuit p
 - Produces:
   - Axum HTTP server hosting `/api/status`, `/api/scan`, `/api/runs`, and index dashboard.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 // crates/clairvoy-server/tests/test_server.rs
@@ -1260,12 +1260,12 @@ async fn test_server_status_and_index() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p clairvoy-server`
 Expected: FAIL (crate not implemented)
 
-- [ ] **Step 3: Implement `clairvoy-server` crate**
+- [x] **Step 3: Implement `clairvoy-server` crate**
 
 Create `crates/clairvoy-server/Cargo.toml`:
 ```toml
@@ -1376,12 +1376,12 @@ pub mod state;
 pub use routes::build_router;
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p clairvoy-server`
 Expected: PASS (1 test passing)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/clairvoy-server
