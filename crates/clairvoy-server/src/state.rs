@@ -12,6 +12,20 @@ pub struct AppScanState {
     pub message: String,
     pub summary: Option<ScanSummary>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub run_id: Option<String>,
+    #[serde(default)]
+    pub bytes_scanned: u64,
+    #[serde(default)]
+    pub scanned_mb: f64,
+    #[serde(default)]
+    pub scanned_gb: f64,
+    #[serde(default)]
+    pub wasted_bytes: u64,
+    #[serde(default)]
+    pub wasted_mb: f64,
+    #[serde(default)]
+    pub wasted_gb: f64,
 }
 
 impl Default for AppScanState {
@@ -25,6 +39,13 @@ impl Default for AppScanState {
             message: "Ready to scan".to_string(),
             summary: None,
             error: None,
+            run_id: None,
+            bytes_scanned: 0,
+            scanned_mb: 0.0,
+            scanned_gb: 0.0,
+            wasted_bytes: 0,
+            wasted_mb: 0.0,
+            wasted_gb: 0.0,
         }
     }
 }

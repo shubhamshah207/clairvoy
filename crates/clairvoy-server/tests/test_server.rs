@@ -118,6 +118,7 @@ async fn test_custom_shared_state() {
         message: "Custom state message".to_string(),
         summary: None,
         error: None,
+        ..Default::default()
     }));
 
     let app = build_router_with_state(custom_state);

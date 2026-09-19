@@ -125,3 +125,46 @@ async fn test_watcher_fallback_periodic_sweep() {
 
     watcher.stop().await;
 }
+
+#[tokio::test]
+async fn test_watcher_reports_progress_callback() {
+    let dir = tempdir().unwrap();
+    let db_file = dir.path().join("test_progress.db");
+    let db = Arc::new(Mutex::new(Database::open(Some(&db_file)).unwrap()));
+
+    let watch_dir = dir.path().join("watched_progress");
+    std::fs::create_dir_all(&watch_dir).unwrap();
+    db.lock()
+        .unwrap()
+        .add_watched_path(watch_dir.to_str().unwrap(), true)
+        .unwrap();
+
+    let progress_events = Arc::new(Mutex::new(Vec::new()));
+    let progress_events_cb = Arc::clone(&progress_events);
+    let progress_cb = Arc::new(move |stage: &str, cur: usize, tot: usize| {
+        progress_events_cb
+            .lock()
+            .unwrap()
+            .push((stage.to_string(), cur, tot));
+    });
+
+    let watcher =
+        AutonomousWatcher::start_with_progress(Arc::clone(&db), 100, 3600, Some(progress_cb))
+            .await
+            .unwrap();
+
+    let file1 = watch_dir.join("f1.txt");
+    let file2 = watch_dir.join("f2.txt");
+    std::fs::write(&file1, b"identical data").unwrap();
+    std::fs::write(&file2, b"identical data").unwrap();
+
+    tokio::time::sleep(Duration::from_millis(350)).await;
+
+    let events = progress_events.lock().unwrap().clone();
+    assert!(
+        !events.is_empty(),
+        "Progress callback should have received events during scan"
+    );
+
+    watcher.stop().await;
+}

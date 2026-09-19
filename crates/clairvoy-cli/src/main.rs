@@ -60,6 +60,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
             let db = Arc::new(Mutex::new(clairvoy_core::db::Database::open(None)?));
 
+            let scan_state: clairvoy_server::SharedScanState = Default::default();
+            clairvoy_server::routes::auto_load_recent_run(&scan_state);
+
             let watcher = if no_daemon {
                 println!("[*] Autonomous watcher daemon disabled (--no-daemon). On-the-fly scanning remains 100% active.");
                 None
@@ -68,17 +71,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "[*] Starting Autonomous Watcher daemon (debounce: {}ms, fallback interval: {}s)...",
                     debounce_ms, fallback_interval
                 );
-                let w = clairvoy_engine::AutonomousWatcher::start(
+                let scan_state_cb = Arc::clone(&scan_state);
+                let progress_cb = Arc::new(move |stage: &str, cur: usize, tot: usize| {
+                    if let Ok(mut s) = scan_state_cb.lock() {
+                        if stage == "Scan complete" {
+                            s.status = "completed".to_string();
+                            s.stage = "Scan complete".to_string();
+                            s.progress_pct = 100;
+                            s.files_indexed = cur;
+                            s.message = format!("Surveillance scan complete: {} files indexed", cur);
+                        } else {
+                            s.status = "running".to_string();
+                            s.stage = stage.to_string();
+                            s.progress_pct = if tot > 0 {
+                                ((cur as f64 / tot as f64) * 100.0).min(100.0) as u32
+                            } else {
+                                0
+                            };
+                            s.files_indexed = cur;
+                            s.message = format!("{}: {} / {}", stage, cur, tot);
+                        }
+                    }
+                });
+
+                let w = clairvoy_engine::AutonomousWatcher::start_with_progress(
                     Arc::clone(&db),
                     debounce_ms,
                     fallback_interval,
+                    Some(progress_cb),
                 )
                 .await?;
                 Some(Arc::new(w))
             };
-
-            let scan_state: clairvoy_server::SharedScanState = Default::default();
-            clairvoy_server::routes::auto_load_recent_run(&scan_state);
 
             println!("[*] Starting Clairvoy Rust Web Server at http://{} ...", addr);
             let app = clairvoy_server::build_router_with_services(scan_state, db, watcher);

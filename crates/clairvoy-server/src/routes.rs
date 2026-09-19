@@ -228,8 +228,41 @@ pub async fn handle_index() -> Html<&'static str> {
 }
 
 pub async fn handle_status(State(state): State<ServerState>) -> Json<AppScanState> {
-    let s = state.scan_state.lock().unwrap();
-    Json(s.clone())
+    let mut s = state.scan_state.lock().unwrap().clone();
+    if s.status == "idle" || s.status == "completed" {
+        if let Ok(db_guard) = state.db.lock() {
+            if let Ok(runs) = db_guard.list_scan_runs(1) {
+                if let Some(latest) = runs.into_iter().next() {
+                    let should_update = match &s.run_id {
+                        Some(current_run) => current_run != &latest.run_id,
+                        None => s.summary.is_none(),
+                    };
+                    if should_update {
+                        let wasted_mb = latest.wasted_bytes as f64 / 1_048_576.0;
+                        let wasted_gb = latest.wasted_bytes as f64 / 1_073_741_824.0;
+                        s.run_id = Some(latest.run_id.clone());
+                        s.wasted_bytes = latest.wasted_bytes;
+                        s.wasted_mb = wasted_mb;
+                        s.wasted_gb = wasted_gb;
+                        s.files_indexed = latest.total_files;
+                        s.status = "completed".to_string();
+                        s.stage = "Database updated".to_string();
+                        s.message = format!(
+                            "Latest scan: {} duplicate groups ({:.2} MB / {:.3} GB recoverable)",
+                            latest.duplicate_groups, wasted_mb, wasted_gb
+                        );
+                        if let Ok(Some(summary)) = db_guard.get_scan_summary(&latest.run_id) {
+                            s.summary = Some(summary);
+                        }
+                        if let Ok(mut guard) = state.scan_state.lock() {
+                            *guard = s.clone();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Json(s)
 }
 
 pub async fn handle_status_stream(
@@ -237,12 +270,51 @@ pub async fn handle_status_stream(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let stream = async_stream::stream! {
         let mut interval = tokio::time::interval(Duration::from_millis(500));
+        let mut last_seen_run_id: Option<String> = None;
         loop {
             interval.tick().await;
-            let current_state = {
+            let mut current_state = {
                 let s = state.scan_state.lock().unwrap();
                 s.clone()
             };
+
+            // If idle or summary is missing, check if a new scan run was saved to SQLite!
+            if current_state.status == "idle" || current_state.status == "completed" {
+                if let Ok(db_guard) = state.db.lock() {
+                    if let Ok(runs) = db_guard.list_scan_runs(1) {
+                        if let Some(latest) = runs.into_iter().next() {
+                            let is_new_run = match (&last_seen_run_id, &current_state.run_id) {
+                                (Some(last), _) => last != &latest.run_id,
+                                (None, Some(active_run)) => active_run != &latest.run_id,
+                                (None, None) => current_state.summary.is_none(),
+                            };
+                            if is_new_run {
+                                let wasted_mb = latest.wasted_bytes as f64 / 1_048_576.0;
+                                let wasted_gb = latest.wasted_bytes as f64 / 1_073_741_824.0;
+                                last_seen_run_id = Some(latest.run_id.clone());
+                                current_state.run_id = Some(latest.run_id.clone());
+                                current_state.wasted_bytes = latest.wasted_bytes;
+                                current_state.wasted_mb = wasted_mb;
+                                current_state.wasted_gb = wasted_gb;
+                                current_state.files_indexed = latest.total_files;
+                                current_state.status = "completed".to_string();
+                                current_state.stage = "Database updated".to_string();
+                                current_state.message = format!(
+                                    "Database updated: {} duplicate groups ({:.2} MB / {:.3} GB recoverable)",
+                                    latest.duplicate_groups, wasted_mb, wasted_gb
+                                );
+                                if let Ok(Some(summary)) = db_guard.get_scan_summary(&latest.run_id) {
+                                    current_state.summary = Some(summary);
+                                }
+                                if let Ok(mut guard) = state.scan_state.lock() {
+                                    *guard = current_state.clone();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if let Ok(json_str) = serde_json::to_string(&current_state) {
                 yield Ok(Event::default().data(json_str));
             }
@@ -277,6 +349,10 @@ pub async fn handle_scan(
         s.progress_pct = 0;
         s.files_indexed = 0;
         s.elapsed_seconds = 0.0;
+        s.run_id = None;
+        s.wasted_bytes = 0;
+        s.wasted_mb = 0.0;
+        s.wasted_gb = 0.0;
         s.message = format!("Scanning {} path(s)", paths.len());
         s.error = None;
     }
@@ -290,9 +366,11 @@ pub async fn handle_scan(
         pipeline.register_matcher(Arc::new(clairvoy_plugins::ExactHashMatcherPlugin::new()));
 
         let state_progress = Arc::clone(&state_clone);
+        let start_time = std::time::Instant::now();
         let run_res = pipeline.run(move |stage, cur, tot| {
             if let Ok(mut s) = state_progress.lock() {
                 s.stage = stage.to_string();
+                s.elapsed_seconds = start_time.elapsed().as_secs_f64();
                 s.progress_pct = if tot > 0 {
                     ((cur as f64 / tot as f64) * 100.0).min(100.0) as u32
                 } else {
@@ -322,9 +400,13 @@ pub async fn handle_scan(
                     s.progress_pct = 100;
                     s.files_indexed = summary.total_files_scanned;
                     s.elapsed_seconds = summary.duration_seconds;
+                    s.run_id = Some(run_id.clone());
+                    s.wasted_bytes = summary.wasted_bytes;
+                    s.wasted_mb = summary.wasted_mb;
+                    s.wasted_gb = summary.wasted_gb;
                     s.message = format!(
-                        "Scan completed: {} duplicate groups ({:.2} GB recoverable)",
-                        summary.total_duplicate_groups, summary.wasted_gb
+                        "Scan completed: {} duplicate groups ({:.2} MB / {:.3} GB recoverable)",
+                        summary.total_duplicate_groups, summary.wasted_mb, summary.wasted_gb
                     );
                     s.summary = Some(summary);
                     s.error = None;
@@ -380,6 +462,30 @@ pub async fn handle_runs_load(
     State(state): State<ServerState>,
     Json(payload): Json<LoadRunRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if let Some(ref run_id) = payload.run_id {
+        if let Ok(db_guard) = state.db.lock() {
+            if let Ok(Some(summary)) = db_guard.get_scan_summary(run_id) {
+                let mut s = state.scan_state.lock().unwrap();
+                s.status = "completed".to_string();
+                s.stage = "Scan summary loaded".to_string();
+                s.progress_pct = 100;
+                s.files_indexed = summary.total_files_scanned;
+                s.elapsed_seconds = summary.duration_seconds;
+                s.run_id = Some(run_id.clone());
+                s.wasted_bytes = summary.wasted_bytes;
+                s.wasted_mb = summary.wasted_mb;
+                s.wasted_gb = summary.wasted_gb;
+                s.message = format!(
+                    "Loaded scan summary ({} duplicate groups, {:.2} GB recoverable)",
+                    summary.total_duplicate_groups, summary.wasted_gb
+                );
+                s.summary = Some(summary.clone());
+                s.error = None;
+                return Ok(Json(serde_json::json!({ "status": "loaded", "summary": summary })));
+            }
+        }
+    }
+
     let summary_path: Option<PathBuf> = if let Some(ref p) = payload.path {
         Some(PathBuf::from(p))
     } else if let Some(ref run_id) = payload.run_id {
@@ -517,6 +623,17 @@ pub async fn handle_watch_paths_add(
         .add_watched_path(&payload.path, payload.recursive.unwrap_or(true))
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     drop(db);
+
+    {
+        let mut s = state.scan_state.lock().unwrap();
+        s.status = "running".to_string();
+        s.stage = format!("Initial baseline surveillance scan for '{}'...", payload.path);
+        s.progress_pct = 0;
+        s.files_indexed = 0;
+        s.elapsed_seconds = 0.0;
+        s.message = format!("Baseline indexing: {}", payload.path);
+        s.error = None;
+    }
 
     if let Some(ref watcher) = state.watcher {
         let _ = watcher.trigger_scan_now();

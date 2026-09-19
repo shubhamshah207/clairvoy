@@ -642,6 +642,93 @@ impl Database {
         Ok(count as usize)
     }
 
+    pub fn get_scan_summary(&self, run_id: &str) -> Result<Option<ScanSummary>, EngineError> {
+        let run = match self.get_scan_run(run_id)? {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+        let clusters = self.get_clusters_for_run(run_id, None, 0, 100_000)?;
+        let mut groups = Vec::new();
+        let mut category_breakdown = std::collections::HashMap::new();
+        let mut exact_count = 0;
+        let mut visual_count = 0;
+        let mut content_count = 0;
+
+        for c in clusters {
+            let match_type = match c.match_type.as_str() {
+                "EXACT_HASH" => {
+                    exact_count += 1;
+                    MatchType::ExactHash
+                }
+                "VISUAL_AI_NEAR_DUPLICATE" => {
+                    visual_count += 1;
+                    MatchType::VisualAiNearDuplicate
+                }
+                _ => {
+                    content_count += 1;
+                    MatchType::ContentNearDuplicate
+                }
+            };
+            let category = match c.category.as_str() {
+                "PHOTO" => ImageCategory::Photo,
+                "VIDEO" => ImageCategory::Video,
+                "SCREENSHOT" => ImageCategory::Screenshot,
+                "DOCUMENT" => ImageCategory::Document,
+                "GRAPHIC" => ImageCategory::Graphic,
+                _ => ImageCategory::File,
+            };
+
+            for item in c.items {
+                let action = if item.action == "KEEP" {
+                    ActionType::Keep
+                } else {
+                    *category_breakdown.entry(c.category.clone()).or_insert(0) += 1;
+                    ActionType::Duplicate
+                };
+                let sim_str = if (c.similarity_score - 1.0).abs() < 1e-4 {
+                    "100%".to_string()
+                } else {
+                    format!("{:.0}%", c.similarity_score * 100.0)
+                };
+                groups.push(DuplicateRecord {
+                    group_id: c.cluster_id,
+                    match_type,
+                    action,
+                    category,
+                    similarity: sim_str,
+                    similarity_score: c.similarity_score,
+                    size_mb: item.size_bytes as f64 / 1_048_576.0,
+                    path: item.path,
+                    dimensions: item.dimensions,
+                });
+            }
+        }
+
+        let wasted_mb = run.wasted_bytes as f64 / 1_048_576.0;
+        let wasted_gb = run.wasted_bytes as f64 / 1_073_741_824.0;
+        let first_path = run.scanned_paths.first().cloned().unwrap_or_default();
+
+        Ok(Some(ScanSummary {
+            scanned_paths: run.scanned_paths,
+            scanned_dir: first_path,
+            total_files_scanned: run.total_files,
+            media_files_scanned: run.total_files,
+            exact_duplicate_groups: exact_count,
+            visual_ai_groups: visual_count,
+            content_duplicate_groups: content_count,
+            total_duplicate_groups: run.duplicate_groups,
+            wasted_bytes: run.wasted_bytes,
+            wasted_mb,
+            wasted_gb,
+            duration_seconds: run.duration_seconds,
+            csv_report: None,
+            summary_json: None,
+            quarantine_script: None,
+            groups,
+            category_breakdown,
+        }))
+    }
+
     pub fn override_keeper(&self, cluster_id: i64, new_keeper_path: &str) -> Result<(), EngineError> {
         let mut conn = self.get_conn()?;
         let tx = conn.transaction()?;

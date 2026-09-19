@@ -599,6 +599,7 @@
                             <div class="text-right">
                                 <div id="scanElapsedText" class="text-xs font-mono text-[#8ab4f8]">⏱️ 0.0s elapsed</div>
                                 <div id="scanFilesText" class="text-[10px] font-mono text-[#8e918f]">0 files indexed</div>
+                                <div id="scanStorageLiveText" class="text-[10px] font-mono text-[#81c995] font-semibold">0.00 MB processed</div>
                             </div>
                             <div class="text-2xl font-bold font-mono text-white" id="scanProgressPctText">0%</div>
                         </div>
@@ -773,7 +774,8 @@
                             <div class="bg-[#131314]/80 rounded-xl p-3 border border-[#81c995]/20 my-2 flex items-baseline justify-between">
                                 <div>
                                     <div class="text-[11px] text-[#8e918f] uppercase font-semibold">Recoverable Storage</div>
-                                    <div class="text-xl font-bold text-[#81c995] font-mono mt-0.5"><span id="heroExactGb">0.00</span> GB</div>
+                                    <div class="text-xl font-bold text-[#81c995] font-mono mt-0.5"><span id="heroExactGb">0.00</span> <span id="heroExactUnit" class="text-xs font-semibold">GB</span></div>
+                                    <div id="heroExactSubtext" class="text-[10px] text-[#8e918f] font-mono">0.00 MB</div>
                                 </div>
                                 <div class="text-right text-xs font-mono text-[#c4c7c5]">
                                     <div><strong id="heroExactCount" class="text-white">0</strong> redundant copies</div>
@@ -818,7 +820,8 @@
                             <div class="bg-[#131314]/80 rounded-xl p-3 border border-[#8ab4f8]/20 my-2 flex items-baseline justify-between">
                                 <div>
                                     <div class="text-[11px] text-[#8e918f] uppercase font-semibold">Potential Storage</div>
-                                    <div class="text-xl font-bold text-[#8ab4f8] font-mono mt-0.5"><span id="heroSimilarGb">0.00</span> GB</div>
+                                    <div class="text-xl font-bold text-[#8ab4f8] font-mono mt-0.5"><span id="heroSimilarGb">0.00</span> <span id="heroSimilarUnit" class="text-xs font-semibold">GB</span></div>
+                                    <div id="heroSimilarSubtext" class="text-[10px] text-[#8e918f] font-mono">0.00 MB</div>
                                 </div>
                                 <div class="text-right text-xs font-mono text-[#c4c7c5]">
                                     <div><strong id="heroSimilarCount" class="text-white">0</strong> candidates to inspect</div>
@@ -1683,6 +1686,8 @@
             return isImageFile(path) || isVideoFile(path);
         }
 
+        let currentRunId = null;
+
         // Initialization
         window.addEventListener('DOMContentLoaded', async () => {
             initStatusStream();
@@ -1693,11 +1698,22 @@
                 const res = await fetch('/api/status');
                 const state = await res.json();
                 if (state.status === "completed" && state.summary) {
+                    currentRunId = state.run_id;
                     loadSummaryState(state.summary, state.message);
                 } else if (state.status === "running") {
                     updateScanProgressUI(state);
                     if (pollTimer) clearInterval(pollTimer);
                     pollTimer = setInterval(pollScanStatus, 800);
+                } else {
+                    // Auto-load latest scan run from SQLite if available
+                    const runsRes = await fetch('/api/runs?limit=1');
+                    if (runsRes.ok) {
+                        const runs = await runsRes.json();
+                        if (runs && runs.length > 0) {
+                            currentRunId = runs[0].run_id;
+                            await loadRunReport({ run_id: runs[0].run_id });
+                        }
+                    }
                 }
             } catch (e) {
                 console.error("Initial status error:", e);
@@ -2004,6 +2020,27 @@
             if (state.files_indexed !== undefined && state.files_indexed !== null) {
                 const filesText = document.getElementById('scanFilesText');
                 if (filesText) filesText.innerText = `${Number(state.files_indexed).toLocaleString()} files indexed`;
+            }
+
+            const liveStorageEl = document.getElementById('scanStorageLiveText');
+            if (liveStorageEl) {
+                if (state.bytes_scanned !== undefined && state.bytes_scanned !== null && state.bytes_scanned > 0) {
+                    const mb = (Number(state.bytes_scanned) / (1024 * 1024));
+                    if (mb >= 1024) {
+                        const gb = (mb / 1024).toFixed(2);
+                        liveStorageEl.innerText = `${gb} GB (${mb.toFixed(1)} MB) processed`;
+                    } else {
+                        liveStorageEl.innerText = `${mb.toFixed(2)} MB processed`;
+                    }
+                } else if (state.scanned_mb !== undefined && state.scanned_mb !== null && state.scanned_mb > 0) {
+                    const mb = Number(state.scanned_mb);
+                    if (mb >= 1024) {
+                        const gb = (mb / 1024).toFixed(2);
+                        liveStorageEl.innerText = `${gb} GB (${mb.toFixed(1)} MB) processed`;
+                    } else {
+                        liveStorageEl.innerText = `${mb.toFixed(2)} MB processed`;
+                    }
+                }
             }
 
             if (state.message) {
@@ -2601,16 +2638,17 @@
             });
 
             const smartHero = document.getElementById('smartCleanHero');
+            const hasWasted = currentSummary && ((currentSummary.wasted_bytes || 0) > 0 || (currentSummary.wasted_gb || 0) > 0 || (allClusters && allClusters.length > 0));
             if (sec === 'CLEANUP') {
                 if (hero) hero.classList.remove('hidden');
-                if (smartHero && currentSummary && (currentSummary.wasted_gb || 0) > 0) smartHero.classList.remove('hidden');
+                if (smartHero && hasWasted) smartHero.classList.remove('hidden');
                 if (gallery) gallery.classList.remove('hidden');
                 activeModality = 'ALL';
                 currentPage = 1;
                 applyFiltersAndSort();
             } else if (sec === 'DRIVE') {
                 if (hero) hero.classList.add('hidden');
-                if (smartHero && currentSummary && (currentSummary.wasted_gb || 0) > 0) smartHero.classList.remove('hidden');
+                if (smartHero && hasWasted) smartHero.classList.remove('hidden');
                 if (gallery) gallery.classList.remove('hidden');
                 setViewMode('list');
             } else if (sec === 'TRASH') {
@@ -2738,9 +2776,43 @@
             return Object.values(clusterMap);
         }
 
+        function formatStorageDual(bytes) {
+            const b = Number(bytes) || 0;
+            const mb = b / (1024 * 1024);
+            const gb = b / (1024 * 1024 * 1024);
+            if (gb >= 1.0) {
+                return {
+                    primaryVal: gb.toFixed(2),
+                    primaryUnit: 'GB',
+                    subtext: `${mb.toFixed(1)} MB`
+                };
+            } else if (mb >= 0.01) {
+                return {
+                    primaryVal: mb.toFixed(2),
+                    primaryUnit: 'MB',
+                    subtext: `${gb.toFixed(3)} GB`
+                };
+            } else if (b > 0) {
+                return {
+                    primaryVal: (b / 1024).toFixed(1),
+                    primaryUnit: 'KB',
+                    subtext: `${b} bytes`
+                };
+            } else {
+                return {
+                    primaryVal: '0.00',
+                    primaryUnit: 'GB',
+                    subtext: '0.00 MB'
+                };
+            }
+        }
+
         function renderHeroStorageMeter(summary) {
-            const wastedGbStr = (summary.wasted_gb || 0).toFixed(3);
-            const wastedMbStr = `${(summary.wasted_mb || 0).toLocaleString()} MB recoverable across duplicates`;
+            const wastedBytes = summary.wasted_bytes || Math.round((summary.wasted_mb || 0) * 1024 * 1024) || Math.round((summary.wasted_gb || 0) * 1024 * 1024 * 1024);
+            const wastedDual = formatStorageDual(wastedBytes);
+            const wastedGbStr = (summary.wasted_gb || (wastedBytes / (1024 * 1024 * 1024))).toFixed(3);
+            const wastedMbVal = summary.wasted_mb || (wastedBytes / (1024 * 1024));
+            const wastedMbStr = `${wastedMbVal >= 100 ? Math.round(wastedMbVal).toLocaleString() : wastedMbVal.toFixed(2)} MB recoverable across duplicates (${wastedGbStr} GB)`;
             const fileCountStr = `${(summary.total_files_scanned || 0).toLocaleString()} files analyzed`;
             const clusterCountStr = `${(summary.total_duplicate_groups || 0).toLocaleString()} clusters`;
 
@@ -2765,10 +2837,11 @@
             // Update Smart Clean Recommendation Banner & Dual Recommendation Panels
             const smartHero = document.getElementById('smartCleanHero');
             if (smartHero) {
-                if ((summary.wasted_gb || 0) > 0 && currentNav !== 'TRASH' && currentNav !== 'WATCHER') {
+                const hasWasted = wastedBytes > 0 || (allClusters && allClusters.length > 0);
+                if (hasWasted && currentNav !== 'TRASH' && currentNav !== 'WATCHER') {
                     smartHero.classList.remove('hidden');
                     const scGb = document.getElementById('smartCleanGb');
-                    if (scGb) scGb.innerText = (summary.wasted_gb || 0).toFixed(2);
+                    if (scGb) scGb.innerText = wastedDual.primaryVal + ' ' + wastedDual.primaryUnit;
 
                     // Compute Exact vs Similar separation
                     let exactBytes = 0;
@@ -2790,15 +2863,25 @@
                         }
                     }
 
+                    const exactDual = formatStorageDual(exactBytes);
                     const exGb = document.getElementById('heroExactGb');
-                    if (exGb) exGb.innerText = (exactBytes / (1024 * 1024 * 1024)).toFixed(2);
+                    if (exGb) exGb.innerText = exactDual.primaryVal;
+                    const exUnit = document.getElementById('heroExactUnit');
+                    if (exUnit) exUnit.innerText = exactDual.primaryUnit;
+                    const exSubtext = document.getElementById('heroExactSubtext');
+                    if (exSubtext) exSubtext.innerText = exactDual.subtext;
                     const exCount = document.getElementById('heroExactCount');
                     if (exCount) exCount.innerText = exactDupes.toLocaleString();
                     const exSets = document.getElementById('heroExactSets');
                     if (exSets) exSets.innerText = exactSets.toLocaleString();
 
+                    const similarDual = formatStorageDual(similarBytes);
                     const simGb = document.getElementById('heroSimilarGb');
-                    if (simGb) simGb.innerText = (similarBytes / (1024 * 1024 * 1024)).toFixed(2);
+                    if (simGb) simGb.innerText = similarDual.primaryVal;
+                    const simUnit = document.getElementById('heroSimilarUnit');
+                    if (simUnit) simUnit.innerText = similarDual.primaryUnit;
+                    const simSubtext = document.getElementById('heroSimilarSubtext');
+                    if (simSubtext) simSubtext.innerText = similarDual.subtext;
                     const simCount = document.getElementById('heroSimilarCount');
                     if (simCount) simCount.innerText = similarDupes.toLocaleString();
                     const simSets = document.getElementById('heroSimilarSets');
@@ -2806,16 +2889,16 @@
 
                     // Update Before/After Storage Projection Gauge
                     const totalWasteBytes = exactBytes + similarBytes;
-                    const totalWasteGb = (totalWasteBytes / (1024 * 1024 * 1024)).toFixed(2);
-                    const freedExactGb = (exactBytes / (1024 * 1024 * 1024)).toFixed(2);
-                    const remainingGb = (similarBytes / (1024 * 1024 * 1024)).toFixed(2);
+                    const curDual = formatStorageDual(totalWasteBytes);
+                    const freedDual = formatStorageDual(exactBytes);
+                    const remDual = formatStorageDual(similarBytes);
 
                     const projCur = document.getElementById('projectionCurrentGb');
-                    if (projCur) projCur.innerText = totalWasteGb + ' GB';
+                    if (projCur) projCur.innerText = `${curDual.primaryVal} ${curDual.primaryUnit}`;
                     const projFreed = document.getElementById('projectionFreedGb');
-                    if (projFreed) projFreed.innerText = '-' + freedExactGb + ' GB';
+                    if (projFreed) projFreed.innerText = `-${freedDual.primaryVal} ${freedDual.primaryUnit}`;
                     const projPost = document.getElementById('projectionPostGb');
-                    if (projPost) projPost.innerText = remainingGb + ' GB';
+                    if (projPost) projPost.innerText = `${remDual.primaryVal} ${remDual.primaryUnit}`;
 
                     const cleanPct = totalWasteBytes > 0 ? (exactBytes / totalWasteBytes) * 100 : 0;
                     const remPct = totalWasteBytes > 0 ? (similarBytes / totalWasteBytes) * 100 : 0;
@@ -4818,9 +4901,28 @@
                         const state = JSON.parse(event.data);
                         if (state.status === "running") {
                             updateScanProgressUI(state);
-                        } else if (state.status === "completed" && state.summary) {
-                            if (!currentSummary || (state.summary.run_id && currentSummary.run_id !== state.summary.run_id)) {
+                        } else if (state.status === "completed") {
+                            if (pollTimer) {
+                                clearInterval(pollTimer);
+                                pollTimer = null;
+                            }
+                            const banner = document.getElementById('scanProgressBanner');
+                            if (banner) banner.classList.add('hidden');
+                            const sideInd = document.getElementById('sideScanIndicator');
+                            if (sideInd) sideInd.classList.add('hidden');
+                            const newRunId = state.run_id || (state.summary && state.summary.run_id);
+                            if (newRunId && newRunId !== currentRunId) {
+                                currentRunId = newRunId;
+                                if (state.summary) {
+                                    loadSummaryState(state.summary, state.message);
+                                } else {
+                                    loadRunReport({ run_id: newRunId });
+                                }
+                                loadPastRunsList(newRunId);
+                            } else if (!currentSummary && state.summary) {
+                                currentRunId = newRunId;
                                 loadSummaryState(state.summary, state.message);
+                                loadPastRunsList(newRunId);
                             }
                         }
                         updateTelemetryDock(state);
@@ -4850,8 +4952,18 @@
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || data.message || "Failed to add watched path");
-                showToast(`Added ${pathToAdd} to Autonomous Surveillance!`, "👁️");
+                showToast(`Added ${pathToAdd} to Autonomous Surveillance! Starting baseline scan...`, "👁️");
                 closeDriveBrowserModal();
+                updateScanProgressUI({
+                    status: 'running',
+                    stage: `Initial baseline surveillance scan for '${pathToAdd}'...`,
+                    progress_pct: 0,
+                    files_indexed: 0,
+                    elapsed_seconds: 0.0,
+                    message: `Baseline indexing: ${pathToAdd}`
+                });
+                if (pollTimer) clearInterval(pollTimer);
+                pollTimer = setInterval(pollScanStatus, 800);
                 if (currentNav === 'WATCHER' || document.getElementById('watchedPathsContainer')) {
                     await renderWatcherSection();
                 }
@@ -5377,7 +5489,9 @@
                     if (banner) banner.classList.add('hidden');
                     const sideInd = document.getElementById('sideScanIndicator');
                     if (sideInd) sideInd.classList.add('hidden');
+                    if (state.run_id) currentRunId = state.run_id;
                     loadSummaryState(state.summary, state.message);
+                    loadPastRunsList(state.run_id);
                 } else if (state.status === "failed") {
                     clearInterval(pollTimer);
                     pollTimer = null;

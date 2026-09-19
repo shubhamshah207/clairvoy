@@ -18,6 +18,8 @@ use tokio::time::Instant;
 /// Monitors configured paths in SQLite using native filesystem events (`notify`),
 /// applies a sliding quiet window debounce to absorb burst modifications,
 /// executes incremental delta deduplication runs, and maintains surveillance state.
+pub type WatcherProgressCallback = Arc<dyn Fn(&str, usize, usize) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct AutonomousWatcher {
     paused: Arc<AtomicBool>,
@@ -28,14 +30,25 @@ pub struct AutonomousWatcher {
 
 impl AutonomousWatcher {
     /// Start the autonomous background watcher daemon.
-    ///
-    /// - `db`: Thread-safe handle to SQLite database.
-    /// - `debounce_ms`: Sliding quiet window duration in milliseconds.
-    /// - `fallback_interval_sec`: Periodic fallback scan interval in seconds (0 to disable).
     pub async fn start(
         db: Arc<Mutex<Database>>,
         debounce_ms: u64,
         fallback_interval_sec: u64,
+    ) -> Result<Self, EngineError> {
+        Self::start_with_progress(db, debounce_ms, fallback_interval_sec, None).await
+    }
+
+    /// Start the autonomous background watcher daemon with an optional progress reporter.
+    ///
+    /// - `db`: Thread-safe handle to SQLite database.
+    /// - `debounce_ms`: Sliding quiet window duration in milliseconds.
+    /// - `fallback_interval_sec`: Periodic fallback scan interval in seconds (0 to disable).
+    /// - `progress`: Optional callback reporting live scan progress (stage, current, total).
+    pub async fn start_with_progress(
+        db: Arc<Mutex<Database>>,
+        debounce_ms: u64,
+        fallback_interval_sec: u64,
+        progress: Option<WatcherProgressCallback>,
     ) -> Result<Self, EngineError> {
         let (event_tx, mut event_rx) = mpsc::unbounded_channel::<notify::Result<Event>>();
 
@@ -58,7 +71,15 @@ impl AutonomousWatcher {
                 if rec.enabled {
                     let path = PathBuf::from(&rec.path);
                     if path.exists() {
-                        if let Err(e) = watcher.watch(&path, RecursiveMode::Recursive) {
+                        let is_drive_root = path.parent() == Some(Path::new("/mnt"))
+                            || path.parent() == Some(Path::new("/Volumes"))
+                            || path == Path::new("/");
+                        let mode = if rec.recursive && !is_drive_root {
+                            RecursiveMode::Recursive
+                        } else {
+                            RecursiveMode::NonRecursive
+                        };
+                        if let Err(e) = watcher.watch(&path, mode) {
                             eprintln!(
                                 "[clairvoy-watcher] Warning: unable to watch '{}': {e}",
                                 path.display()
@@ -78,6 +99,7 @@ impl AutonomousWatcher {
 
         let debounce_duration = Duration::from_millis(debounce_ms);
 
+        let progress_for_task = progress;
         let join_handle = tokio::spawn(async move {
             let mut quiet_deadline: Option<Instant> = None;
             let mut fallback_interval = if fallback_interval_sec > 0 {
@@ -99,7 +121,7 @@ impl AutonomousWatcher {
                     // 2. Explicit manual scan trigger
                     Some(()) = trigger_rx.recv() => {
                         quiet_deadline = None;
-                        if let Err(e) = execute_scan_cycle(&db, &mut currently_watched, &mut watcher).await {
+                        if let Err(e) = execute_scan_cycle(&db, &mut currently_watched, &mut watcher, progress_for_task.as_ref()).await {
                             eprintln!("[clairvoy-watcher] Triggered scan error: {e}");
                         }
                     }
@@ -132,7 +154,7 @@ impl AutonomousWatcher {
                     }, if quiet_deadline.is_some() => {
                         quiet_deadline = None;
                         if !paused_clone.load(Ordering::SeqCst) {
-                            if let Err(e) = execute_scan_cycle(&db, &mut currently_watched, &mut watcher).await {
+                            if let Err(e) = execute_scan_cycle(&db, &mut currently_watched, &mut watcher, progress_for_task.as_ref()).await {
                                 eprintln!("[clairvoy-watcher] Debounced scan error: {e}");
                             }
                         }
@@ -148,7 +170,7 @@ impl AutonomousWatcher {
                         }
                     }, if fallback_interval.is_some() => {
                         if quiet_deadline.is_none() && !paused_clone.load(Ordering::SeqCst) {
-                            if let Err(e) = execute_scan_cycle(&db, &mut currently_watched, &mut watcher).await {
+                            if let Err(e) = execute_scan_cycle(&db, &mut currently_watched, &mut watcher, progress_for_task.as_ref()).await {
                                 eprintln!("[clairvoy-watcher] Fallback sweep error: {e}");
                             }
                         }
@@ -205,6 +227,7 @@ async fn execute_scan_cycle(
     db: &Arc<Mutex<Database>>,
     currently_watched: &mut HashSet<PathBuf>,
     watcher: &mut RecommendedWatcher,
+    progress: Option<&WatcherProgressCallback>,
 ) -> Result<(), EngineError> {
     let watched_records = {
         let db_guard = db
@@ -213,30 +236,39 @@ async fn execute_scan_cycle(
         db_guard.list_watched_paths()?
     };
 
-    let mut desired_watched = HashSet::new();
+    let mut desired_map = std::collections::HashMap::new();
     let mut scan_paths = Vec::new();
 
     for rec in &watched_records {
         if rec.enabled {
             let path = PathBuf::from(&rec.path);
             if path.exists() {
-                desired_watched.insert(path.clone());
+                let is_drive_root = path.parent() == Some(Path::new("/mnt"))
+                    || path.parent() == Some(Path::new("/Volumes"))
+                    || path == Path::new("/");
+                let mode = if rec.recursive && !is_drive_root {
+                    RecursiveMode::Recursive
+                } else {
+                    RecursiveMode::NonRecursive
+                };
+                desired_map.insert(path.clone(), mode);
                 scan_paths.push(path);
             }
         }
     }
 
     // Synchronize active watches with current database state
-    for path in &desired_watched {
+    for (path, mode) in &desired_map {
         if !currently_watched.contains(path) {
-            if let Ok(()) = watcher.watch(path, RecursiveMode::Recursive) {
+            if let Ok(()) = watcher.watch(path, *mode) {
                 currently_watched.insert(path.clone());
             }
         }
     }
 
+    let desired_set: HashSet<PathBuf> = desired_map.into_keys().collect();
     let to_remove: Vec<PathBuf> = currently_watched
-        .difference(&desired_watched)
+        .difference(&desired_set)
         .cloned()
         .collect();
     for path in to_remove {
@@ -249,7 +281,8 @@ async fn execute_scan_cycle(
     }
 
     let db_clone = Arc::clone(db);
-    tokio::task::spawn_blocking(move || run_delta_pipeline(&db_clone, scan_paths, &watched_records))
+    let progress_cb = progress.cloned();
+    tokio::task::spawn_blocking(move || run_delta_pipeline(&db_clone, scan_paths, &watched_records, progress_cb))
         .await
         .map_err(|e| EngineError::Config(format!("Scan task execution failed: {e}")))?
 }
@@ -259,10 +292,20 @@ fn run_delta_pipeline(
     db: &Arc<Mutex<Database>>,
     scan_paths: Vec<PathBuf>,
     watched_records: &[WatchedPathRecord],
+    progress: Option<WatcherProgressCallback>,
 ) -> Result<(), EngineError> {
+    if let Some(ref cb) = progress {
+        cb("Crawling watched directories...", 0, 0);
+    }
+
     let mut pipeline = DeduplicationPipeline::new(scan_paths.clone());
     pipeline.register_matcher(Arc::new(ExactHashMatcherPlugin::new()));
-    let summary = pipeline.run(|_stage, _cur, _tot| {})?;
+    let progress_for_pipe = progress.clone();
+    let summary = pipeline.run(move |stage, cur, tot| {
+        if let Some(ref cb) = progress_for_pipe {
+            cb(stage, cur, tot);
+        }
+    })?;
 
     let run_id = format!(
         "run_{}",
@@ -281,6 +324,10 @@ fn run_delta_pipeline(
         if rec.enabled {
             let _ = db_guard.update_watched_path_last_scanned(rec.id);
         }
+    }
+
+    if let Some(ref cb) = progress {
+        cb("Scan complete", summary.total_files_scanned, summary.total_files_scanned);
     }
 
     // Delta cache indexing: crawl and update file_index
