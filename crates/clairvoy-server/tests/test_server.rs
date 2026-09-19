@@ -397,3 +397,17 @@ async fn test_server_smart_clean_two_track_elements() {
     assert!(html.contains("trackExactCleanBtn"));
     assert!(html.contains("trackSimilarReviewBtn"));
 }
+
+#[tokio::test]
+async fn test_server_comparison_studio_elements() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("comparisonStudioModal") || html.contains("splitComparisonCanvas"));
+    assert!(html.contains("syncLoupeZoom"));
+    assert!(html.contains("swapKeeperFromStudio"));
+}
+

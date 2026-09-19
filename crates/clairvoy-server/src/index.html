@@ -1118,149 +1118,215 @@
         </div>
     </div>
 
-    <!-- Google Photos Full-Screen Lightbox Viewer (Single Photo + Side-by-Side Diff) -->
-    <div id="photoLightboxModal" class="hidden fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col">
-        <!-- Top Lightbox Bar -->
-        <div class="px-5 py-3 border-b border-white/10 flex items-center justify-between gap-4 bg-[#1e1f20]/80">
+    <!-- Google Photos Top Shot Comparison Studio Modal (Split-Screen Diff Canvas) -->
+    <div id="comparisonStudioModal" class="hidden fixed inset-0 z-50 bg-[#131314]/98 backdrop-blur-2xl flex flex-col select-none">
+        <!-- Top Studio Bar -->
+        <div class="px-5 py-3 border-b border-white/10 flex items-center justify-between gap-4 bg-[#1e1f20]/90">
+            <!-- Left: Back button and cluster identification -->
             <div class="flex items-center gap-3 min-w-0">
-                <button onclick="closePhotoLightbox()" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-xl text-white transition" title="Back to gallery">
+                <button onclick="closeComparisonStudio()" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-xl text-white transition" title="Back to gallery (Esc)">
                     ←
                 </button>
-                <div class="min-w-0">
-                    <div class="flex items-center gap-2">
-                        <span id="lbClusterTitle" class="text-sm font-bold text-white">Cluster #1</span>
-                        <span id="lbMatchType" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">MATCH</span>
-                    </div>
-                    <p id="lbFileName" class="text-xs text-[#8e918f] font-mono truncate max-w-md">image.jpg</p>
+                <div class="min-w-0 flex items-center gap-2.5">
+                    <span id="studioClusterTitle" class="text-sm font-bold text-white">Cluster #1</span>
+                    <span id="studioMatchType" class="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8] font-semibold tracking-wide uppercase">EXACT HASH</span>
+                    <span id="studioClusterCounter" class="text-xs text-[#8e918f] font-mono">(1 of 1)</span>
                 </div>
             </div>
 
+            <!-- Center: Synchronized Loupe Zoom controls -->
+            <div class="flex items-center bg-[#131314] border border-[#3c4043] rounded-full px-2 py-1 gap-1.5 shadow-inner">
+                <span class="text-[11px] text-[#8e918f] px-2 font-mono flex items-center gap-1">
+                    <span>🔍</span> Loupe
+                </span>
+                <button id="studioZoomBtn1x" onclick="setStudioZoom(1)" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#8ab4f8] text-[#041e49] transition">1x</button>
+                <button id="studioZoomBtn2x" onclick="setStudioZoom(2)" class="px-2.5 py-0.5 rounded-full text-xs font-semibold text-[#c4c7c5] hover:text-white transition">2x</button>
+                <button id="studioZoomBtn4x" onclick="setStudioZoom(4)" class="px-2.5 py-0.5 rounded-full text-xs font-semibold text-[#c4c7c5] hover:text-white transition">4x</button>
+            </div>
+
+            <!-- Right: Cluster Navigation & Action Controls -->
             <div class="flex items-center gap-2 flex-shrink-0">
-                <button id="lbMakeKeeperBtn" onclick="swapKeeperInLightbox()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8]">
-                    <span>★ Make Keeper</span>
+                <div class="flex items-center gap-1 bg-[#131314] border border-[#3c4043] rounded-xl p-0.5">
+                    <button onclick="navigateStudioCluster(-1)" class="px-2.5 py-1 text-xs text-[#c4c7c5] hover:text-white hover:bg-white/10 rounded-lg transition" title="Previous Cluster (←)">
+                        ‹ Prev
+                    </button>
+                    <button onclick="navigateStudioCluster(1)" class="px-2.5 py-1 text-xs text-[#c4c7c5] hover:text-white hover:bg-white/10 rounded-lg transition" title="Next Cluster (→)">
+                        Next ›
+                    </button>
+                </div>
+                <button id="studioCandidateSelectBtn" onclick="toggleStudioCandidateSelection()" class="m3-button-secondary text-xs !py-1.5 !px-3" title="Toggle candidate for cleanup (Space)">
+                    <span>Mark for Cleanup (Space)</span>
                 </button>
-                <button onclick="toggleLightboxDiff()" id="lbDiffBtn" class="m3-button-secondary text-xs !py-1.5 !px-3">
-                    <span>⇄ Side-by-Side</span>
-                </button>
-                <button onclick="toggleLightboxInfo()" id="lbInfoBtn" class="m3-button-secondary text-xs !py-1.5 !px-3" title="Toggle file details">
+                <button onclick="toggleStudioInfo()" id="studioInfoBtn" class="m3-button-secondary text-xs !py-1.5 !px-3" title="Toggle File Details (I)">
                     <span>ℹ️ Details</span>
+                </button>
+                <button onclick="closeComparisonStudio()" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white text-base transition" title="Close (Esc)">
+                    ✕
                 </button>
             </div>
         </div>
 
-        <!-- Lightbox Content Area -->
+        <!-- Studio Main Body: Split Canvas & Metadata Drawer -->
         <div class="flex-1 min-h-0 flex overflow-hidden relative">
-            <!-- Navigation Arrows -->
-            <button onclick="navigateLightbox(-1)" id="lbPrevBtn"
-                    class="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 text-white flex items-center justify-center text-2xl transition">
+            <!-- Navigation Chevrons Overlaid on Canvas -->
+            <button onclick="navigateStudioCluster(-1)" id="studioPrevChevron"
+                    class="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 text-white flex items-center justify-center text-2xl transition shadow-xl"
+                    title="Previous Cluster (←)">
                 ‹
             </button>
-            <button onclick="navigateLightbox(1)" id="lbNextBtn"
-                    class="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 text-white flex items-center justify-center text-2xl transition">
+            <button onclick="navigateStudioCluster(1)" id="studioNextChevron"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 text-white flex items-center justify-center text-2xl transition shadow-xl"
+                    title="Next Cluster (→)">
                 ›
             </button>
 
-            <!-- Single Photo / Video View -->
-            <div id="lbSingleView" class="flex-1 flex items-center justify-center p-4 min-w-0">
-                <div id="lbImageContainer" class="max-w-full max-h-[80vh] flex items-center justify-center w-full"></div>
-            </div>
-
-            <!-- Side-by-Side Diff View -->
-            <div id="lbDiffView" class="hidden flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-6 min-w-0 overflow-y-auto custom-scrollbar">
-                <!-- Keeper Column -->
-                <div class="bg-[#131314] rounded-2xl p-4 border border-[#81c995]/50 flex flex-col justify-between">
-                    <div>
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="text-xs font-bold bg-[#81c995]/20 text-[#81c995] px-2.5 py-1 rounded-full flex items-center gap-1">
-                                <span>★</span> Designated Keeper (Preserved)
-                            </span>
-                            <span id="lbDiffKeeperCat" class="text-xs font-mono text-[#8e918f] uppercase">PHOTO</span>
-                        </div>
-                        <div id="lbDiffKeeperPreview" class="w-full h-72 rounded-xl bg-black flex items-center justify-center overflow-hidden mb-3 border border-[#28292a]"></div>
-                        <div class="space-y-1.5 text-xs">
-                            <div id="lbDiffKeeperName" class="font-bold text-white truncate">original.jpg</div>
-                            <div id="lbDiffKeeperPath" class="text-[10px] text-[#8e918f] font-mono break-all">/path/to/original</div>
-                            <div class="flex gap-4 font-mono text-[#c4c7c5] pt-1">
-                                <span>Size: <strong id="lbDiffKeeperSize" class="text-white">0 MB</strong></span>
-                                <span>Resolution: <strong id="lbDiffKeeperDim" class="text-white">N/A</strong></span>
+            <!-- Dual-Pane Split Comparison Canvas -->
+            <div id="splitComparisonCanvas" class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 lg:p-6 min-w-0 overflow-y-auto custom-scrollbar">
+                <!-- Left Pane: Candidate / Duplicate Copy -->
+                <div class="bg-[#1e1f20]/60 rounded-3xl p-4 lg:p-5 border border-[#f28b82]/30 flex flex-col justify-between shadow-lg">
+                    <div class="flex-1 flex flex-col min-h-0">
+                        <!-- Candidate Header -->
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span id="studioCandidateBadge" class="text-xs font-bold bg-[#f28b82]/20 text-[#f28b82] border border-[#f28b82]/30 px-3 py-1 rounded-full flex items-center gap-1.5 flex-shrink-0">
+                                    <span>⌧</span> Candidate Copy
+                                </span>
+                                <span id="studioCandidateSim" class="text-xs font-mono text-[#fdd663] bg-[#fdd663]/10 px-2 py-0.5 rounded border border-[#fdd663]/20 flex-shrink-0">100% Match</span>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <button id="studioMakeKeeperBtn" onclick="swapKeeperFromStudio()" class="m3-button-secondary text-xs !py-1 !px-3 text-[#8ab4f8] hover:bg-[#1a3860] border border-[#8ab4f8]/40 transition flex items-center gap-1.5" title="Make this candidate the keeper (K)">
+                                    <span>★</span> Make Keeper (K)
+                                </button>
+                                <button id="studioCandidateCheckboxBtn" onclick="toggleStudioCandidateSelection()" class="text-xs px-2.5 py-1 rounded-lg border bg-[#1e1f20] border-[#3c4043] text-[#c4c7c5] hover:text-white flex items-center gap-1.5 transition">
+                                    <span>○</span> Cleanup (Space)
+                                </button>
                             </div>
                         </div>
+
+                        <!-- Candidate Filename & Path -->
+                        <div class="mb-3">
+                            <div id="studioCandidateName" class="font-bold text-white text-sm truncate" title="Candidate">candidate.jpg</div>
+                            <div id="studioCandidatePath" class="text-[10px] text-[#8e918f] font-mono truncate" title="/path/to/candidate">/path/to/candidate</div>
+                        </div>
+
+                        <!-- Candidate Image Canvas with Synchronized Loupe Zoom -->
+                        <div id="studioCandidateWrapper" onmousemove="syncLoupeZoom(event)" onmouseleave="resetLoupeZoom()" onclick="toggleStudioZoomOnClick(event)"
+                             class="relative flex-1 min-h-[300px] lg:min-h-[420px] bg-black/80 rounded-2xl border border-white/10 overflow-hidden flex items-center justify-center cursor-crosshair group select-none">
+                            <div id="studioCandidateMediaContainer" class="w-full h-full flex items-center justify-center overflow-hidden relative">
+                                <img id="studioCandidateImg" src="" alt="Candidate Copy" class="max-h-[58vh] max-w-full object-contain transition-transform duration-75 select-none pointer-events-none" />
+                            </div>
+                            <div id="studioCandidateLoupeIndicator" class="absolute pointer-events-none w-16 h-16 rounded-full border-2 border-[#8ab4f8] bg-[#8ab4f8]/15 hidden shadow-lg -translate-x-1/2 -translate-y-1/2"></div>
+                        </div>
+
+                        <!-- Candidate Multi-item tabs (if cluster has > 1 duplicate) -->
+                        <div id="studioCandidatePills" class="flex gap-1.5 pt-2.5 overflow-x-auto custom-scrollbar hidden"></div>
                     </div>
-                    <div class="mt-4 pt-3 border-t border-[#28292a]">
-                        <span class="text-xs text-[#81c995] font-semibold flex items-center gap-1">✓ Safely preserved on disk</span>
+
+                    <!-- Candidate Specs & Quality Badges -->
+                    <div class="mt-4 pt-3 border-t border-white/10 space-y-2">
+                        <div class="flex items-center justify-between text-xs font-mono text-[#c4c7c5]">
+                            <span>Size: <strong id="studioCandidateSize" class="text-white">0 MB</strong></span>
+                            <span>Resolution: <strong id="studioCandidateDim" class="text-white">N/A</strong></span>
+                        </div>
+                        <div id="studioCandidateBadges" class="flex flex-wrap gap-1.5 min-h-[24px]"></div>
                     </div>
                 </div>
 
-                <!-- Duplicate Candidate Column -->
-                <div class="bg-[#131314] rounded-2xl p-4 border border-[#f28b82]/50 flex flex-col justify-between">
-                    <div>
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="text-xs font-bold bg-[#f28b82]/20 text-[#f28b82] px-2.5 py-1 rounded-full flex items-center gap-1">
-                                <span>⌧</span> Redundant Duplicate
+                <!-- Right Pane: Designated Keeper (Protected) -->
+                <div class="bg-[#1e1f20]/60 rounded-3xl p-4 lg:p-5 border border-[#81c995]/40 flex flex-col justify-between shadow-[0_0_30px_rgba(129,201,149,0.06)]">
+                    <div class="flex-1 flex flex-col min-h-0">
+                        <!-- Keeper Header -->
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <span class="text-xs font-bold bg-[#81c995]/20 text-[#81c995] border border-[#81c995]/40 px-3 py-1 rounded-full flex items-center gap-1.5 flex-shrink-0">
+                                <span>★</span> Designated Keeper (Protected)
                             </span>
-                            <span id="lbDiffDupeSim" class="text-xs font-mono text-[#fdd663]">100% Match</span>
+                            <span class="text-[10px] font-mono text-[#81c995] bg-[#81c995]/10 px-2 py-0.5 rounded border border-[#81c995]/20">
+                                🛡️ Zero-Clobber Invariant
+                            </span>
                         </div>
-                        <div id="lbDiffDupePreview" class="w-full h-72 rounded-xl bg-black flex items-center justify-center overflow-hidden mb-3 border border-[#28292a]"></div>
-                        <div class="space-y-1.5 text-xs">
-                            <div id="lbDiffDupeName" class="font-bold text-white truncate">duplicate.jpg</div>
-                            <div id="lbDiffDupePath" class="text-[10px] text-[#8e918f] font-mono break-all">/path/to/dupe</div>
-                            <div class="flex gap-4 font-mono text-[#c4c7c5] pt-1">
-                                <span>Size: <strong id="lbDiffDupeSize" class="text-white">0 MB</strong></span>
-                                <span>Resolution: <strong id="lbDiffDupeDim" class="text-white">N/A</strong></span>
+
+                        <!-- Keeper Filename & Path -->
+                        <div class="mb-3">
+                            <div id="studioKeeperName" class="font-bold text-white text-sm truncate" title="Keeper">keeper.jpg</div>
+                            <div id="studioKeeperPath" class="text-[10px] text-[#8e918f] font-mono truncate" title="/path/to/keeper">/path/to/keeper</div>
+                        </div>
+
+                        <!-- Keeper Image Canvas with Synchronized Loupe Zoom -->
+                        <div id="studioKeeperWrapper" onmousemove="syncLoupeZoom(event)" onmouseleave="resetLoupeZoom()" onclick="toggleStudioZoomOnClick(event)"
+                             class="relative flex-1 min-h-[300px] lg:min-h-[420px] bg-black/80 rounded-2xl border border-[#81c995]/40 overflow-hidden flex items-center justify-center cursor-crosshair group select-none">
+                            <div id="studioKeeperMediaContainer" class="w-full h-full flex items-center justify-center overflow-hidden relative">
+                                <img id="studioKeeperImg" src="" alt="Designated Keeper" class="max-h-[58vh] max-w-full object-contain transition-transform duration-75 select-none pointer-events-none" />
                             </div>
+                            <div id="studioKeeperLoupeIndicator" class="absolute pointer-events-none w-16 h-16 rounded-full border-2 border-[#81c995] bg-[#81c995]/15 hidden shadow-lg -translate-x-1/2 -translate-y-1/2"></div>
                         </div>
                     </div>
-                    <div class="mt-4 pt-3 border-t border-[#28292a] flex justify-between items-center">
-                        <button onclick="swapKeeperInLightbox()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8]">
-                            <span>★ Promote to Keeper</span>
-                        </button>
+
+                    <!-- Keeper Specs & Automated Advantage Badges -->
+                    <div class="mt-4 pt-3 border-t border-white/10 space-y-2">
+                        <div class="flex items-center justify-between text-xs font-mono text-[#c4c7c5]">
+                            <span>Size: <strong id="studioKeeperSize" class="text-white">0 MB</strong></span>
+                            <span>Resolution: <strong id="studioKeeperDim" class="text-white">N/A</strong></span>
+                            <span id="studioKeeperFormat" class="text-[#81c995] font-semibold">PRESERVED</span>
+                        </div>
+                        <!-- Automated Advantage Badges Container -->
+                        <div id="studioKeeperBadges" class="flex flex-wrap gap-1.5 min-h-[24px]"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Slide-in Details / Metadata Drawer -->
-            <div id="lbInfoDrawer" class="hidden w-80 bg-[#1e1f20] border-l border-white/10 p-5 flex-shrink-0 overflow-y-auto custom-scrollbar">
+            <div id="studioInfoDrawer" class="hidden w-80 bg-[#1e1f20] border-l border-white/10 p-5 flex-shrink-0 overflow-y-auto custom-scrollbar">
                 <div class="flex justify-between items-center mb-4">
                     <h4 class="text-sm font-bold text-white uppercase tracking-wider">File Details</h4>
-                    <button onclick="toggleLightboxInfo()" class="text-sm text-[#8e918f] hover:text-white">✕</button>
+                    <button onclick="toggleStudioInfo()" class="text-sm text-[#8e918f] hover:text-white">✕</button>
                 </div>
                 <div class="space-y-4 text-xs font-mono">
-                    <div>
-                        <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Filename</div>
-                        <div id="lbInfoName" class="text-white font-sans font-medium break-all">-</div>
-                    </div>
-                    <div>
-                        <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Absolute Path</div>
-                        <div id="lbInfoPath" class="text-[#c4c7c5] text-[11px] break-all">-</div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">File Size</div>
-                            <div id="lbInfoSize" class="text-white">-</div>
+                    <div class="p-3 rounded-xl bg-[#131314] border border-[#3c4043]">
+                        <div class="text-[10px] text-[#f28b82] uppercase font-bold mb-1">Candidate Copy</div>
+                        <div id="studioInfoCandName" class="text-white font-sans font-medium break-all">-</div>
+                        <div id="studioInfoCandPath" class="text-[#8e918f] text-[10px] break-all mt-0.5">-</div>
+                        <div class="mt-2 flex justify-between text-[11px]">
+                            <span>Size: <strong id="studioInfoCandSize" class="text-white">-</strong></span>
+                            <span>Dim: <strong id="studioInfoCandDim" class="text-white">-</strong></span>
                         </div>
-                        <div>
-                            <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Dimensions</div>
-                            <div id="lbInfoDim" class="text-white">-</div>
+                        <div class="mt-1 text-[11px]">
+                            <span>Similarity: <strong id="studioInfoCandSim" class="text-[#fdd663]">-</strong></span>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Role</div>
-                            <div id="lbInfoRole" class="text-[#81c995] font-semibold">-</div>
+
+                    <div class="p-3 rounded-xl bg-[#131314] border border-[#81c995]/40">
+                        <div class="text-[10px] text-[#81c995] uppercase font-bold mb-1">Designated Keeper</div>
+                        <div id="studioInfoKeepName" class="text-white font-sans font-medium break-all">-</div>
+                        <div id="studioInfoKeepPath" class="text-[#8e918f] text-[10px] break-all mt-0.5">-</div>
+                        <div class="mt-2 flex justify-between text-[11px]">
+                            <span>Size: <strong id="studioInfoKeepSize" class="text-white">-</strong></span>
+                            <span>Dim: <strong id="studioInfoKeepDim" class="text-white">-</strong></span>
                         </div>
-                        <div>
-                            <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Similarity</div>
-                            <div id="lbInfoSim" class="text-[#fdd663]">-</div>
+                        <div class="mt-1 text-[11px] text-[#81c995]">
+                            <span>Role: <strong class="text-[#81c995]">PERMANENT KEEPER</strong></span>
                         </div>
                     </div>
+
                     <div>
                         <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Match Algorithm</div>
-                        <div id="lbInfoAlgorithm" class="text-[#8ab4f8]">-</div>
+                        <div id="studioInfoAlgorithm" class="text-[#8ab4f8] font-bold">-</div>
+                    </div>
+
+                    <div class="pt-2 border-t border-[#3c4043] text-[#8e918f] text-[11px] space-y-1">
+                        <div><kbd class="px-1.5 py-0.5 bg-[#131314] rounded border border-white/10 text-white">← / →</kbd> Prev / Next Cluster</div>
+                        <div><kbd class="px-1.5 py-0.5 bg-[#131314] rounded border border-white/10 text-white">Space</kbd> Mark candidate for cleanup</div>
+                        <div><kbd class="px-1.5 py-0.5 bg-[#131314] rounded border border-white/10 text-white">K</kbd> Make candidate the keeper</div>
+                        <div><kbd class="px-1.5 py-0.5 bg-[#131314] rounded border border-white/10 text-white">1 / 2 / 4</kbd> Loupe Zoom levels</div>
+                        <div><kbd class="px-1.5 py-0.5 bg-[#131314] rounded border border-white/10 text-white">Esc</kbd> Exit Studio</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Legacy Lightbox Modal Anchor for Backward Compatibility -->
+    <div id="photoLightboxModal" class="hidden"></div>
+
 
     <!-- Google Move to Trash Confirmation Dialog -->
     <div id="trashDialog" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -1365,27 +1431,27 @@
             </div>
             <div class="space-y-3 text-xs">
                 <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
-                    <span class="text-[#c4c7c5]">Open Lightbox / Compare</span>
-                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">Space / Enter</kbd>
-                </div>
-                <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
-                    <span class="text-[#c4c7c5]">Navigate Lightbox Items</span>
+                    <span class="text-[#c4c7c5]">Navigate Clusters / Gallery</span>
                     <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">← / →</kbd>
                 </div>
                 <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
-                    <span class="text-[#c4c7c5]">Toggle Side-by-Side Diff</span>
-                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">Space / D</kbd>
+                    <span class="text-[#c4c7c5]">Toggle Candidate Cleanup Selection</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-[#8ab4f8]">Space</kbd>
                 </div>
                 <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
-                    <span class="text-[#c4c7c5]">Promote Current Item to Keeper</span>
+                    <span class="text-[#c4c7c5]">Promote Candidate to Keeper</span>
                     <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-[#81c995]">K</kbd>
                 </div>
                 <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
-                    <span class="text-[#c4c7c5]">Toggle Duplicate Selection</span>
-                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-[#8ab4f8]">X / Del</kbd>
+                    <span class="text-[#c4c7c5]">Loupe Zoom Magnification</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">1 / 2 / 4</kbd>
                 </div>
                 <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
-                    <span class="text-[#c4c7c5]">Close Lightbox / Modals</span>
+                    <span class="text-[#c4c7c5]">Toggle Studio File Details</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">I</kbd>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
+                    <span class="text-[#c4c7c5]">Close Comparison Studio / Modals</span>
                     <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">Esc</kbd>
                 </div>
                 <div class="flex justify-between items-center py-1">
@@ -1424,7 +1490,16 @@
         let activeMatchType = 'ALL'; // 'ALL' | 'EXACT' | 'SIMILAR'
         let currentBrowsedPath = '';
 
-        // Lightbox state
+        // Google Photos Top Shot Comparison Studio State
+        let studioCluster = null;
+        let studioClusterIndex = 0;
+        let studioCandidate = null;
+        let studioKeeper = null;
+        let studioCandidateIndex = 0;
+        let studioZoomLevel = 1;
+        let studioIsInfoOpen = false;
+
+        // Legacy lightbox compatibility state
         let lbCluster = null;
         let lbItemIndex = 0;
         let lbIsDiff = false;
@@ -1469,8 +1544,8 @@
                     return;
                 }
 
-                const modal = document.getElementById('photoLightboxModal');
-                const isLbOpen = modal && !modal.classList.contains('hidden');
+                const studioModal = document.getElementById('comparisonStudioModal') || document.getElementById('photoLightboxModal');
+                const isStudioOpen = studioModal && !studioModal.classList.contains('hidden');
 
                 if (e.key === '?') {
                     toggleShortcutsModal();
@@ -1478,33 +1553,33 @@
                     return;
                 }
 
-                if (isLbOpen) {
+                if (isStudioOpen) {
                     if (e.key === 'Escape') {
-                        closePhotoLightbox();
+                        closeComparisonStudio();
                         e.preventDefault();
                     } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-                        navigateLightbox(-1);
+                        navigateStudioCluster(-1);
                         e.preventDefault();
                     } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-                        navigateLightbox(1);
+                        navigateStudioCluster(1);
                         e.preventDefault();
-                    } else if (e.key === ' ' || e.key === 'Spacebar') {
-                        toggleLightboxDiff();
+                    } else if (e.key === ' ' || e.code === 'Space') {
+                        toggleStudioCandidateSelection();
                         e.preventDefault();
-                    } else if (e.key === 'k' || e.key === 'K') {
-                        swapKeeperInLightbox();
+                    } else if (e.key === 'k' || e.key === 'K' || e.code === 'KeyK') {
+                        swapKeeperFromStudio();
                         e.preventDefault();
-                    } else if (e.key === 'x' || e.key === 'X' || e.key === 'Delete') {
-                        if (lbCluster && lbCluster.items[lbItemIndex]) {
-                            const cur = lbCluster.items[lbItemIndex];
-                            if (cur.action !== 'KEEP') {
-                                toggleItemSelection(encodeURIComponent(cur.path));
-                                showToast(selectedPaths.has(cur.path) ? "Item marked for cleaning." : "Item removed from cleaning.", "🗑️");
-                            }
-                        }
+                    } else if (e.key === '1') {
+                        setStudioZoom(1);
+                        e.preventDefault();
+                    } else if (e.key === '2') {
+                        setStudioZoom(2);
+                        e.preventDefault();
+                    } else if (e.key === '4') {
+                        setStudioZoom(4);
                         e.preventDefault();
                     } else if (e.key === 'i' || e.key === 'I') {
-                        toggleLightboxInfo();
+                        toggleStudioInfo();
                         e.preventDefault();
                     }
                 } else {
@@ -3286,158 +3361,551 @@
             }
         }
 
-        // Google Photos Full-Screen Lightbox
-        function openPhotoLightbox(groupId, encodedPath) {
-            const cluster = allClusters.find(c => c.group_id === groupId);
-            if (!cluster) return;
+        // =========================================================================
+        // Google Photos Top Shot Comparison Studio (Split-Screen Diff Lightbox)
+        // =========================================================================
 
-            const path = decodeURIComponent(encodedPath);
-            let idx = cluster.items.findIndex(i => i.path === path);
+        function parseDimensions(dim) {
+            if (!dim) return null;
+            if (Array.isArray(dim) && dim.length >= 2) {
+                const w = Number(dim[0]) || 0;
+                const h = Number(dim[1]) || 0;
+                if (w > 0 && h > 0) return { w, h, mp: (w * h) / 1000000 };
+            }
+            if (typeof dim === 'string') {
+                const parts = dim.toLowerCase().split(/[x×]/);
+                if (parts.length === 2) {
+                    const w = parseInt(parts[0].trim(), 10) || 0;
+                    const h = parseInt(parts[1].trim(), 10) || 0;
+                    if (w > 0 && h > 0) return { w, h, mp: (w * h) / 1000000 };
+                }
+            }
+            return null;
+        }
+
+        function extractDateOrEpoch(item) {
+            if (!item) return null;
+            if (typeof item.modified_epoch === 'number' && item.modified_epoch > 0) {
+                return item.modified_epoch * (item.modified_epoch < 10000000000 ? 1000 : 1);
+            }
+            if (item.date) {
+                const t = new Date(item.date).getTime();
+                if (!isNaN(t)) return t;
+            }
+            const m = (item.path || '').match(/(20\d\d)[-_]?(0[1-9]|1[0-2])[-_]?(0[1-9]|[12]\d|3[01])/);
+            if (m) {
+                const d = new Date(`${m[1]}-${m[2]}-${m[3]}`).getTime();
+                if (!isNaN(d)) return d;
+            }
+            return null;
+        }
+
+        function computeAdvantageBadges(candidate, keeper) {
+            const keeperBadges = [];
+            const candBadges = [];
+            if (!candidate || !keeper) return { keeperBadges, candBadges };
+
+            // 1. Dimensions / Resolution / MP
+            const cDim = parseDimensions(candidate.dimensions);
+            const kDim = parseDimensions(keeper.dimensions);
+            if (kDim && cDim) {
+                if (kDim.mp > cDim.mp * 1.05 || (kDim.w * kDim.h > cDim.w * cDim.h)) {
+                    keeperBadges.push({
+                        text: "🟢 Higher Resolution",
+                        detail: `${kDim.w}×${kDim.h} (${kDim.mp.toFixed(1)} MP) vs ${cDim.w}×${cDim.h} (${cDim.mp.toFixed(1)} MP)`
+                    });
+                } else if (cDim.mp > kDim.mp * 1.05 || (cDim.w * cDim.h > kDim.w * kDim.h)) {
+                    candBadges.push({
+                        text: "🟡 Higher Resolution",
+                        detail: `${cDim.w}×${cDim.h} (${cDim.mp.toFixed(1)} MP) vs ${kDim.w}×${kDim.h} (${kDim.mp.toFixed(1)} MP)`
+                    });
+                }
+            } else if (kDim && !cDim) {
+                keeperBadges.push({
+                    text: "🟢 Higher Resolution",
+                    detail: `${kDim.w}×${kDim.h} (${kDim.mp.toFixed(1)} MP)`
+                });
+            } else if (cDim && !kDim) {
+                candBadges.push({
+                    text: "🟡 Higher Resolution",
+                    detail: `${cDim.w}×${cDim.h} (${cDim.mp.toFixed(1)} MP)`
+                });
+            }
+
+            // 2. Size / Bitrate
+            const kSize = keeper.size_mb || 0;
+            const cSize = candidate.size_mb || 0;
+            if (kSize > cSize * 1.02) {
+                const diffPct = cSize > 0 ? (((kSize - cSize) / cSize) * 100).toFixed(0) : 0;
+                keeperBadges.push({
+                    text: "🟢 Higher Bitrate / Size",
+                    detail: `${kSize.toFixed(2)} MB (+${diffPct}%)`
+                });
+            } else if (cSize > kSize * 1.02) {
+                const diffPct = kSize > 0 ? (((cSize - kSize) / kSize) * 100).toFixed(0) : 0;
+                candBadges.push({
+                    text: "🟡 Higher Bitrate / Size",
+                    detail: `${cSize.toFixed(2)} MB (+${diffPct}%)`
+                });
+            }
+
+            // 3. Older Original Date
+            const kDate = extractDateOrEpoch(keeper);
+            const cDate = extractDateOrEpoch(candidate);
+            if (kDate && cDate) {
+                if (kDate < cDate - 60000) {
+                    keeperBadges.push({
+                        text: "🟢 Older Original Date",
+                        detail: "Earlier original capture"
+                    });
+                } else if (cDate < kDate - 60000) {
+                    candBadges.push({
+                        text: "🟡 Older Original Date",
+                        detail: "Candidate captured earlier"
+                    });
+                }
+            }
+
+            // 4. RAW / Uncompressed
+            const rawExts = ['.raw', '.cr2', '.nef', '.arw', '.dng', '.raf', '.orf', '.rw2', '.pef', '.tiff', '.tif', '.psd', '.bmp'];
+            const kExt = '.' + (keeper.path.split('.').pop() || '').toLowerCase();
+            const cExt = '.' + (candidate.path.split('.').pop() || '').toLowerCase();
+            const kIsRaw = rawExts.includes(kExt);
+            const cIsRaw = rawExts.includes(cExt);
+
+            if (kIsRaw && !cIsRaw) {
+                keeperBadges.push({
+                    text: "🟢 RAW / Uncompressed",
+                    detail: `${kExt.toUpperCase()} Lossless Master`
+                });
+            } else if (cIsRaw && !kIsRaw) {
+                candBadges.push({
+                    text: "🟡 RAW / Uncompressed",
+                    detail: `${cExt.toUpperCase()} Lossless Master`
+                });
+            } else if (kIsRaw && cIsRaw) {
+                keeperBadges.push({
+                    text: "🟢 RAW / Uncompressed",
+                    detail: "Lossless Master Format"
+                });
+            }
+
+            return { keeperBadges, candBadges };
+        }
+
+        function openComparisonStudio(groupId, encodedPath) {
+            if (!allClusters || allClusters.length === 0) return;
+            let idx = allClusters.findIndex(c => c.group_id === groupId);
             if (idx === -1) idx = 0;
+            studioClusterIndex = idx;
+            const cluster = allClusters[idx];
 
+            let candIdx = 0;
+            if (encodedPath) {
+                const path = decodeURIComponent(encodedPath);
+                const dupIdx = (cluster.duplicates || []).findIndex(d => d.path === path);
+                if (dupIdx !== -1) {
+                    candIdx = dupIdx;
+                } else {
+                    const itemIdx = (cluster.items || []).findIndex(i => i.path === path && i.action !== 'KEEP');
+                    if (itemIdx !== -1) candIdx = itemIdx;
+                }
+            }
+            studioCandidateIndex = candIdx;
+
+            renderStudioCluster(cluster);
+
+            const modal = document.getElementById('comparisonStudioModal');
+            if (modal) modal.classList.remove('hidden');
+            const legModal = document.getElementById('photoLightboxModal');
+            if (legModal && legModal !== modal) legModal.classList.remove('hidden');
+        }
+
+        function closeComparisonStudio() {
+            const modal = document.getElementById('comparisonStudioModal');
+            if (modal) modal.classList.add('hidden');
+            const legModal = document.getElementById('photoLightboxModal');
+            if (legModal && legModal !== modal) legModal.classList.add('hidden');
+
+            setStudioZoom(1);
+            studioCluster = null;
+            lbCluster = null;
+            studioCandidate = null;
+            studioKeeper = null;
+        }
+
+        function navigateStudioCluster(dir) {
+            if (!allClusters || allClusters.length === 0) return;
+            studioClusterIndex = (studioClusterIndex + dir + allClusters.length) % allClusters.length;
+            const cluster = allClusters[studioClusterIndex];
+            if (!cluster) return;
+            studioCandidateIndex = 0;
+            renderStudioCluster(cluster);
+        }
+
+        function selectStudioCandidateIndex(idx) {
+            studioCandidateIndex = idx;
+            if (studioCluster) renderStudioCluster(studioCluster);
+        }
+
+        function renderStudioCluster(cluster) {
+            if (!cluster) return;
+            studioCluster = cluster;
             lbCluster = cluster;
-            lbItemIndex = idx;
-            lbIsDiff = false;
 
-            renderLightboxView();
-            document.getElementById('photoLightboxModal').classList.remove('hidden');
+            studioKeeper = cluster.keeper || cluster.items.find(i => i.action === 'KEEP') || cluster.items[0];
+            const duplicates = (cluster.duplicates && cluster.duplicates.length > 0)
+                ? cluster.duplicates
+                : cluster.items.filter(i => i.path !== studioKeeper.path);
+
+            if (duplicates.length === 0) {
+                studioCandidate = studioKeeper;
+            } else {
+                if (studioCandidateIndex >= duplicates.length) studioCandidateIndex = 0;
+                studioCandidate = duplicates[studioCandidateIndex];
+            }
+
+            // Update Top Studio Bar Information
+            const titleEl = document.getElementById('studioClusterTitle');
+            if (titleEl) titleEl.innerText = `Cluster #${cluster.group_id}`;
+            const matchEl = document.getElementById('studioMatchType');
+            if (matchEl) matchEl.innerText = (cluster.match_type || 'EXACT HASH').replace(/_/g, ' ');
+            const countEl = document.getElementById('studioClusterCounter');
+            if (countEl) countEl.innerText = `(${studioClusterIndex + 1} of ${allClusters.length})`;
+
+            // Left Pane: Candidate / Duplicate Copy
+            const candFname = studioCandidate.path.split('/').pop();
+            const candNameEl = document.getElementById('studioCandidateName');
+            if (candNameEl) { candNameEl.innerText = candFname; candNameEl.title = candFname; }
+            const candPathEl = document.getElementById('studioCandidatePath');
+            if (candPathEl) { candPathEl.innerText = studioCandidate.path; candPathEl.title = studioCandidate.path; }
+            const candSizeEl = document.getElementById('studioCandidateSize');
+            if (candSizeEl) candSizeEl.innerText = `${(studioCandidate.size_mb || 0).toFixed(2)} MB`;
+            const candDimEl = document.getElementById('studioCandidateDim');
+            const candDimParsed = parseDimensions(studioCandidate.dimensions);
+            if (candDimEl) candDimEl.innerText = candDimParsed ? `${candDimParsed.w}×${candDimParsed.h} (${candDimParsed.mp.toFixed(1)} MP)` : (studioCandidate.dimensions || 'N/A');
+            const candSimEl = document.getElementById('studioCandidateSim');
+            if (candSimEl) candSimEl.innerText = studioCandidate.similarity || (studioCandidate.action === 'KEEP' ? 'Original' : '100% Match');
+
+            // Render Candidate Media Preview via /api/media?path=...
+            const candMedia = document.getElementById('studioCandidateMediaContainer');
+            if (candMedia) {
+                if (isVideoFile(studioCandidate.path)) {
+                    candMedia.innerHTML = `<video src="/api/media?path=${encodeURIComponent(studioCandidate.path)}" controls class="max-h-[58vh] max-w-full object-contain rounded-xl bg-black"></video>`;
+                } else if (isImageFile(studioCandidate.path)) {
+                    candMedia.innerHTML = `<img id="studioCandidateImg" src="/api/media?path=${encodeURIComponent(studioCandidate.path)}" alt="Candidate Copy" class="max-h-[58vh] max-w-full object-contain transition-transform duration-75 select-none pointer-events-none" />`;
+                } else {
+                    candMedia.innerHTML = `
+                        <div class="text-center p-8 bg-[#1e1f20] rounded-2xl border border-[#3c4043] max-w-xs shadow-lg">
+                            <span class="text-5xl block mb-2">📄</span>
+                            <div class="font-bold text-white text-xs break-all">${candFname}</div>
+                            <div class="text-[11px] text-[#8e918f] font-mono mt-1">${(studioCandidate.size_mb || 0).toFixed(2)} MB</div>
+                        </div>
+                    `;
+                }
+            }
+
+            // Candidate Multi-item tabs (if cluster has > 1 duplicate)
+            const pillsContainer = document.getElementById('studioCandidatePills');
+            if (pillsContainer) {
+                if (duplicates.length > 1) {
+                    pillsContainer.innerHTML = duplicates.map((d, i) => {
+                        const active = (i === studioCandidateIndex);
+                        const dName = d.path.split('/').pop();
+                        return `
+                            <button onclick="selectStudioCandidateIndex(${i})" class="px-2.5 py-1 rounded-lg text-xs font-mono truncate max-w-[150px] border transition ${active ? 'bg-[#f28b82]/20 border-[#f28b82] text-[#f28b82] font-bold shadow-sm' : 'bg-[#1e1f20] border-[#3c4043] text-[#8e918f] hover:text-white'}">
+                                ${dName}
+                            </button>
+                        `;
+                    }).join('');
+                    pillsContainer.classList.remove('hidden');
+                } else {
+                    pillsContainer.innerHTML = '';
+                    pillsContainer.classList.add('hidden');
+                }
+            }
+
+            // Right Pane: Designated Keeper (Protected)
+            const keepFname = studioKeeper.path.split('/').pop();
+            const keepNameEl = document.getElementById('studioKeeperName');
+            if (keepNameEl) { keepNameEl.innerText = keepFname; keepNameEl.title = keepFname; }
+            const keepPathEl = document.getElementById('studioKeeperPath');
+            if (keepPathEl) { keepPathEl.innerText = studioKeeper.path; keepPathEl.title = studioKeeper.path; }
+            const keepSizeEl = document.getElementById('studioKeeperSize');
+            if (keepSizeEl) keepSizeEl.innerText = `${(studioKeeper.size_mb || 0).toFixed(2)} MB`;
+            const keepDimEl = document.getElementById('studioKeeperDim');
+            const keepDimParsed = parseDimensions(studioKeeper.dimensions);
+            if (keepDimEl) keepDimEl.innerText = keepDimParsed ? `${keepDimParsed.w}×${keepDimParsed.h} (${keepDimParsed.mp.toFixed(1)} MP)` : (studioKeeper.dimensions || 'N/A');
+            const keepFmtEl = document.getElementById('studioKeeperFormat');
+            const keepExt = (studioKeeper.path.split('.').pop() || '').toUpperCase();
+            if (keepFmtEl) keepFmtEl.innerText = `${keepExt} • PRESERVED`;
+
+            // Render Keeper Media Preview via /api/media?path=...
+            const keepMedia = document.getElementById('studioKeeperMediaContainer');
+            if (keepMedia) {
+                if (isVideoFile(studioKeeper.path)) {
+                    keepMedia.innerHTML = `<video src="/api/media?path=${encodeURIComponent(studioKeeper.path)}" controls class="max-h-[58vh] max-w-full object-contain rounded-xl bg-black"></video>`;
+                } else if (isImageFile(studioKeeper.path)) {
+                    keepMedia.innerHTML = `<img id="studioKeeperImg" src="/api/media?path=${encodeURIComponent(studioKeeper.path)}" alt="Designated Keeper" class="max-h-[58vh] max-w-full object-contain transition-transform duration-75 select-none pointer-events-none" />`;
+                } else {
+                    keepMedia.innerHTML = `
+                        <div class="text-center p-8 bg-[#1e1f20] rounded-2xl border border-[#3c4043] max-w-xs shadow-lg">
+                            <span class="text-5xl block mb-2">📄</span>
+                            <div class="font-bold text-white text-xs break-all">${keepFname}</div>
+                            <div class="text-[11px] text-[#8e918f] font-mono mt-1">${(studioKeeper.size_mb || 0).toFixed(2)} MB</div>
+                        </div>
+                    `;
+                }
+            }
+
+            // Automated Advantage Badges Computation & Rendering
+            const badges = computeAdvantageBadges(studioCandidate, studioKeeper);
+            const keeperBadgesContainer = document.getElementById('studioKeeperBadges');
+            if (keeperBadgesContainer) {
+                if (badges.keeperBadges.length > 0) {
+                    keeperBadgesContainer.innerHTML = badges.keeperBadges.map(b => `
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm" title="${b.detail}">
+                            ${b.text}
+                        </span>
+                    `).join('');
+                } else {
+                    keeperBadgesContainer.innerHTML = `
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] text-[#81c995] bg-[#81c995]/10 border border-[#81c995]/20">
+                            🟢 Exact Byte-Identical Replica
+                        </span>
+                    `;
+                }
+            }
+
+            const candBadgesContainer = document.getElementById('studioCandidateBadges');
+            if (candBadgesContainer) {
+                if (badges.candBadges.length > 0) {
+                    candBadgesContainer.innerHTML = badges.candBadges.map(b => `
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-sm" title="${b.detail}">
+                            ${b.text}
+                        </span>
+                    `).join('');
+                } else {
+                    candBadgesContainer.innerHTML = '';
+                }
+            }
+
+            updateStudioCandidateSelectionUI();
+            setStudioZoom(1);
+            if (studioIsInfoOpen) populateStudioInfoDrawer();
+        }
+
+        // Synchronized Loupe Zoom Controls
+        function setStudioZoom(level) {
+            studioZoomLevel = level;
+            [1, 2, 4].forEach(lvl => {
+                const btn = document.getElementById(`studioZoomBtn${lvl}x`);
+                if (btn) {
+                    if (lvl === level) {
+                        btn.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#8ab4f8] text-[#041e49] transition shadow-sm";
+                    } else {
+                        btn.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold text-[#c4c7c5] hover:text-white transition";
+                    }
+                }
+            });
+
+            const candImg = document.getElementById('studioCandidateImg');
+            const keepImg = document.getElementById('studioKeeperImg');
+
+            if (level === 1) {
+                if (candImg) { candImg.style.transform = 'scale(1)'; candImg.style.transformOrigin = 'center center'; }
+                if (keepImg) { keepImg.style.transform = 'scale(1)'; keepImg.style.transformOrigin = 'center center'; }
+                hideLoupeIndicators();
+            } else {
+                if (candImg) candImg.style.transform = `scale(${level})`;
+                if (keepImg) keepImg.style.transform = `scale(${level})`;
+            }
+        }
+
+        function toggleStudioZoomOnClick(e) {
+            if (studioZoomLevel === 1) {
+                setStudioZoom(2);
+                syncLoupeZoom(e);
+            } else if (studioZoomLevel === 2) {
+                setStudioZoom(4);
+                syncLoupeZoom(e);
+            } else {
+                setStudioZoom(1);
+            }
+        }
+
+        function syncLoupeZoom(e) {
+            if (studioZoomLevel <= 1) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const offsetX = e.clientX - rect.left;
+            const offsetY = e.clientY - rect.top;
+            const relX = Math.max(0, Math.min(1, offsetX / rect.width));
+            const relY = Math.max(0, Math.min(1, offsetY / rect.height));
+
+            const candImg = document.getElementById('studioCandidateImg');
+            const keepImg = document.getElementById('studioKeeperImg');
+            if (!candImg || !keepImg) return;
+
+            const pctX = (relX * 100).toFixed(2);
+            const pctY = (relY * 100).toFixed(2);
+
+            candImg.style.transformOrigin = `${pctX}% ${pctY}%`;
+            keepImg.style.transformOrigin = `${pctX}% ${pctY}%`;
+            candImg.style.transform = `scale(${studioZoomLevel})`;
+            keepImg.style.transform = `scale(${studioZoomLevel})`;
+
+            updateLoupeIndicators(offsetX, offsetY);
+        }
+
+        function updateLoupeIndicators(offsetX, offsetY) {
+            const candInd = document.getElementById('studioCandidateLoupeIndicator');
+            const keepInd = document.getElementById('studioKeeperLoupeIndicator');
+            if (candInd && keepInd) {
+                candInd.style.left = `${offsetX}px`;
+                candInd.style.top = `${offsetY}px`;
+                keepInd.style.left = `${offsetX}px`;
+                keepInd.style.top = `${offsetY}px`;
+                candInd.classList.remove('hidden');
+                keepInd.classList.remove('hidden');
+            }
+        }
+
+        function hideLoupeIndicators() {
+            const candInd = document.getElementById('studioCandidateLoupeIndicator');
+            const keepInd = document.getElementById('studioKeeperLoupeIndicator');
+            if (candInd) candInd.classList.add('hidden');
+            if (keepInd) keepInd.classList.add('hidden');
+        }
+
+        function resetLoupeZoom() {
+            hideLoupeIndicators();
+            if (studioZoomLevel <= 1) {
+                const candImg = document.getElementById('studioCandidateImg');
+                const keepImg = document.getElementById('studioKeeperImg');
+                if (candImg) { candImg.style.transform = 'scale(1)'; candImg.style.transformOrigin = 'center center'; }
+                if (keepImg) { keepImg.style.transform = 'scale(1)'; keepImg.style.transformOrigin = 'center center'; }
+            }
+        }
+
+        // 1-Click Keeper Swap from Studio
+        async function swapKeeperFromStudio() {
+            if (!studioCluster || !studioCandidate) return;
+            const groupId = studioCluster.group_id;
+            const newKeeperPath = studioCandidate.path;
+
+            try {
+                const res = await fetch('/api/clusters/override-keeper', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ group_id: groupId, new_keeper_path: newKeeperPath })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Keeper reassignment failed");
+
+                // Keeper file must never remain selected for deletion
+                selectedPaths.delete(newKeeperPath);
+
+                for (const item of currentSummary.groups) {
+                    if (item.group_id === groupId) {
+                        item.action = (item.path === newKeeperPath) ? 'KEEP' : 'DUPLICATE';
+                    }
+                }
+                allClusters = groupRecordsIntoClusters(currentSummary.groups);
+                applyFiltersAndSort();
+                updateTopSelectionBar();
+
+                const fname = newKeeperPath.split('/').pop();
+                showToast(`Promoted "${fname}" to Keeper in Cluster #${groupId}`, "★");
+
+                // Refresh studio view immediately
+                openComparisonStudio(groupId, encodeURIComponent(newKeeperPath));
+            } catch (e) {
+                alert("Error swapping keeper: " + e.message);
+            }
+        }
+
+        // Candidate Selection for Cleanup Toggle
+        function toggleStudioCandidateSelection() {
+            if (!studioCandidate) return;
+            if (studioCandidate.action === 'KEEP') {
+                showToast("Designated Keeper is protected from deletion!", "⚠️");
+                return;
+            }
+            toggleItemSelection(encodeURIComponent(studioCandidate.path));
+            updateStudioCandidateSelectionUI();
+            updateTopSelectionBar();
+        }
+
+        function updateStudioCandidateSelectionUI() {
+            if (!studioCandidate) return;
+            const isSelected = selectedPaths.has(studioCandidate.path);
+            const chkBtn = document.getElementById('studioCandidateCheckboxBtn');
+            const hdrBtn = document.getElementById('studioCandidateSelectBtn');
+            if (chkBtn) {
+                if (isSelected) {
+                    chkBtn.className = "text-xs px-2.5 py-1 rounded-lg border bg-[#f28b82]/20 border-[#f28b82] text-[#f28b82] font-semibold flex items-center gap-1.5 transition";
+                    chkBtn.innerHTML = `<span>✓</span> Cleanup (Space)`;
+                } else {
+                    chkBtn.className = "text-xs px-2.5 py-1 rounded-lg border bg-[#1e1f20] border-[#3c4043] text-[#c4c7c5] hover:text-white flex items-center gap-1.5 transition";
+                    chkBtn.innerHTML = `<span>○</span> Cleanup (Space)`;
+                }
+            }
+            if (hdrBtn) {
+                if (isSelected) {
+                    hdrBtn.className = "m3-button-secondary text-xs !py-1.5 !px-3 !bg-[#f28b82]/20 !text-[#f28b82] border !border-[#f28b82]";
+                    hdrBtn.innerHTML = `<span>✓ Marked for Cleanup</span>`;
+                } else {
+                    hdrBtn.className = "m3-button-secondary text-xs !py-1.5 !px-3 text-[#c4c7c5]";
+                    hdrBtn.innerHTML = `<span>Mark for Cleanup (Space)</span>`;
+                }
+            }
+        }
+
+        // Studio Info Drawer
+        function toggleStudioInfo() {
+            studioIsInfoOpen = !studioIsInfoOpen;
+            const drawer = document.getElementById('studioInfoDrawer');
+            const infoBtn = document.getElementById('studioInfoBtn');
+            if (drawer) {
+                if (studioIsInfoOpen) {
+                    drawer.classList.remove('hidden');
+                    if (infoBtn) infoBtn.classList.add('!bg-[#1a3860]', '!text-[#8ab4f8]');
+                    populateStudioInfoDrawer();
+                } else {
+                    drawer.classList.add('hidden');
+                    if (infoBtn) infoBtn.classList.remove('!bg-[#1a3860]', '!text-[#8ab4f8]');
+                }
+            }
+        }
+
+        function populateStudioInfoDrawer() {
+            if (!studioCluster || !studioCandidate || !studioKeeper) return;
+            const candEl = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+            candEl('studioInfoCandName', studioCandidate.path.split('/').pop());
+            candEl('studioInfoCandPath', studioCandidate.path);
+            candEl('studioInfoCandSize', `${(studioCandidate.size_mb || 0).toFixed(2)} MB`);
+            candEl('studioInfoCandDim', studioCandidate.dimensions || 'N/A');
+            candEl('studioInfoCandSim', studioCandidate.similarity || '100%');
+
+            candEl('studioInfoKeepName', studioKeeper.path.split('/').pop());
+            candEl('studioInfoKeepPath', studioKeeper.path);
+            candEl('studioInfoKeepSize', `${(studioKeeper.size_mb || 0).toFixed(2)} MB`);
+            candEl('studioInfoKeepDim', studioKeeper.dimensions || 'N/A');
+
+            candEl('studioInfoAlgorithm', studioCluster.match_type || 'EXACT HASH');
+        }
+
+        // Backward compatibility aliases
+        function openPhotoLightbox(groupId, encodedPath) {
+            openComparisonStudio(groupId, encodedPath);
         }
 
         function closePhotoLightbox() {
-            document.getElementById('photoLightboxModal').classList.add('hidden');
-            lbCluster = null;
+            closeComparisonStudio();
         }
 
-        function navigateLightbox(dir) {
-            if (!lbCluster || lbCluster.items.length <= 1) return;
-            lbItemIndex = (lbItemIndex + dir + lbCluster.items.length) % lbCluster.items.length;
-            renderLightboxView();
-        }
-
-        function toggleLightboxDiff() {
-            lbIsDiff = !lbIsDiff;
-            const diffBtn = document.getElementById('lbDiffBtn');
-            if (lbIsDiff) {
-                diffBtn.classList.add('!bg-[#1a3860]', '!text-[#8ab4f8]');
-            } else {
-                diffBtn.classList.remove('!bg-[#1a3860]', '!text-[#8ab4f8]');
-            }
-            renderLightboxView();
-        }
-
-        function toggleLightboxInfo() {
-            lbIsInfoOpen = !lbIsInfoOpen;
-            const drawer = document.getElementById('lbInfoDrawer');
-            const infoBtn = document.getElementById('lbInfoBtn');
-            if (lbIsInfoOpen) {
-                drawer.classList.remove('hidden');
-                infoBtn.classList.add('!bg-[#1a3860]', '!text-[#8ab4f8]');
-            } else {
-                drawer.classList.add('hidden');
-                infoBtn.classList.remove('!bg-[#1a3860]', '!text-[#8ab4f8]');
-            }
-        }
-
-        function renderLightboxView() {
-            if (!lbCluster) return;
-            const item = lbCluster.items[lbItemIndex];
-            const keeper = lbCluster.keeper || lbCluster.items[0];
-            const isKeeper = (item.action === 'KEEP');
-            const fname = item.path.split('/').pop();
-            const sizeStr = `${(item.size_mb || 0).toFixed(2)} MB`;
-
-            document.getElementById('lbClusterTitle').innerText = `Cluster #${lbCluster.group_id} (${lbItemIndex + 1} of ${lbCluster.items.length})`;
-            document.getElementById('lbMatchType').innerText = lbCluster.match_type;
-            document.getElementById('lbFileName').innerText = fname;
-
-            const makeKeeperBtn = document.getElementById('lbMakeKeeperBtn');
-            if (isKeeper) {
-                makeKeeperBtn.classList.add('opacity-50', 'pointer-events-none');
-                makeKeeperBtn.innerText = "★ Designated Keeper";
-            } else {
-                makeKeeperBtn.classList.remove('opacity-50', 'pointer-events-none');
-                makeKeeperBtn.innerText = "★ Make Keeper";
-            }
-
-            const singleView = document.getElementById('lbSingleView');
-            const diffView = document.getElementById('lbDiffView');
-
-            if (lbIsDiff) {
-                singleView.classList.add('hidden');
-                diffView.classList.remove('hidden');
-
-                // Keeper Diff Column
-                document.getElementById('lbDiffKeeperName').innerText = keeper.path.split('/').pop();
-                document.getElementById('lbDiffKeeperPath').innerText = keeper.path;
-                document.getElementById('lbDiffKeeperSize').innerText = `${(keeper.size_mb || 0).toFixed(2)} MB`;
-                document.getElementById('lbDiffKeeperDim').innerText = keeper.dimensions ? `${keeper.dimensions[0]}x${keeper.dimensions[1]}` : 'N/A';
-                document.getElementById('lbDiffKeeperCat').innerText = keeper.category || 'MEDIA';
-                const kpPreview = document.getElementById('lbDiffKeeperPreview');
-                if (isVideoFile(keeper.path)) {
-                    kpPreview.innerHTML = `<video src="/api/media?path=${encodeURIComponent(keeper.path)}" controls class="w-full h-full object-contain bg-black"></video>`;
-                } else if (isImageFile(keeper.path)) {
-                    kpPreview.innerHTML = `<img src="/api/thumbnail?path=${encodeURIComponent(keeper.path)}" class="w-full h-full object-contain" alt="keeper">`;
-                } else {
-                    kpPreview.innerHTML = `<span class="text-xs font-mono text-[#8e918f] uppercase">${keeper.path.split('.').pop()} FILE</span>`;
-                }
-
-                // Dupe Diff Column
-                const dupeItem = isKeeper ? (lbCluster.duplicates[0] || item) : item;
-                document.getElementById('lbDiffDupeName').innerText = dupeItem.path.split('/').pop();
-                document.getElementById('lbDiffDupePath').innerText = dupeItem.path;
-                document.getElementById('lbDiffDupeSize').innerText = `${(dupeItem.size_mb || 0).toFixed(2)} MB`;
-                document.getElementById('lbDiffDupeDim').innerText = dupeItem.dimensions ? `${dupeItem.dimensions[0]}x${dupeItem.dimensions[1]}` : 'N/A';
-                document.getElementById('lbDiffDupeSim').innerText = dupeItem.similarity || '100% Match';
-                const dpPreview = document.getElementById('lbDiffDupePreview');
-                if (isVideoFile(dupeItem.path)) {
-                    dpPreview.innerHTML = `<video src="/api/media?path=${encodeURIComponent(dupeItem.path)}" controls class="w-full h-full object-contain bg-black"></video>`;
-                } else if (isImageFile(dupeItem.path)) {
-                    dpPreview.innerHTML = `<img src="/api/thumbnail?path=${encodeURIComponent(dupeItem.path)}" class="w-full h-full object-contain" alt="dupe">`;
-                } else {
-                    dpPreview.innerHTML = `<span class="text-xs font-mono text-[#8e918f] uppercase">${dupeItem.path.split('.').pop()} FILE</span>`;
-                }
-            } else {
-                diffView.classList.add('hidden');
-                singleView.classList.remove('hidden');
-
-                const container = document.getElementById('lbImageContainer');
-                if (isVideoFile(item.path)) {
-                    container.innerHTML = `
-                        <div class="flex flex-col items-center justify-center max-w-full">
-                            <video controls autoplay src="/api/media?path=${encodeURIComponent(item.path)}"
-                                   class="max-h-[75vh] max-w-full rounded-2xl shadow-2xl bg-black border border-white/10">
-                            </video>
-                            <div class="text-xs text-[#8e918f] font-mono mt-2">${fname} (${sizeStr})</div>
-                        </div>
-                    `;
-                } else if (isImageFile(item.path)) {
-                    container.innerHTML = `<img src="/api/thumbnail?path=${encodeURIComponent(item.path)}" class="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl" alt="lightbox photo">`;
-                } else {
-                    container.innerHTML = `
-                        <div class="text-center p-12 bg-[#1e1f20] rounded-3xl border border-[#3c4043] max-w-md">
-                            <span class="text-6xl block mb-3">📄</span>
-                            <div class="font-bold text-white text-base break-all">${fname}</div>
-                            <div class="text-xs text-[#8e918f] font-mono mt-1">${sizeStr}</div>
-                        </div>
-                    `;
-                }
-            }
-
-            // Populate Info Drawer
-            document.getElementById('lbInfoName').innerText = item.path.split('/').pop();
-            document.getElementById('lbInfoPath').innerText = item.path;
-            document.getElementById('lbInfoSize').innerText = `${(item.size_mb || 0).toFixed(2)} MB`;
-            document.getElementById('lbInfoDim').innerText = item.dimensions ? `${item.dimensions[0]}x${item.dimensions[1]}` : 'N/A';
-            document.getElementById('lbInfoRole').innerText = isKeeper ? 'DESIGNATED KEEPER' : 'DUPLICATE CANDIDATE';
-            document.getElementById('lbInfoRole').className = isKeeper ? 'text-[#81c995] font-semibold' : 'text-[#f28b82] font-semibold';
-            document.getElementById('lbInfoSim').innerText = item.similarity || (isKeeper ? 'Original' : '100%');
-            document.getElementById('lbInfoAlgorithm').innerText = lbCluster.match_type;
-        }
-
-        async function swapKeeperInLightbox() {
-            if (!lbCluster) return;
-            const item = lbCluster.items[lbItemIndex];
-            await setKeeperOverride(lbCluster.group_id, encodeURIComponent(item.path));
+        function swapKeeperInLightbox() {
+            swapKeeperFromStudio();
         }
 
         // Trash Section View
