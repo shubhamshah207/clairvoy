@@ -326,7 +326,7 @@ git commit -m "feat(rust): scaffold workspace and clairvoy-core crate"
   - `pub fn compute_quick_hash_4kb(path: &Path) -> Result<u64, std::io::Error>` (SIMD XXH3)
   - Bounded streaming with backpressure to cap RAM $\le 50\text{MB}$.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 // crates/clairvoy-scanner/tests/test_scanner.rs
@@ -357,12 +357,12 @@ fn test_scanner_discovers_and_quick_hashes() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p clairvoy-scanner`
 Expected: FAIL (crate not implemented)
 
-- [ ] **Step 3: Implement `clairvoy-scanner` crate**
+- [x] **Step 3: Implement `clairvoy-scanner` crate**
 
 Create `crates/clairvoy-scanner/Cargo.toml`:
 ```toml
@@ -490,12 +490,12 @@ pub use hasher::compute_quick_hash_4kb;
 pub use walker::scan_roots;
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p clairvoy-scanner`
 Expected: PASS (1 test passing)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/clairvoy-scanner
