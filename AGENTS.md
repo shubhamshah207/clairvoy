@@ -153,6 +153,8 @@ In-depth guidelines are organized into dedicated documents:
   - Test fixtures, execution options, and linter standards.
 - **Rust High-Performance Guidelines:** [`docs/RUST_GUIDELINES.md`](file:///home/shubhamshah207/clairvoy/docs/RUST_GUIDELINES.md)
   - Zero-copy memory patterns, bounded queue backpressure, SIMD hashing, Rayon/Tokio boundaries, and `thiserror` domain errors.
+- **Performance Benchmarks & Analysis:** [`docs/BENCHMARKS.md`](file:///home/shubhamshah207/clairvoy/docs/BENCHMARKS.md)
+  - Empirical comparisons across real-world workloads, SIMD profiling, and memory invariants.
 - **Enterprise Security Policy:** [`SECURITY.md`](file:///home/shubhamshah207/clairvoy/SECURITY.md)
   - Path traversal defenses, system root isolation, and sanitized shell generation.
 - **Automated Agent Guardrails:** [`scripts/agent_guard.py`](file:///home/shubhamshah207/clairvoy/scripts/agent_guard.py)

@@ -541,3 +541,6 @@ Clairvoy features a dual-engine architecture where an ultra-high-performance pur
 7. **[`crates/clairvoy-cli`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-cli)**:
    - Native binary executable `clairvoy-rs` built with Clap derive parsing.
    - Commands: `clairvoy-rs scan <paths...>` and `clairvoy-rs ui [--port <port>] [--host <host>]`.
+
+### 7.2. Empirical Performance & Benchmarks
+Empirical benchmarks comparing the pure Rust binary (`clairvoy-rs`) and the Python engine across real-world datasets are documented in [`docs/BENCHMARKS.md`](file:///home/shubhamshah207/clairvoy/docs/BENCHMARKS.md), highlighting up to 36x throughput gains, 97+ seconds saved on multi-thousand photo archives, and strict $\le 35\text{MB}$ RAM limits.
