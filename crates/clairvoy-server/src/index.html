@@ -1754,6 +1754,10 @@
                         closeQuarantineModal();
                         closeNewScanModal();
                         closeDriveBrowserModal();
+                        closeHardlinkDialog();
+                        if (document.getElementById('activityDrawerModal')) {
+                            document.getElementById('activityDrawerModal').classList.add('hidden');
+                        }
                         const scModal = document.getElementById('shortcutsModal');
                         if (scModal && !scModal.classList.contains('hidden')) toggleShortcutsModal();
                         const scDrawer = document.getElementById('scanDrawer');
