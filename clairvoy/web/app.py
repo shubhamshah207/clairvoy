@@ -23,6 +23,7 @@ from clairvoy.core.config import (
 )
 from clairvoy.core.models import ActionType
 from clairvoy.core.security import SecurityError, resolve_safe_path, resolve_safe_paths
+from clairvoy.engines.delete_engine import DeleteEngine
 from clairvoy.engines.quarantine import QuarantineEngine
 from clairvoy.engines.storage_engine import StorageEngine
 from clairvoy.engines.vision_engine import VisionEngine
@@ -142,6 +143,17 @@ class LoadRunRequest(BaseModel):
 class KeeperOverrideRequest(BaseModel):
     group_id: int
     new_keeper_path: str
+
+
+class DeleteActionRequest(BaseModel):
+    paths: list[str] | None = None
+    mode: str = Field(default="trash", description="'trash' or 'permanent'")
+    base_dir: str | list[str] | None = None
+
+
+class RestoreTrashRequest(BaseModel):
+    manifest_file: str
+
 
 
 # In-memory thumbnail cache (max 1024 entries)
@@ -475,5 +487,98 @@ async def download_quarantine_script():
             media_type="application/x-sh",
             headers={"Content-Disposition": 'attachment; filename="quarantine_duplicates.sh"'},
         )
+
+
+@app.post("/api/delete/execute")
+async def execute_delete(req: DeleteActionRequest):
+    """Safely executes soft trash or permanent deletion across duplicate files."""
+    with SCAN_LOCK:
+        if not SCAN_STATE["summary"]:
+            raise HTTPException(status_code=400, detail="No active scan summary available.")
+        summary_data = SCAN_STATE["summary"]
+
+    base_dir = req.base_dir or (
+        SCAN_STATE["target_paths"][0] if SCAN_STATE["target_paths"] else SCAN_STATE["target_dir"]
+    )
+
+    try:
+        manifest = DeleteEngine.execute(
+            summary_or_records=summary_data,
+            selected_paths=req.paths,
+            base_dir=base_dir,
+            mode=req.mode,
+        )
+
+        # Update in-memory SCAN_STATE summary: remove deleted paths from groups
+        with SCAN_LOCK:
+            if SCAN_STATE["summary"] and "groups" in SCAN_STATE["summary"]:
+                deleted_paths = {it.original_path for it in manifest.items}
+                new_groups = [
+                    g for g in SCAN_STATE["summary"]["groups"]
+                    if g.get("path") not in deleted_paths
+                ]
+                SCAN_STATE["summary"]["groups"] = new_groups
+                freed_bytes = manifest.total_bytes_freed
+                old_wasted = SCAN_STATE["summary"].get("wasted_bytes", 0)
+                new_wasted = max(0, old_wasted - freed_bytes)
+                SCAN_STATE["summary"]["wasted_bytes"] = new_wasted
+                SCAN_STATE["summary"]["wasted_mb"] = round(new_wasted / (1024 * 1024), 2)
+                SCAN_STATE["summary"]["wasted_gb"] = round(new_wasted / (1024 * 1024 * 1024), 3)
+
+        return manifest.model_dump()
+    except SecurityError as se:
+        raise HTTPException(status_code=403, detail=str(se)) from se
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Deletion failed: {e!s}") from e
+
+
+@app.post("/api/delete/restore")
+async def restore_delete(req: RestoreTrashRequest):
+    """Restores soft-deleted files from a trash manifest back to original paths."""
+    try:
+        safe_manifest = resolve_safe_path(req.manifest_file, must_exist=True)
+        count = DeleteEngine.restore(safe_manifest)
+        return {"status": "restored", "restored_files_count": count}
+    except SecurityError as se:
+        raise HTTPException(status_code=403, detail=str(se)) from se
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Trash manifest file not found.") from None
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Restore failed: {e!s}") from e
+
+
+@app.get("/api/reports/delete-script")
+async def download_delete_script(mode: str = Query(default="trash", pattern="^(trash|permanent)$")):
+    """Streams or downloads a hardened deletion shell script for the active duplicate set."""
+    with SCAN_LOCK:
+        summary = SCAN_STATE.get("summary")
+        if not summary:
+            raise HTTPException(status_code=404, detail="No active scan summary available.")
+
+        from clairvoy.core.security import generate_hardened_deletion_script
+
+        groups = summary.get("groups", [])
+        scanned_paths = summary.get("scanned_paths") or [summary.get("scanned_dir", "")]
+        base_dir = scanned_paths[0] if scanned_paths else str(Path.cwd())
+        trash_dir = str(Path(base_dir) / ".clairvoy_trash")
+
+        duplicate_paths = [
+            item.get("path")
+            for item in groups
+            if item.get("action") == ActionType.DUPLICATE.value and item.get("path")
+        ]
+
+        script_content = generate_hardened_deletion_script(
+            deletions=duplicate_paths,
+            base_dir=scanned_paths,
+            mode=mode,
+            trash_dir=trash_dir if mode == "trash" else None,
+        )
+        return Response(
+            content=script_content,
+            media_type="application/x-sh",
+            headers={"Content-Disposition": f'attachment; filename="delete_duplicates_{mode}.sh"'},
+        )
+
 
 

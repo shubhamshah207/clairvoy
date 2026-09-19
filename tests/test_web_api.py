@@ -2,6 +2,7 @@
 Integration Tests for FastAPI Web Application Endpoints
 """
 
+import json
 import pytest
 from fastapi.testclient import TestClient
 
@@ -200,4 +201,76 @@ def test_download_reports_endpoints(client, tmp_path):
     assert sh_res.status_code == 200
     assert "#!/usr/bin/env bash" in sh_res.text
     assert "mv -n --" in sh_res.text
+
+
+def test_delete_endpoints(client, tmp_path):
+    # Setup test duplicate files
+    keeper = tmp_path / "keep_img.jpg"
+    keeper.write_text("keeper content")
+    dupe = tmp_path / "dupe_img.jpg"
+    dupe.write_text("dupe content")
+
+    summary_file = tmp_path / "clairvoy_summary.json"
+    data = {
+        "scanned_paths": [str(tmp_path)],
+        "scanned_dir": str(tmp_path),
+        "total_files_scanned": 2,
+        "total_duplicate_groups": 1,
+        "wasted_bytes": len(dupe.read_bytes()),
+        "wasted_mb": 0.001,
+        "wasted_gb": 0.0,
+        "summary_json": str(summary_file),
+        "groups": [
+            {
+                "group_id": 1,
+                "match_type": "EXACT_HASH",
+                "action": "KEEP",
+                "similarity": "100%",
+                "similarity_score": 1.0,
+                "size_mb": 0.001,
+                "path": str(keeper),
+                "category": "FILE",
+            },
+            {
+                "group_id": 1,
+                "match_type": "EXACT_HASH",
+                "action": "DUPLICATE",
+                "similarity": "100%",
+                "similarity_score": 1.0,
+                "size_mb": 0.001,
+                "path": str(dupe),
+                "category": "FILE",
+            },
+        ],
+    }
+    summary_file.write_text(json.dumps(data), encoding="utf-8")
+
+    manager = RunManager()
+    rec = manager.register_run(data)
+    load_res = client.post("/api/runs/load", json={"run_id": rec.run_id})
+    assert load_res.status_code == 200
+
+    # 1. Test GET /api/reports/delete-script
+    script_res = client.get("/api/reports/delete-script?mode=permanent")
+    assert script_res.status_code == 200
+    assert "rm -f --" in script_res.text
+
+    # 2. Test POST /api/delete/execute (trash mode)
+    del_res = client.post(
+        "/api/delete/execute",
+        json={"paths": [str(dupe)], "mode": "trash", "base_dir": str(tmp_path)},
+    )
+    assert del_res.status_code == 200
+    del_data = del_res.json()
+    assert del_data["total_files_deleted"] == 1
+    assert not dupe.exists()
+    assert keeper.exists()
+
+    # 3. Test POST /api/delete/restore
+    manifest_path = del_data["audit_file"]
+    restore_res = client.post("/api/delete/restore", json={"manifest_file": manifest_path})
+    assert restore_res.status_code == 200
+    assert restore_res.json()["restored_files_count"] == 1
+    assert dupe.exists()
+
 
