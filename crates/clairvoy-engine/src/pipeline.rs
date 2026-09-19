@@ -62,9 +62,13 @@ impl DeduplicationPipeline {
             let supported = matcher.filter_supported(&candidates);
             if supported.len() >= 2 {
                 let matcher_name = matcher.display_name();
-                let clusters = matcher.find_duplicates_with_progress(&supported, &all_files, &mut |cur, tot| {
-                    progress_cb(&format!("{}: hashing files", matcher_name), cur, tot);
-                })?;
+                let clusters = matcher.find_duplicates_with_progress(
+                    &supported,
+                    &all_files,
+                    &mut |cur, tot| {
+                        progress_cb(&format!("{}: hashing files", matcher_name), cur, tot);
+                    },
+                )?;
                 for cluster in clusters {
                     for m in &cluster.members {
                         matched_paths.insert(m.path.clone());
@@ -75,11 +79,7 @@ impl DeduplicationPipeline {
         }
 
         let total_clusters = all_clusters.len();
-        progress_cb(
-            "Scoring duplicate clusters",
-            0,
-            total_clusters,
-        );
+        progress_cb("Scoring duplicate clusters", 0, total_clusters);
         let mut records = Vec::new();
         let mut total_wasted_bytes = 0u64;
         let mut category_breakdown = HashMap::new();

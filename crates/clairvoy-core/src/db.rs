@@ -511,9 +511,8 @@ impl Database {
                  ORDER BY id ASC
                  LIMIT ?3 OFFSET ?4",
             )?;
-            let rows = stmt.query_map(
-                params![run_id, cat, limit as i64, offset as i64],
-                |row| {
+            let rows =
+                stmt.query_map(params![run_id, cat, limit as i64, offset as i64], |row| {
                     let id: i64 = row.get(0)?;
                     let run_id: String = row.get(1)?;
                     let cluster_id: i64 = row.get(2)?;
@@ -528,8 +527,7 @@ impl Database {
                         category,
                         similarity_score,
                     ))
-                },
-            )?;
+                })?;
             for r in rows {
                 let (id, r_id, c_id, mt, cat, score) = r?;
                 clusters.push(DuplicateClusterRecord {
@@ -550,25 +548,22 @@ impl Database {
                  ORDER BY id ASC
                  LIMIT ?2 OFFSET ?3",
             )?;
-            let rows = stmt.query_map(
-                params![run_id, limit as i64, offset as i64],
-                |row| {
-                    let id: i64 = row.get(0)?;
-                    let run_id: String = row.get(1)?;
-                    let cluster_id: i64 = row.get(2)?;
-                    let match_type: String = row.get(3)?;
-                    let category: String = row.get(4)?;
-                    let similarity_score: f64 = row.get(5)?;
-                    Ok((
-                        id,
-                        run_id,
-                        cluster_id as usize,
-                        match_type,
-                        category,
-                        similarity_score,
-                    ))
-                },
-            )?;
+            let rows = stmt.query_map(params![run_id, limit as i64, offset as i64], |row| {
+                let id: i64 = row.get(0)?;
+                let run_id: String = row.get(1)?;
+                let cluster_id: i64 = row.get(2)?;
+                let match_type: String = row.get(3)?;
+                let category: String = row.get(4)?;
+                let similarity_score: f64 = row.get(5)?;
+                Ok((
+                    id,
+                    run_id,
+                    cluster_id as usize,
+                    match_type,
+                    category,
+                    similarity_score,
+                ))
+            })?;
             for r in rows {
                 let (id, r_id, c_id, mt, cat, score) = r?;
                 clusters.push(DuplicateClusterRecord {
@@ -729,7 +724,11 @@ impl Database {
         }))
     }
 
-    pub fn override_keeper(&self, cluster_id: i64, new_keeper_path: &str) -> Result<(), EngineError> {
+    pub fn override_keeper(
+        &self,
+        cluster_id: i64,
+        new_keeper_path: &str,
+    ) -> Result<(), EngineError> {
         let mut conn = self.get_conn()?;
         let tx = conn.transaction()?;
 
@@ -768,9 +767,13 @@ impl Database {
         let mut freed_bytes = 0u64;
 
         for path in paths {
-            let mut stmt = tx.prepare("SELECT cluster_id, size_bytes, action FROM duplicate_items WHERE path = ?1")?;
+            let mut stmt = tx.prepare(
+                "SELECT cluster_id, size_bytes, action FROM duplicate_items WHERE path = ?1",
+            )?;
             let rows: Vec<(i64, i64, String)> = stmt
-                .query_map(params![path], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+                .query_map(params![path], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                })?
                 .filter_map(|r| r.ok())
                 .collect();
 
@@ -822,12 +825,16 @@ impl Database {
     pub fn prune_missing_files(&self) -> Result<(usize, u64), EngineError> {
         let paths: Vec<String> = {
             let conn = self.get_conn()?;
-            let mut stmt = conn.prepare("SELECT DISTINCT path FROM duplicate_items WHERE action = 'DUPLICATE'")?;
+            let mut stmt = conn
+                .prepare("SELECT DISTINCT path FROM duplicate_items WHERE action = 'DUPLICATE'")?;
             let rows = stmt.query_map([], |row| row.get(0))?;
             rows.filter_map(|r| r.ok()).collect()
         };
 
-        let missing: Vec<String> = paths.into_iter().filter(|p| !Path::new(p).exists()).collect();
+        let missing: Vec<String> = paths
+            .into_iter()
+            .filter(|p| !Path::new(p).exists())
+            .collect();
         if missing.is_empty() {
             return Ok((0, 0));
         }

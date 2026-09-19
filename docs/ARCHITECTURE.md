@@ -1,558 +1,203 @@
 # Clairvoy Architecture & Deep Modules Blueprint
 
-This document details the internal architecture, module boundaries, and data pipelines of Clairvoy.
-Refer to this document for architectural patterns and deep module design.
+This document details the internal architecture, crate boundaries, data pipelines, and design invariants of Clairvoy.
+Clairvoy is an ultra-fast, 100% offline, privacy-first multimodal media deduplication and storage optimization engine built in pure Rust.
 
 ---
 
 ## 1. System Architecture
 
-Clairvoy follows the **Deep Module** philosophy (*A Philosophy of Software Design*): complex operations are encapsulated behind simple, cohesive, and type-safe public interfaces.
+Clairvoy follows the **Deep Module** philosophy (*A Philosophy of Software Design*): complex operations (multi-threaded streaming crawl, SIMD quick-hashing, perceptual AI matching, SQLite WAL persistence, background filesystem surveillance, and safe trash manipulation) are encapsulated behind simple, cohesive, and type-safe public interfaces.
 
 ```
-+---------------------------------------------------------------------------------------------------------+
-|                                             CLAIRVOY ENGINE                                             |
-+---------------------------------------------------------------------------------------------------------+
-|                                                                                                         |
-|   +-------------------+            +---------------------+              +-----------------+             |
-|   |    CLI (Typer)    |            |    FastAPI (Web)    |              | Custom Plugins  |             |
-|   |  clairvoy/cli.py  |            |   clairvoy/web/     |              | ~/.clairvoy/... |             |
-|   +---------+---------+            +----------+----------+              +--------+--------+             |
-|             |                                 |                                  |                      |
-|             +---------------------------+     |     +----------------------------+                      |
-|                                         v     v     v                                                   |
-|                              +---------------------------+                                              |
-|                              |       PluginRegistry      |                                              |
-|                              | clairvoy/core/plugins.py  |                                              |
-|                              +-------------+-------------+                                              |
-|                                            |                                                            |
-|                                            v                                                            |
-|                              +---------------------------+                                              |
-|                              |   DeduplicationPipeline   |                                              |
-|                              | clairvoy/engines/pipeline |                                              |
-|                              +-------------+-------------+                                              |
-|                                            |                                                            |
-|        +------------------+----------------+-----------------+------------------+                       |
-|        |                  |                |                 |                  |                       |
-|        v                  v                v                 v                  v                       |
-| [Tier 1: Byte Exact][Tier 2: Visual AI] [Tier 3: Video]  [Tier 4: Archives] [Tier 5: Documents]         |
-| ExactHashMatcher    PhotoVisionMatcher  VideoKeyframe... ArchiveInspector.. DocumentTextMatcher         |
-| (QuickHash+SHA-256) (DINOv2: .heic,..)  (Frames: .mp4..) (In-Memory: .zip)  (.pdf, .docx, .csv)         |
-|        |                  |                |                 |                  |                       |
-|        +------------------+----------------+-----------------+------------------+                       |
-|                                            |                                                            |
-|                                            v                                                            |
-|                              +---------------------------+                                              |
-|                              |  CompositeKeeperStrategy  |                                              |
-|                              |  (Scoring & Seniority)    |                                              |
-|                              +-------------+-------------+                                              |
-|                                            |                                                            |
-|                                            v                                                            |
-|                              +-------------+-------------+                                              |
-|                              |                           |                                              |
-|                              v                           v                                              |
-|                 [Action: SafeQuarantine]          [Action: Hardlink]                                    |
-|                 SafeQuarantineActionPlugin        HardlinkActionPlugin                                  |
-+---------------------------------------------------------------------------------------------------------+
++---------------------------------------------------------------------------------------------------+
+|                                          CLAIRVOY ENGINE                                          |
++---------------------------------------------------------------------------------------------------+
+|   +-------------------+          +---------------------+            +-----------------+           |
+|   | CLI: clairvoy-rs  |          | Web: Axum Server    |            | Custom Plugins  |           |
+|   | crates/clairvoy-cli|         | crates/clairvoy-server|          | clairvoy-plugins|           |
+|   +---------+---------+          +----------+----------+            +--------+--------+           |
+|             |                               |                                |                    |
+|             +-------------------------+     |     +--------------------------+                    |
+|                                       v     v     v                                               |
+|                            +---------------------------+                                          |
+|                            |   DeduplicationPipeline   |                                          |
+|                            |  crates/clairvoy-engine   |                                          |
+|                            +-------------+-------------+                                          |
+|                                          |                                                        |
+|             +----------------------------+----------------------------+                           |
+|             v                                                         v                           |
+|  [Tier 1: ExactHashMatcher]                              [Tier 2: PhotoVisionMatcher]             |
+|  Parallel BLAKE3 SIMD Hash                               Perceptual dHash & Model Registry        |
+|  (crates/clairvoy-plugins)                               (crates/clairvoy-plugins & model)        |
+|             +----------------------------+----------------------------+                           |
+|                                          |                                                        |
+|                                          v                                                        |
+|                            +---------------------------+                                          |
+|                            |  CompositeKeeperStrategy  |                                          |
+|                            |  (Scoring & Seniority)    |                                          |
+|                            +-------------+-------------+                                          |
+|                                          |                                                        |
+|                                          v                                                        |
+|                 +------------------------+-----------------------+                                |
+|                 v                        v                       v                                |
+|       [Action: Safe Trash]      [Action: Hardlink]      [Action: Perm Delete]                     |
+|       .clairvoy_trash/          Zero-space hardlinking  Direct safe unlinking                     |
+|       Rollback manifest         Cross-mount fallback    Enforces KEEPER safety                    |
++---------------------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## 2. Deep Module Organization
+## 2. Workspace Crate Breakdown
 
-The codebase is strictly structured into 4 cohesive packages with minimal cross-talk:
+The repository is organized into 7 focused crates with clean directional dependencies:
 
-### `clairvoy.core` (Data Domain, Security, Contracts)
-- [`models.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/models.py): Canonical Pydantic v2 schemas (`FileEntry`, `DuplicateRecord`, `DuplicateCluster`, `ScanSummary`, `ActionResult`).
-- [`format_utils.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/format_utils.py): $O(1)$ stream header validators (`is_mpeg_ts`, `is_motion_photo_video`, `is_rar_archive`) discriminating media streams from ambiguous source files.
-- [`plugins.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/plugins.py): Base plugin ABCs (`BasePlugin`, `BaseMatcherPlugin`, `BaseKeeperPlugin`, `BaseActionPlugin`) and thread-safe `PluginRegistry`.
-- [`security.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/security.py): Enterprise filesystem defenses: path traversal verification, system root protection, sanitized shell command generation.
-- [`config.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/config.py): Global configuration defaults and environment variable overrides.
+```
+crates/clairvoy-cli  -->  crates/clairvoy-server  -->  crates/clairvoy-engine
+        |                         |                            |
+        +-------------------------+                            v
+                                  |                 crates/clairvoy-plugins
+                                  v                            |
+                        crates/clairvoy-core                   v
+                                  ^                 crates/clairvoy-model
+                                  |                            |
+                        crates/clairvoy-scanner <--------------+
+```
 
-### `clairvoy.engines` (Computation, Inference, Orchestration)
-- [`pipeline.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/pipeline.py): `DeduplicationPipeline` coordinating chained matchers with short-circuit pruning, plus `CompositeKeeperStrategy`.
-- [`storage_engine.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/storage_engine.py): Multi-threaded filesystem scanner, 128KB head/tail QuickHash, and SHA-256 digests.
-- [`vision_engine.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/vision_engine.py): 100% offline Meta DINOv2 ONNX Runtime embedding inference, dual-path HEIC frame decoding, and Disjoint Set Union (DSU) graph clustering.
-- [`classifier_engine.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/classifier_engine.py): Fast cosine distance classifier categorizing media into Photo, Screenshot, Meme, or Document.
-- [`quarantine.py`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/quarantine.py): Manifest-backed non-destructive quarantine isolation engine with automated rollback generator.
+### 2.1. [`crates/clairvoy-core`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core)
+- **Data Models**: Canonical representations including [`FileEntry`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/models.rs), [`DuplicateRecord`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/models.rs), [`DuplicateCluster`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/models.rs), and [`ScanSummary`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/models.rs).
+- **Traits**: Strong contracts for [`MatcherPlugin`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/traits.rs), [`KeeperStrategy`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/traits.rs), and [`ActionHandler`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/traits.rs).
+- **Embedded SQLite Persistence Engine (`clairvoy_core::db::Database`)**:
+  - Embedded SQLite database located at `~/.clairvoy/clairvoy.db`.
+  - Configured with Write-Ahead Logging (`WAL` mode), `PRAGMA synchronous = NORMAL`, and memory caching for sub-millisecond queries.
+  - Normalized schema: `watched_paths`, `scan_runs`, `file_index`, `duplicate_clusters`, `duplicate_items`.
+  - Live synchronization APIs: [`Database::remove_duplicate_items`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/db.rs) and [`Database::prune_missing_files`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/db.rs).
 
-### `clairvoy.plugins` (Bundled Default Extensions)
-- [`exact_hash.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/exact_hash.py): Tier 1 byte-for-byte deduplication (Priority 10).
-- [`photo_vision.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/photo_vision.py): Tier 2 visual similarity deduplication supporting `.jpg`, `.png`, `.webp`, `.heic`, and `.psd` (Priority 20).
-- [`video_matcher.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/video_matcher.py): Tier 3 video keyframe hash deduplication supporting `.mp4`, `.mkv`, `.mov`, `.ts`, and `.mp` (Priority 30).
-- [`archive_inspector.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/archive_inspector.py): Tier 4 in-memory ZIP/TAR/JAR/APK central directory inspector (Priority 40).
-- [`document_matcher.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/document_matcher.py): Tier 5 content-aware document and tabular deduplication supporting `.pdf`, `.docx`, `.pptx`, `.odt`, `.csv`, and `.tsv` (Priority 50).
-- [`quarantine_action.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/quarantine_action.py): Safe reversible quarantine action.
-- [`hardlink_action.py`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/hardlink_action.py): Cross-filesystem safe hardlink replacement action.
+### 2.2. [`crates/clairvoy-scanner`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-scanner)
+- **Streaming Filesystem Crawler**: Parallel multi-threaded directory walking via `jwalk`.
+- **Bounded Backpressure**: Uses `flume::bounded(2048)` to guarantee $\le 50\text{MB}$ resident RAM across multi-million file workloads.
+- **SIMD XXH3 Quick-Hashing**: Instant candidate grouping using 4KB head hashing at >10 GB/s.
 
-### `clairvoy.cli` & `clairvoy.web` (Presentation & Interfaces)
-- [`cli.py`](file:///home/shubhamshah207/clairvoy/clairvoy/cli.py): Typer CLI with `scan`, `review`, `quarantine`, `restore`, `plugins list`, and `plugins info`.
-- [`web/app.py`](file:///home/shubhamshah207/clairvoy/clairvoy/web/app.py): FastAPI backend serving interactive UI for side-by-side visual diffs and manual reviews.
+### 2.3. [`crates/clairvoy-model`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-model)
+- **Model Runtime Abstraction**: Pluggable `ModelBackend` trait supporting perceptual and neural backends.
+- **Built-in Perceptual Hash**: Zero-dependency 64-bit perceptual hash backend (`dHash`).
+- **Model Registry**: Dynamic `models.toml` configuration parsing.
+
+### 2.4. [`crates/clairvoy-plugins`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-plugins)
+- **Tier 1: `ExactHashMatcherPlugin`**: Bit-for-bit exact duplicate identification using multi-threaded Rayon BLAKE3 hashing.
+- **Tier 2: `PhotoVisionMatcherPlugin`**: Perceptual visual duplicate matching with configurable similarity thresholds.
+
+### 2.5. [`crates/clairvoy-engine`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-engine)
+- **`DeduplicationPipeline`**: Chained execution engine orchestrating matchers in cost-ascending order with short-circuit pruning.
+- **`CompositeKeeperStrategy`**: Deterministic scoring engine evaluating folder seniority, resolution, file size, duplicate token penalties, and modification time.
+- **`AutonomousWatcher`**: Real-time filesystem surveillance daemon with 5-second sliding debounce quiet window and 30-minute fallback sweep ticker.
+
+### 2.6. [`crates/clairvoy-server`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-server)
+- **High-Throughput Axum Web Server**: Exposes complete REST & SSE API for web UI.
+- **Real-Time Telemetry**: Server-Sent Events stream (`/api/status/stream`) broadcasting active phases, duration, and indexed file counts.
+- **Integrated Storage Operations**: Soft trash isolation with rollback manifest, permanent unlinking with keeper guards, and POSIX hardlinking.
+- **Embedded Web Frontend**: Zero-dependency static SPA embedded directly into the binary (`index.html`).
+
+### 2.7. [`crates/clairvoy-cli`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-cli)
+- **Native CLI Executable (`clairvoy-rs`)**:
+  - `scan`: Fast non-interactive scan with optional immediate cleaning (`--clean`, `--mode`).
+  - `clean`: Process duplicates from stored database runs.
+  - `ui`: Launches Axum web studio with optional `--no-daemon`, `--debounce-ms`, and `--port`.
 
 ---
 
 ## 3. Chained Pipeline & Short-Circuit Pruning
 
-To maximize speed and minimize compute, matchers run strictly in ascending computational cost order:
+To maximize speed and minimize computation, matchers run strictly in ascending computational cost order:
 
 ```
 [Candidate Files]
        |
        v
 +-------------------------------+
-| Tier 1: ExactHashMatcher      | (Cost: Very Low - 128KB QuickHash + SHA-256)
+| Tier 1: ExactHashMatcher      | (Cost: Very Low - 4KB XXH3 + Parallel BLAKE3)
 +---------------+---------------+
                 |
                 +---> [Exact Duplicates Found]   ---> Removed from downstream pipeline
                 |
                 v
 +-------------------------------+
-| Tier 2: PhotoVisionMatcher    | (Cost: Medium - Local ONNX DINOv2)
-+---------------+---------------+
-                |
-                +---> [Visual Duplicates Found]  ---> Removed from downstream pipeline
-                |
-                v
-+-------------------------------+
-| Tier 3: VideoKeyframeMatcher  | (Cost: High - PyAV keyframe extraction)
-+---------------+---------------+
-                |
-                +---> [Video Duplicates Found]   ---> Removed from downstream pipeline
-                |
-                v
-+-------------------------------+
-| Tier 4: ArchiveInspector      | (Cost: Low/Medium - In-memory ZIP/TAR CRC32 parse)
-+---------------+---------------+
-                |
-                +---> [Archive Duplicates Found] ---> Removed from downstream pipeline
-                |
-                v
-+-------------------------------+
-| Tier 5: DocumentTextMatcher   | (Cost: Low/Medium - Text extraction & token Jaccard)
+| Tier 2: PhotoVisionMatcher    | (Cost: Medium - Perceptual dHash / AI Model)
 +---------------+---------------+
                 |
                 v
        [Combined Clusters]
+                |
+                v
++-------------------------------+
+|    CompositeKeeperStrategy    |
++---------------+---------------+
+                |
+                v
+   [Designated Keepers & Dupes]
 ```
 
 ### Short-Circuit Pruning Guarantee
-Once a file is identified as a member of a duplicate cluster in an earlier tier, it is **pruned from the candidate pool** for all subsequent tiers. This prevents expensive neural embedding inference, video frame decoding, or document text parsing on files that are already proven exact duplicates.
+Once candidate files are grouped into a duplicate cluster by Tier 1 (Exact Hash), they are **immediately removed from the candidate pool** before Tier 2 (Visual AI) executes. This ensures that computationally expensive perceptual hashing is never performed on files already proven to be exact bit-for-bit clones.
 
 ---
 
-## 4. Supported Modalities & Formats Matrix
+## 4. Keeper Resolution & Scoring Engine
 
-| Modality | Formats Handled | Engine / Plugin | Key Invariant / Discriminator |
-|---|---|---|---|
-| **Photos & Raster** | `.jpg`, `.png`, `.webp`, `.bmp`, `.tiff`, `.tif`, `.heic`, `.psd` | [`PhotoVisionMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/photo_vision.py) & [`VisionEngine`](file:///home/shubhamshah207/clairvoy/clairvoy/engines/vision_engine.py) | Native Pillow PSD composite; dual-path HEIC (Pillow / ffmpeg pipe). |
-| **Video & Motion** | `.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.flv`, `.wmv`, `.m4v`, `.ts`, `.mp` | [`VideoKeyframeMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/video_matcher.py) | $O(1)$ sync byte `0x47` distinguishes MPEG-TS from TypeScript; `ftyp` box detects `.mp` Motion Photos. |
-| **In-Memory Archives** | `.zip`, `.jar`, `.apk`, `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.rar` | [`ArchiveInspectorMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/archive_inspector.py) | In-memory central directory CRC32 inspection without disk extraction. |
-| **Documents & Tabular** | `.pdf`, `.docx`, `.pptx`, `.odt`, `.csv`, `.tsv` | [`DocumentTextMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/document_matcher.py) | In-memory `zipfile` XML inspection; pure-Python `pypdf` up to 50 pages; permutation-invariant tabular row sort; token Jaccard similarity $\ge 0.90$; 25MB buffer / 50k words cap. |
-| **Stream Utils** | Binary magic-byte probes | [`format_utils.py`](file:///home/shubhamshah207/clairvoy/clairvoy/core/format_utils.py) | `is_mpeg_ts`, `is_motion_photo_video`, `is_rar_archive`. |
+`CompositeKeeperStrategy` computes a deterministic integer score for each file in a cluster:
 
----
-
-## 5. Tier 5: Document & Tabular Matcher (`DocumentTextMatcherPlugin`)
-
-The [`DocumentTextMatcherPlugin`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/document_matcher.py) operates at **Priority 50** with match type `MatchType.CONTENT_NEAR_DUPLICATE`. It detects identical and near-duplicate text across re-saved exports, converted office documents, draft revisions, and permuted datasets.
-
-### Extraction Recipes by Format
-
-1. **PDF Documents (`.pdf`)**:
-   - Extracted using pure-Python [`pypdf.PdfReader`](file:///home/shubhamshah207/clairvoy/clairvoy/plugins/document_matcher.py#L171).
-   - Inspects up to the first 50 pages (`MAX_PDF_PAGES = 50`) to avoid memory bottlenecks on large books or manuals.
-   - Automatically attempts decryption with an empty password string `""` for softly protected PDFs.
-   - Accumulates text up to a strict 25 MB byte ceiling (`MAX_BUFFER_BYTES`).
-
-2. **Microsoft Word (`.docx`)**:
-   - Treated as an in-memory ZIP package using standard library `zipfile.ZipFile`.
-   - Directly parses `word/document.xml` using `xml.etree.ElementTree`.
-   - Iterates over paragraph structures (`<w:p>`) and extracts text runs (`<w:t>`), reconstructing body paragraphs without requiring heavyweight external office runtimes.
-
-3. **Microsoft PowerPoint (`.pptx`)**:
-   - In-memory ZIP inspection of `ppt/slides/slide*.xml`.
-   - Employs natural numerical sorting (`re.search(r"ppt/slides/slide(\d+)\.xml$")`) so slides are ordered as `slide1.xml`, `slide2.xml`, ..., `slide10.xml` rather than lexicographical order.
-   - Extracts slide text runs (`<a:t>`) and aggregates them into slide-separated text blocks.
-
-4. **OpenDocument Text (`.odt`)**:
-   - In-memory ZIP inspection of `content.xml`.
-   - Uses XML element tree text iteration (`root.itertext()`) to extract all narrative paragraphs and headings.
-
-5. **Tabular Datasets (`.csv`, `.tsv`)**:
-   - Delimiter detection via `csv.Sniffer` sampling the first 8 KB with fallback to extension defaults (`\t` for `.tsv`, `,` for `.csv`).
-   - Normalizes whitespace across all cells and filters out blank lines.
-   - Preserves header row at index 0, then **canonically sorts all data rows** (`sorted(data_rows, key=tuple)`).
-   - Produces a **permutation-invariant canonical text digest**: datasets with identical records shuffled in different row orders produce identical content hashes.
-
-### Deduplication & Clustering Pipeline
-
-```
-[Supported Candidate Files]
-             |
-             v
-+----------------------------+
-|  Text / Table Extraction   | ---> (Cap at 25MB buffer / 50k words)
-+-------------+--------------+
-             |
-             v
-+----------------------------+
-|  Stage 1: Hash Matching    | ---> Identical normalized text hash -> Similarity 1.00
-+-------------+--------------+
-             |
-             v
-+----------------------------+
-|  Stage 2: Jaccard Matching | ---> O(1) ratio pre-filtering: min_len / max_len >= 0.90
-|                            | ---> Word token Jaccard similarity: |A ∩ B| / |A ∪ B| >= 0.90
-+-------------+--------------+
-             |
-             v
-+----------------------------+
-|  Stage 3: DSU Clustering   | ---> Disjoint Set Union with path compression & rank union
-+-------------+--------------+
-             |
-             v
- [Duplicate Clusters Emitted]
-```
-
-1. **Exact Normalized Hash Matching**: Computes SHA-256 over normalized body text. Files with identical normalized text receive similarity `1.00`.
-2. **Near-Duplicate Token Jaccard Similarity**:
-   - Documents with at least 5 tokens (`MIN_TOKENS_FOR_SIMILARITY = 5`) are compared via word-level Jaccard similarity: $\text{Sim}(A, B) = \frac{|A \cap B|}{|A \cup B|}$.
-   - Pairs meeting the threshold $\text{Sim}(A, B) \ge 0.90$ are joined into duplicate clusters.
-   - **$O(1)$ Length Ratio Pre-Filtering**: To avoid expensive set operations on mismatched files, pairs with $\frac{\min(|A|, |B|)}{\max(|A|, |B|)} < 0.90$ are pruned immediately before computing intersections.
-3. **Disjoint Set Union (DSU) Clustering**:
-   - Groups candidates into connected components using path compression and union-by-rank.
-   - Emits structured [`DuplicateCluster`](file:///home/shubhamshah207/clairvoy/clairvoy/core/plugins.py) instances with member similarity scores, extension breakdowns, and content hashes.
-
-### Memory Safety & Offline Invariants
-
-- **100% Offline**: Pure Python execution relying solely on `pypdf` and standard libraries (`zipfile`, `csv`, `xml.etree.ElementTree`). Zero network calls or external cloud services.
-- **Strict Memory Ceilings**:
-  - Max buffer read: 25 MB (`MAX_BUFFER_BYTES = 25 * 1024 * 1024`).
-  - Max words extracted: 50,000 words (`MAX_WORDS = 50_000`).
-  - Max PDF pages: 50 pages (`MAX_PDF_PAGES = 50`).
-- **Graceful Fault Tolerance**: Corrupted archives, binary files renamed with document extensions, unreadable streams, or encrypted PDFs without empty passwords safely return `None` and are logged at `DEBUG` level without crashing the pipeline.
+| Criteria | Scoring Adjustment | Rationale |
+|---|---|---|
+| **Media Resolution** | $+(\text{width} \times \text{height})$ | Always prioritize master/uncompressed assets. |
+| **File Size** | $+(\text{bytes} / 1024)$ | Higher information density receives bonus. |
+| **Clean Path (Seniority)** | $+50$ to $+100$ | Shorter paths and master directories preferred over deep subfolders. |
+| **Duplicate Naming Penalty** | $-500$ | Penalizes files containing `copy`, `(1)`, `_1`, `dupe`, or trailing numbers. |
+| **Creation/Modification Date** | Tie-breaker | Older timestamp is preserved when all other scores match. |
 
 ---
 
-## 6. Keeper Resolution & Scoring Engine
+## 5. Google Suite Premier Web UI Architecture
 
-When duplicate clusters are identified, `CompositeKeeperStrategy` determines which file to keep (`ActionType.KEEP`) and which to flag as duplicates (`ActionType.DUPLICATE`).
-
-### Scoring Criteria:
-1. **Resolution & Media Dimensions**: Higher resolution receives higher score.
-2. **File Size & Bitrate**: Higher information density receives bonus.
-3. **Duplicate Token Penalties**: Filenames containing `copy`, `(1)`, `_1`, `dupe`, or trailing numeric suffixes receive severe penalties.
-4. **Directory Seniority / Clean Path Bonus**: Shorter, cleaner directory paths receive preference over deeply nested temp folders.
-5. **Modification Time Tie-Breaking**: When scores are identical, the oldest original file is preserved.
-6. **Document Categorization**: Clusters tagged with `MatchType.CONTENT_NEAR_DUPLICATE` are classified as `ImageCategory.DOCUMENT` in duplicate records and scan summaries.
-
----
-
-## 7. Persistent Run Management & History Architecture
-
-Clairvoy automatically maintains scan run history and provides instant report hydration across CLI and Web environments via [`RunManager`](file:///home/shubhamshah207/clairvoy/clairvoy/core/run_manager.py).
-
-```
-+-----------------------------------------------------------------------------------------+
-|                               RUN MANAGEMENT ARCHITECTURE                               |
-+-----------------------------------------------------------------------------------------+
-|                                                                                         |
-|   Scan Completion (CLI / Web Engine)                                                    |
-|          |                                                                              |
-|          v                                                                              |
-|   RunManager.register_run(summary)                                                      |
-|          |                                                                              |
-|          v                                                                              |
-|   Persistent Storage (~/.clairvoy/runs.json) <---> Auto-Discovery (known directories)   |
-|          |                                                                              |
-|          +--------------------------------------+---------------------------------------+
-|          |                                                              |
-|          v                                                              v
-|   CLI Interface (`clairvoy runs list / show`)              Web UI API (`/api/runs`, `/load`)
-|   * Clean ASCII table listing past scan runs              * Top header "📂 Runs:" dropdown
-|   * Deep inspection of run metrics                        * 1-click run switching without rescan
-|   * Launch UI loaded to specific run (`--run`)            * Auto-hydrates latest run on load
-+-----------------------------------------------------------------------------------------+
-```
-
-### Key Components:
-- **`RunRecord` Schema**: Serializes `run_id`, ISO timestamp, `scanned_paths`, duplicate counts, recoverable space (MB/GB), category breakdown, and paths to `clairvoy_summary.json`, `clairvoy_duplicates.csv`, and `clairvoy_quarantine.sh`.
-- **Auto-Discovery**: Automatically inspects well-known directories (`~/clairvoy_drive_e_reports`, `./_dedupe_reports`, `~/.clairvoy/reports`) to index preexisting scan runs without requiring manual re-scanning.
-- **CLI Commands**:
-  - `clairvoy runs list`: Formats past scan runs in an ASCII table.
-  - `clairvoy runs show <RUN_ID>`: Displays detailed metrics, breakdown, and file paths.
-  - `clairvoy ui --report <PATH>` / `clairvoy ui --run <RUN_ID>`: Pre-loads specific scan data into the web dashboard.
-- **Web UI Hydration**:
-  - `GET /api/runs`: Lists available runs ordered by newest first.
-  - `POST /api/runs/load`: Dynamically swaps the active dashboard state and updates path traversal whitelists for media thumbnails.
-  - Automatically loads the latest run on page load if the server was idle.
-
----
-
-## 8. Premier Storage Optimization Studio UX Architecture
-
-Inspired by industry benchmarks **CleanMyMac X** and **Immich**, Clairvoy features a modern, responsive, 100% offline storage optimization studio designed for rapid review and safe curation across tens of thousands of duplicate clusters:
-
-```
-+-----------------------------------------------------------------------------------------+
-|                                CLAIRVOY PREMIER WEB STUDIO                              |
-+-----------------------------------------------------------------------------------------+
-|                                                                                         |
-|  [Header Bar]  Logo  |  📂 Past Runs Switcher  |  [+ New Scan Drawer Toggle]            |
-|                                                                                         |
-|  +-----------------------------------------------------------------------------------+  |
-|  | HERO STORAGE RECLAMATION METER                                                    |  |
-|  | Recoverable Space: 68.22 GB  |  Total Scanned: 43,086  |  Duplicates: 10,463      |  |
-|  | [=== Photos: 52GB ===][== Screencaps: 8GB ==][= Docs: 5GB =][= Files: 3GB =]      |  |
-|  +-----------------------------------------------------------------------------------+  |
-|                                                                                         |
-|  +-----------------------------------------------------------------------------------+  |
-|  | MULTI-FACET FILTER & SORT TOOLBAR                                                 |  |
-|  | Tabs: [All (10.4k)] [Photos (6.7k)] [Screenshots (786)] [Docs (355)] [Files]      |  |
-|  | Search: [ Filter path/name... ]  |  Type: [All / Exact / Vision]  | Sort: [Size]  |  |
-|  +-----------------------------------------------------------------------------------+  |
-|                                                                                         |
-|  +-----------------------------------------------------------------------------------+  |
-|  | HIGH-PERFORMANCE PAGINATED CLUSTER CARDS (25 / 50 / 100 per page)                 |  |
-|  | Cluster #102: Exact Hash (100% Match) - Wasted: 45.2 MB                           |  |
-|  |   [★ KEEPER CARD]             [DUPLICATE CARD]            [DUPLICATE CARD]        |  |
-|  |   Emerald Border              Amber/Rose Border           Amber/Rose Border       |  |
-|  |   Thumbnail + Meta            Thumbnail + Meta            Thumbnail + Meta        |  |
-|  |   [Current Keeper]            [★ Make Keeper]             [★ Make Keeper]         |  |
-|  |                               [Compare Side-by-Side]      [Compare Side-by-Side]  |  |
-|  +-----------------------------------------------------------------------------------+  |
-|                                                                                         |
-|  +-----------------------------------------------------------------------------------+  |
-|  | FLOATING STICKY ACTION DOCK                                                       |  |
-|  | Staged: 10,463 Files (68.22 GB)  |  [CSV Report]  [Shell Script]  [Safe Quarantine]|  |
-|  +-----------------------------------------------------------------------------------+  |
-+-----------------------------------------------------------------------------------------+
-```
-
-### Key Capabilities:
-- **CleanMyMac Hero Storage Meter**: Visualizes total recoverable disk space with multi-colored segmented proportion bars (Photos: Cyan, Screenshots: Purple, Documents: Amber, Graphics: Pink, Files: Slate).
-- **Modality Categorization Tabs**: Instant 1-click filtering by category with dynamic counter badges.
-- **Client-Side High-Performance Pagination**: Paginates 10,000+ clusters (25, 50, or 100 per page) to ensure smooth 60fps scrolling with zero DOM lag.
-- **Interactive Keeper Swapping (`POST /api/clusters/override-keeper`)**: Allows users to swap designated `KEEP` vs `DUPLICATE` records dynamically, updating actions in place.
-- **Side-by-Side Comparison Lightbox Modal**: High-resolution image/document preview modal comparing the current Keeper against any duplicate candidate with synchronized metadata diffs (file size, resolution, modification date, file path).
-- **Sticky Action Dock**: Persistent bottom dock tracking staged quarantine count and gigabytes with direct CSV export (`GET /api/reports/csv`), Shell script download (`GET /api/reports/script`), and reversible quarantine staging.
-
----
-
-## 9. Google Photos Product Interface & Safe Deletion Architecture
-
-Clairvoy features an authentic, 100% offline Google Photos product interface modeled directly on **Google Photos**, **Google Drive**, and **Google One**:
+The embedded web interface delivers a premier, 100% offline Google Suite product experience modeled after Google One, Google Photos, and Google Drive:
 
 ```
 +---------------------------------------------------------------------------------------------------------+
-|                                      CLAIRVOY GOOGLE PHOTOS STUDIO                                      |
+|                                      CLAIRVOY PREMIER WEB STUDIO                                        |
 +---------------------------------------------------------------------------------------------------------+
+| [Header] 👁️ Clairvoy Studio  |  [ 🔍 Search duplicates... ]  |  [⚡ 1-Click Clean Exact] [⌨️ ?] [🟢 Local]|
 |                                                                                                         |
-|  [Default Header]   [Pinwheel] Clairvoy Studio   |  [ 🔍 Search duplicate photos, videos, docs... ]   |  [⌨️ ?] [🟢 Local]|
-|  [Selection Mode]   [✕] 14 selected (248.5 MB)   |  [Select All] [Clear] [🗑️ Trash] [⚠️ Delete] [📦 Quaran]  |
-|                                                                                                         |
-|  +-------------------------+  +-----------------------------------------------------------------------+ |
-|  | GOOGLE NAV RAIL         |  | 🌐 All Duplicates (10,463 sets)    Sort: [Size ▼]   Size: [ S | M | L ]| |
-|  |                         |  +-----------------------------------------------------------------------+ |
-|  | [+ New Scan] (Primary)  |  | SECTION: Duplicate Set #1 • Visual AI (98.4%) • 24.5 MB  [🔍 Compare] | |
-|  | [📂 Scan Run: Run 1 ▼]  |  | +-------------------------------------------------------------------+ | |
-|  |                         |  | | [★] [IMG]    [ ] [▶ VIDEO]   [ ] [IMG]    [ ] [▶ VIDEO]   [ ] [IMG] | | |
-|  | CATEGORIES:             |  | |  ★ Keeper     98.4% Match     98.4% Match  100% Match    98.4% Match | | |
-|  | [🖼️ Photos   6.6k  ✕]  |  | +-------------------------------------------------------------------+ | |
-|  | [🎥 Videos   2.5k  ✕]  |  +-----------------------------------------------------------------------+ |
-|  | [📸 Screens   786   ✕]  |                                                                            |
-|  | [📄 Docs      355   ✕]  |                                                                            |
-|  | [📦 Files     136   ✕]  |                                                                            |
-|  | [🌐 All     10.4k    ]  |                                                                            |
-|  | TOOLS:                  |                                                                            |
-|  | [📁 Drive List]         |                                                                            |
-|  | [🧹 Clean up]           |                                                                            |
-|  | [🗑️ Trash & Audit]     |                                                                            |
-|  |-------------------------|                                                                            |
-|  | ☁️ STORAGE [68.22 GB]   |                                                                            |
-|  | [===== 68.22 GB ======] |                                                                            |
-|  +-------------------------+                                                                            |
-+---------------------------------------------------------------------------------------------------------+
-                                        |
-                 +----------------------+----------------------+
-                 v                                             v
-       [Quarantine Engine]                               [Delete Engine]
-       clairvoy/engines/quarantine.py                    clairvoy/engines/delete_engine.py
-                 |                                             |
-                 +---> _duplicate_quarantine/                  +---> .clairvoy_trash/ (Soft)
-                 +---> quarantine_manifest.json                +---> os.unlink() (Permanent)
-                                                               +---> deletion_audit.json
-```
-
-### Key Capabilities:
-- **Smart Clean Recommendation Hero Banner (Gemini 2 & CleanMyMac Parity)**:
-  - Prominent recoverable storage recommendation banner (`#smartCleanHero`) calculating total reclaimable gigabytes.
-  - Automated selection rule presets:
-    - `Keep Best Copy (Auto)`: Preserves highest resolution/original files.
-    - `Keep Oldest File`: Keeps oldest timestamp.
-    - `Keep Newest File`: Keeps newest timestamp.
-    - `Keep Shortest Path`: Keeps cleanest, least nested path.
-    - `Select All Duplicates` / `Clear All Selections`.
-  - 1-Click Direct Actions: `[🗑️ Move Duplicates to Trash]` and `[📦 Quarantine]`.
-- **Cohesive Cluster Cards**:
-  - Each duplicate set is encapsulated in a unified, elevated M3 card (`.m3-card`) displaying:
-    - Primary file name and parent folder path hint (`📁 /path/to/folder • X copies`).
-    - Match algorithm badge (`Exact Byte Hash`, `Visual AI Match`, etc.).
-    - Reclaimable space badge (`-XX MB wasted`).
-    - Cluster-level 1-click action button: `[★ Keep Best & Clean Rest]` / `[✓ Clean Ready]`.
-    - Direct `[⇄ Compare Diff]` side-by-side inspection launcher.
-- **Crystal-Clear Keeper vs Duplicate Visual Identity**:
-  - **Keeper Tile**: Framed in Google Emerald (`border-2 border-[#81c995] bg-[#81c995]/5`), prominent `★ BEST COPY (KEEPER)` badge, and `✓ Preserved Original (Kept)` subtitle.
-  - **Duplicate Candidates**: Red-accented checkmarks when marked for removal, similarity match pill, and 1-click `★ Keep This` promotion button on hover.
-- **Rich Keyboard Navigation & Shortcuts**:
-  - `Space` / `Enter`: Launch Lightbox / toggle side-by-side split comparison.
-  - `←` / `→` / `A` / `D`: Navigate items in lightbox or paginate gallery.
-  - `K`: Promote currently viewed duplicate to Keeper.
-  - `X` / `Del`: Toggle duplicate selection for deletion.
-  - `Esc`: Dismiss lightbox, drawers, or dialogs.
-  - `?`: Open interactive Keyboard Shortcuts cheat-sheet modal (`#shortcutsModal`).
-- **Interactive Toast Notifications**:
-  - Slide-up pill notifications (`#toastNotification`) giving instant tactile feedback for keeper promotions, preset applications, and batch actions.
-- **Google Photos Top Selection Bar (Zero Floating Windows)**:
-  - Eliminates obstructing bottom floating docks or modal pill bars.
-  - When 1 or more photos/files are selected, the Top App Bar smoothly morphs into the Google Photos Selection Bar (`[✕]` Deselect, `{count} selected ({size})`, `[Select All]`, `[🗑️ Move to Trash]`, `[⚠️ Delete Permanently]`, `[📦 Quarantine]`, `[📄 CSV]`).
-- **Left Sidebar Category Navigation with Filter Clear Crosses (`✕`)**:
-  - Categories (Photos, Videos, Screenshots, Documents, Other Files, All Duplicates) are organized in the left navigation rail alongside dynamic count badges.
-  - When a category is active, it highlights with Google Blue and reveals an instant `✕` (cross) button to clear the filter back to "All Duplicates".
-  - The gallery header is decluttered from horizontal chips, showing only the active category breadcrumb and an interactive `[✕ Clear Filter]` chip.
-- **Zero Auto-Selection on Load / Refresh**:
-  - Employs an explicit opt-in selection architecture (`selectedPaths = new Set()`) rather than inverted negative exclusions.
-  - On initial page load or browser refresh, `selectedPaths` initializes empty (0 items selected). Checkboxes remain unselected, and the standard Google floating search header remains tranquil and prominent until items are deliberately chosen or preset rules are triggered.
-- **Google Drive Left Navigation Rail Primary Actions**:
-  - The `+ New Scan` primary action button and the `Scan Run` session switcher (`#runsDropdown`) are positioned at the very top of the left sidebar rail, replicating Google Drive's iconic `+ New` button and folder switcher layout.
-  - This declutters the top-right header, keeping it clean with only subtle Keyboard Shortcuts and Local Offline status pills.
-- **Left-Bottom Persistent Storage Widget**:
-  - Storage consumption and recoverable gigabytes pinned strictly to the bottom-left sidebar navigation drawer (mirroring Google Drive and Google Photos storage indicator), keeping the gallery clean and focused on media.
-- **Dynamic Thumbnail & Icon Size Controls**:
-  - Segmented `Small`, `Medium`, and `Large` controls allowing users to switch between dense compact browsing (8-10 columns), balanced Google Photos grid (4-6 columns), or high-detail preview cards (2-4 columns).
-- **Comprehensive Video Thumbnail Extraction & Streaming**:
-  - Video keyframe thumbnail extraction via `ffmpeg` pipeline at 0.5s–1.0s cached in LRU memory (`GET /api/thumbnail`).
-  - Native media streaming endpoint (`GET /api/media`) with `accept-ranges: bytes` and video MIME headers (`video/mp4`, `video/webm`, `video/quicktime`, etc.).
-  - Video badges (`▶ VIDEO`) rendered over video tiles in the grid.
-- **Google Photos Full-Screen Lightbox Viewer & Video Diff**:
-  - Full-screen pitch-black viewer with top action bar (`[← Back]`, `[★ Make Keeper]`, `[⇄ Side-by-Side Diff]`, `[ℹ️ Details]`).
-  - Renders native `<video controls autoplay>` for video files and high-resolution `<img>` for photos.
-  - Instant side-by-side comparison mode comparing keeper against duplicate candidates with synchronized dimensions, size, and paths for both photos and video playback.
-- **Google Drive List View**:
-  - Tabular view for reviewing documents, archives, and spreadsheets with synced selection state and thumbnail previews.
-- **Safe Deletion Engine (`DeleteEngine`)**:
-  - **Mode A: Soft Delete (Move to Trash)**: Isolates files to `.clairvoy_trash/` with a rollback manifest for 1-click restoration via `POST /api/delete/restore`.
-  - **Mode B: Permanent Deletion**: Unlinks duplicate files permanently while enforcing hard assertions that `KEEP` files can never be deleted, producing an immutable audit log.
-  - **Shell Script Generation (`GET /api/reports/delete-script`)**: Generates an audit-ready `delete_duplicates.sh` script with posix quoting and `rm -f --` safety.
-- **Google Workspace Storage Scan Modal & Host Drive Browser**:
-  - Replaces rudimentary drawer with `#newScanModal`.
-  - **Native Host OS Dialog (`POST /api/system/pick-folder`)**: Uses native Tkinter OS file manager dialog when display/desktop is attached (`DISPLAY` / `WAYLAND_DISPLAY`), allowing seamless host directory selection.
-  - **In-App Google Drive Directory Browser (`GET /api/system/browse-directories` & `#driveBrowserModal`)**: For headless servers or in-browser navigation, provides an authentic file explorer with instant shortcuts (`Pictures`, `Videos`, `Home`, `Drives`, `/mnt`), path breadcrumb navigation, and subfolder picking.
-  - Quick target chips (`#scanTargetsList`) with instant add/remove badges and multi-directory batch scanning.
-- **Dual Cleaning Recommendation Tracks (100% Exact Clones vs Similarity Review)**:
-  - Splits deduplication cleanup into two separate operational tracks:
-    - **⚡ Track 1: 100% Byte-Exact Clones (`#heroExactGb`)**: Zero risk, bit-for-bit identical hashes (`EXACT_HASH`). Can be directly batch-cleaned into Trash or Quarantine with 1 click without requiring manual verification. Cards feature vibrant emerald `⚡ 100% EXACT CLONE` badges and `⚡ Keep Original & Clean Copy` buttons.
-    - **🔍 Track 2: Similar & Near-Duplicates (`#heroSimilarGb`)**: Visual resemblance, resized photos, or document drafts (`CONTENT_NEAR_DUPLICATE`, `VISUAL_SIMILARITY`). Explicitly tagged as `Review Required`, with instant 1-click side-by-side diff comparison (`[⇄ Review Diff]`) and candidate inspection.
-- **Match Confidence Filtering**:
-  - Segmented toggle in gallery controls (`All`, `⚡ Exact`, `🔍 Similar`) and Left Sidebar rail (`⚡ 100% Exact`, `🔍 Similar (Review)`) with dynamic duplicate set counts.
-
----
-
-## 7. Dual Pure Rust Architecture (`crates/*`)
-
-Clairvoy features a dual-engine architecture where an ultra-high-performance pure Rust engine (`crates/*`) coexists seamlessly with the Python engine, adhering to strict manifest compatibility (`ScanSummary`) and memory ceiling invariants.
-
-```
-+---------------------------------------------------------------------------------------------------------+
-|                                    PURE RUST ENGINE WORKSPACE (crates/*)                                |
-+---------------------------------------------------------------------------------------------------------+
-|                                                                                                         |
-|  +--------------------+        +---------------------+                                                  |
-|  | clairvoy-cli       |        | clairvoy-server     |                                                  |
-|  | (clairvoy-rs CLI)  |        | (High-Throughput)   |                                                  |
-|  +---------+----------+        +----------+----------+                                                  |
-|            |                              |                                                             |
-|            +---------------+--------------+                                                             |
-|                            |                                                                            |
-|                            v                                                                            |
-|                 +--------------------+                                                                  |
-|                 | clairvoy-engine    |                                                                  |
-|                 | DeduplicationPipe..|                                                                  |
-|                 | CompositeKeeper... |                                                                  |
-|                 +----+----------+----+                                                                  |
-|                      |          |                                                                       |
-|         +------------+          +------------+                                                          |
-|         v                                    v                                                          |
-|  +--------------------+               +--------------------+                                            |
-|  | clairvoy-plugins   |               | clairvoy-scanner   |                                            |
-|  | ExactHashMatcher   |               | jwalk parallel     |                                            |
-|  | PhotoVisionMatcher |               | flume bounded queue|                                            |
-|  +---------+----------+               | SIMD XXH3 4KB      |                                            |
-|            |                          +----------+---------+                                            |
-|            v                                     |                                                      |
-|  +--------------------+                          |                                                      |
-|  | clairvoy-model     |                          |                                                      |
-|  | ModelBackend trait |                          |                                                      |
-|  | PerceptualHash (p) |                          |                                                      |
-|  +---------+----------+                          |                                                      |
-|            |                                     |                                                      |
-|            +------------------+------------------+                                                      |
-|                               |                                                                         |
-|                               v                                                                         |
-|                 +--------------------+                                                                  |
-|                 | clairvoy-core      |                                                                  |
-|                 | FileEntry, Record, |                                                                  |
-|                 | ScanSummary, Error |                                                                  |
-|                 +--------------------+                                                                  |
+| +---------------------+  +----------------------------------------------------------------------------+ |
+| | GOOGLE NAV RAIL     |  | GOOGLE ONE SMART CLEAN 2-TRACK RECOVERY HERO                               | |
+| |                     |  | +------------------------------------+ +---------------------------------+ | |
+| | [+ New Scan]        |  | | ⚡ 100% Byte-Exact Clones          | | 🔍 Similar Candidates (Review)  | | |
+| | [📂 Runs Switcher]  |  | | 0.00 GB • 0 redundant copies       | | 18.42 GB • 3,856 copies         | | |
+| |                     |  | | Direct Clean Safe (Bit-for-bit)    | | Needs Human Judgement           | | |
+| | VIEWS:              |  | | [⚡ 1-Click Clean Exact]           | | [🔍 Start Guided Review]        | | |
+| | [📊 Dashboard]      |  | +------------------------------------+ +---------------------------------+ | |
+| | [🖼️ Photos Studio]  |  +----------------------------------------------------------------------------+ |
+| | [📁 Drive Table]    |  | TOP SHOT SIDE-BY-SIDE COMPARISON STUDIO                                    | |
+| | [👁️ Auto Watcher]   |  | [★ KEEPER: Master 4K.jpg]    [⇄ 1-Click Swap]    [DUPLICATE: Copy (1).jpg]   | |
+| |                     |  | [Synchronized Loupe Zoom]                         [Synchronized Loupe Zoom]  | |
+| | STORAGE GAUGE:      |  +----------------------------------------------------------------------------+ |
+| | [ 18.42 GB Clones ] |  | GOOGLE DRIVE STRUCTURED WORKSPACE                                          | |
+| | 3,856 Duplicates    |  | Density: [Compact | Standard | Comfortable]  Columns: [Name | Size | Path] | |
+| +---------------------+  +----------------------------------------------------------------------------+ |
 +---------------------------------------------------------------------------------------------------------+
 ```
 
-### 7.1. Crate Breakdown & Responsibilities
-
-1. **[`crates/clairvoy-core`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core)**:
-   - Canonical domain models: `FileEntry`, `DuplicateRecord`, `DuplicateCluster`, `ScanSummary`, `ImageCategory`, and `ScanStats`.
-   - Plugin & strategy traits: `MatcherPlugin`, `KeeperStrategy`, `ActionHandler`.
-   - Typed error hierarchies with `thiserror`: `EngineError`.
-   - **Embedded SQLite Persistence Engine (`clairvoy_core::db::Database`)**:
-     - Embedded zero-config SQLite database (`~/.clairvoy/clairvoy.db`) running in Write-Ahead Logging (`WAL`) mode with `PRAGMA synchronous = NORMAL;` and 64MB memory page caching.
-     - Normalized relational schema: `watched_paths`, `scan_runs`, `file_index`, `duplicate_clusters`, and `duplicate_items`.
-     - Sub-millisecond indexed queries replacing multi-megabyte CSV and JSON files, with atomic transactional rollbacks on keeper overrides and file deletions.
-
-2. **[`crates/clairvoy-scanner`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-scanner)**:
-   - High-speed directory traversal using `jwalk` multi-threaded worker pools.
-   - SIMD XXH3 4KB quick-hashing (>10 GB/s) for immediate candidate discrimination.
-   - Bounded backpressure streaming using `flume::bounded(2048)` guaranteeing $\le 50\text{MB}$ RAM across multi-million file workloads.
-   - Resilient file error handling: gracefully skips unreadable or inaccessible files without scan aborts.
-
-3. **[`crates/clairvoy-model`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-model)**:
-   - Pluggable AI model runtime abstraction: `ModelBackend` trait with dynamic dispatch (`Arc<dyn ModelBackend>`).
-   - Built-in zero-weight `PerceptualHashBackend` (64-bit blockhash/pHash).
-   - Dynamic model registry: `models.toml` schema parsing with `ModelRegistry` supporting onnx, tch, and perceptual backends.
-
-4. **[`crates/clairvoy-plugins`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-plugins)**:
-   - Tier 1: `ExactHashMatcherPlugin` using parallel Rayon BLAKE3 SIMD hashing with 0-byte guards.
-   - Tier 2: `PhotoVisionMatcherPlugin` visual AI candidate integration holding `Arc<dyn ModelBackend>`.
-
-5. **[`crates/clairvoy-engine`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-engine)**:
-   - `DeduplicationPipeline`: Multi-tier matcher execution pipeline with live progress reporting, short-circuit pruning, and sequential global `group_id` re-indexing.
-   - `CompositeKeeperStrategy`: Deterministic scoring rule engine evaluating folder seniority, copy/duplicate naming patterns, and cross-platform path normalization.
-   - **`AutonomousWatcher` Background Daemon**:
-     - Real-time inotify monitoring via the `notify` crate with a 5-second sliding debounce quiet window.
-     - 30-minute periodic consistency sweep ensuring zero dropped filesystem events.
-     - Incremental delta deduplication skipping unchanged `(path, size, mtime)` files with zero disk seeks.
-
-6. **[`crates/clairvoy-server`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-server)**:
-   - High-throughput async Axum web server exposing full M3 SPA at `/`, `/api/status`, `/api/status/stream` (SSE), `/api/scan`, `/api/runs`, `/api/system/browse-directories`, and `/api/watch/paths`.
-   - Shared atomic telemetry state (`SharedScanState`) managing scan phases, file indexing counters, and duration metrics.
-   - Static embedded single-page application (`include_str!("index.html")`) requiring zero asset extraction.
-
-7. **[`crates/clairvoy-cli`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-cli)**:
-   - Native binary executable `clairvoy-rs` built with Clap derive parsing.
-   - Commands: `clairvoy-rs scan <paths...>` and `clairvoy-rs ui [--port <port>] [--host <host>] [--no-daemon]`.
-   - Flag-based daemon decoupling: `--no-daemon` allows running purely in interactive on-the-fly scanning mode without background filesystem surveillance threads.
-
-### 7.2. Empirical Performance & Benchmarks
-Empirical benchmarks comparing the pure Rust binary (`clairvoy-rs`) and the Python engine across real-world datasets are documented in [`docs/BENCHMARKS.md`](file:///home/shubhamshah207/clairvoy/docs/BENCHMARKS.md), highlighting up to 36x throughput gains, 97+ seconds saved on multi-thousand photo archives, and strict $\le 35\text{MB}$ RAM limits.
-
-### 7.3. Migration & Python Deprecation Notice
-The Python web server (`clairvoy/web/app.py`) is officially deprecated in favor of `crates/clairvoy-server`. All future web UI features, persistence layers, and daemon watchers are implemented in pure Rust.
+### Key Interactive Features:
+1. **Google One 2-Track Smart Clean Recovery**:
+   - **Track 1 (100% Byte-Exact Clones)**: Bit-for-bit identical hashes (`EXACT_HASH`). Can be batch cleaned into Trash or Quarantine with 1 click without manual review.
+   - **Track 2 (Similar Candidates)**: Resized photos, drafts, or bursts. Single primary action: `[ 🔍 Start Guided Review ]` launching the comparison studio.
+2. **Google Photos Top Shot Comparison Studio**:
+   - Side-by-side split view comparing designated Keeper against duplicate candidates.
+   - Synchronized loupe zoom and pan tracking cursor movement across both images simultaneously.
+   - 1-click Keeper promotion (`[★ Make Keeper]`) and instant candidate trashing.
+3. **Google Drive Structured Workspace**:
+   - Sortable multi-column table view for bulk review across deep folder hierarchies.
+   - Density switcher (`Compact`, `Standard`, `Comfortable`).
+4. **Safe Deletion Engine**:
+   - **Soft Delete (Trash)**: Relocates duplicate files to `.clairvoy_trash/` with a timestamped manifest for 1-click undo.
+   - **Permanent Deletion**: Direct unlinking strictly asserting that keeper files can never be deleted.
+   - **Zero-Space Hardlinking**: Safely substitutes duplicate files with native filesystem hardlinks.

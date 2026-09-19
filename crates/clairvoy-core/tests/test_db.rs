@@ -67,7 +67,9 @@ fn test_db_save_and_query_scan_run() {
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].run_id, "run_1");
 
-    let clusters = db.get_clusters_for_run("run_1", None, 0, 50).expect("Get clusters");
+    let clusters = db
+        .get_clusters_for_run("run_1", None, 0, 50)
+        .expect("Get clusters");
     assert_eq!(clusters.len(), 1);
     assert_eq!(clusters[0].items.len(), 2);
 }
@@ -113,23 +115,45 @@ fn test_db_override_keeper() {
         ..Default::default()
     };
 
-    db.save_scan_run("run_override", &summary).expect("Save run");
-    let clusters = db.get_clusters_for_run("run_override", None, 0, 10).expect("Get clusters");
+    db.save_scan_run("run_override", &summary)
+        .expect("Save run");
+    let clusters = db
+        .get_clusters_for_run("run_override", None, 0, 10)
+        .expect("Get clusters");
     assert_eq!(clusters.len(), 1);
     let cluster_id = clusters[0].id;
 
     // Initially img1 is KEEP, img2 is DUPLICATE
-    let item1 = clusters[0].items.iter().find(|i| i.path == "/tmp/test/img1.jpg").unwrap();
-    let item2 = clusters[0].items.iter().find(|i| i.path == "/tmp/test/img2.jpg").unwrap();
+    let item1 = clusters[0]
+        .items
+        .iter()
+        .find(|i| i.path == "/tmp/test/img1.jpg")
+        .unwrap();
+    let item2 = clusters[0]
+        .items
+        .iter()
+        .find(|i| i.path == "/tmp/test/img2.jpg")
+        .unwrap();
     assert_eq!(item1.action, "KEEP");
     assert_eq!(item2.action, "DUPLICATE");
 
     // Override keeper to img2
-    db.override_keeper(cluster_id, "/tmp/test/img2.jpg").expect("Override keeper");
+    db.override_keeper(cluster_id, "/tmp/test/img2.jpg")
+        .expect("Override keeper");
 
-    let updated_clusters = db.get_clusters_for_run("run_override", None, 0, 10).expect("Get updated clusters");
-    let updated_item1 = updated_clusters[0].items.iter().find(|i| i.path == "/tmp/test/img1.jpg").unwrap();
-    let updated_item2 = updated_clusters[0].items.iter().find(|i| i.path == "/tmp/test/img2.jpg").unwrap();
+    let updated_clusters = db
+        .get_clusters_for_run("run_override", None, 0, 10)
+        .expect("Get updated clusters");
+    let updated_item1 = updated_clusters[0]
+        .items
+        .iter()
+        .find(|i| i.path == "/tmp/test/img1.jpg")
+        .unwrap();
+    let updated_item2 = updated_clusters[0]
+        .items
+        .iter()
+        .find(|i| i.path == "/tmp/test/img2.jpg")
+        .unwrap();
     assert_eq!(updated_item1.action, "DUPLICATE");
     assert_eq!(updated_item2.action, "KEEP");
 }
@@ -139,7 +163,8 @@ fn test_db_file_index_caching() {
     let tmp = NamedTempFile::new().unwrap();
     let db = Database::open(Some(tmp.path())).expect("Should open db");
 
-    db.save_scan_run("run_cache_1", &ScanSummary::default()).expect("Save scan run");
+    db.save_scan_run("run_cache_1", &ScanSummary::default())
+        .expect("Save scan run");
 
     let entry = CachedFileRecord {
         id: 0,
@@ -154,7 +179,9 @@ fn test_db_file_index_caching() {
 
     db.upsert_file_index(&entry).expect("Upsert file index");
 
-    let cached = db.get_cached_file("/tmp/test/cached.png").expect("Get cached");
+    let cached = db
+        .get_cached_file("/tmp/test/cached.png")
+        .expect("Get cached");
     assert!(cached.is_some());
     let retrieved = cached.unwrap();
     assert_eq!(retrieved.path, "/tmp/test/cached.png");
@@ -165,7 +192,9 @@ fn test_db_file_index_caching() {
     assert_eq!(retrieved.category, "PHOTO");
 
     // Non-existent file
-    let missing = db.get_cached_file("/tmp/test/nonexistent.jpg").expect("Query missing");
+    let missing = db
+        .get_cached_file("/tmp/test/nonexistent.jpg")
+        .expect("Query missing");
     assert!(missing.is_none());
 }
 
@@ -217,9 +246,12 @@ fn test_db_get_scan_summary() {
         category_breakdown: [("PHOTO".to_string(), 1)].into_iter().collect(),
     };
 
-    db.save_scan_run("run_summary_test", &summary).expect("Save scan run");
+    db.save_scan_run("run_summary_test", &summary)
+        .expect("Save scan run");
 
-    let loaded = db.get_scan_summary("run_summary_test").expect("Get scan summary");
+    let loaded = db
+        .get_scan_summary("run_summary_test")
+        .expect("Get scan summary");
     assert!(loaded.is_some());
     let loaded_summary = loaded.unwrap();
     assert_eq!(loaded_summary.total_files_scanned, 10);
@@ -297,10 +329,13 @@ fn test_db_remove_duplicate_items() {
         ..Default::default()
     };
 
-    db.save_scan_run("run_delete_test", &summary).expect("Save scan run");
+    db.save_scan_run("run_delete_test", &summary)
+        .expect("Save scan run");
 
     // Remove the exact duplicate item
-    let (removed_count, freed_bytes) = db.remove_duplicate_items(&["/tmp/test/img1_copy.jpg".to_string()]).expect("Remove duplicate item");
+    let (removed_count, freed_bytes) = db
+        .remove_duplicate_items(&["/tmp/test/img1_copy.jpg".to_string()])
+        .expect("Remove duplicate item");
     assert_eq!(removed_count, 1);
     assert_eq!(freed_bytes, 1048576);
 
@@ -314,5 +349,3 @@ fn test_db_remove_duplicate_items() {
     assert_eq!(updated_summary.groups[0].path, "/tmp/test/img2.jpg");
     assert_eq!(updated_summary.groups[1].path, "/tmp/test/img2_edited.jpg");
 }
-
-

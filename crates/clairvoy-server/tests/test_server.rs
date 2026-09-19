@@ -3,7 +3,8 @@ use axum_test::TestServer;
 use clairvoy_core::db::Database;
 use clairvoy_engine::watcher::AutonomousWatcher;
 use clairvoy_server::{
-    build_router, build_router_with_services, build_router_with_state, AppScanState, SharedScanState,
+    build_router, build_router_with_services, build_router_with_state, AppScanState,
+    SharedScanState,
 };
 use serde_json::json;
 use std::sync::{Arc, Mutex};
@@ -245,7 +246,11 @@ async fn test_server_watch_daemon_toggle() {
     assert_eq!(body["paused"], true);
 
     // Test with active watcher attached
-    let watcher = Arc::new(AutonomousWatcher::start(Arc::clone(&db), 100, 0).await.unwrap());
+    let watcher = Arc::new(
+        AutonomousWatcher::start(Arc::clone(&db), 100, 0)
+            .await
+            .unwrap(),
+    );
     let app_watcher = build_router_with_services(
         Arc::clone(&state),
         Arc::clone(&db),
@@ -382,9 +387,7 @@ async fn test_server_duplicates_and_runs_sqlite() {
     assert_eq!(runs_body[0]["total_files"], 5);
 
     // 4. /api/duplicates queries by run_id
-    let res_dup = server
-        .get("/api/duplicates?run_id=run_sqlite_test")
-        .await;
+    let res_dup = server.get("/api/duplicates?run_id=run_sqlite_test").await;
     assert_eq!(res_dup.status_code(), 200);
     let clusters: Vec<serde_json::Value> = res_dup.json();
     assert_eq!(clusters.len(), 1);
@@ -454,7 +457,9 @@ async fn test_server_ambient_telemetry_dock_elements() {
 
 #[tokio::test]
 async fn test_server_hardlink_execute() {
-    use clairvoy_core::models::{ActionType, DuplicateRecord, ImageCategory, MatchType, ScanSummary};
+    use clairvoy_core::models::{
+        ActionType, DuplicateRecord, ImageCategory, MatchType, ScanSummary,
+    };
 
     let tmp = std::env::temp_dir().join("clairvoy_test_hardlink");
     let _ = std::fs::create_dir_all(&tmp);
@@ -573,4 +578,3 @@ async fn test_server_audits_section_elements() {
     assert!(html.contains("inspectHistoricalRun"));
     assert!(!html.contains("runsDropdown"));
 }
-

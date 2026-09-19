@@ -6,7 +6,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 #[derive(Parser, Debug)]
-#[command(name = "clairvoy-rs", version = "0.2.0", about = "Pure Rust High-Performance Deduplication Engine")]
+#[command(
+    name = "clairvoy-rs",
+    version = "0.2.0",
+    about = "Pure Rust High-Performance Deduplication Engine"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -68,7 +72,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Commands::Scan { paths, server } => {
             if let Some(server_url) = server {
-                println!("[*] Coordinating scan across {} path(s) via Clairvoy Server ({}) ...", paths.len(), server_url);
+                println!(
+                    "[*] Coordinating scan across {} path(s) via Clairvoy Server ({}) ...",
+                    paths.len(),
+                    server_url
+                );
                 let client = reqwest::Client::new();
                 let scan_ep = format!("{}/api/scan", server_url.trim_end_matches('/'));
                 let payload = serde_json::json!({
@@ -78,16 +86,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 });
                 let res = client.post(&scan_ep).json(&payload).send().await?;
                 if !res.status().is_success() {
-                    let err_txt = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                    let err_txt = res
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
                     eprintln!("[✗] Server rejected scan request: {}", err_txt);
                     return Ok(());
                 }
-                println!("[*] Scan triggered successfully on server. Streaming real-time progress...");
+                println!(
+                    "[*] Scan triggered successfully on server. Streaming real-time progress..."
+                );
                 stream_server_progress(&server_url).await?;
             } else {
-                println!("[*] Initializing Clairvoy Pure Rust Engine across {} path(s)...", paths.len());
+                println!(
+                    "[*] Initializing Clairvoy Pure Rust Engine across {} path(s)...",
+                    paths.len()
+                );
                 let mut pipeline = clairvoy_engine::DeduplicationPipeline::new(paths);
-                pipeline.register_matcher(Arc::new(clairvoy_plugins::ExactHashMatcherPlugin::new()));
+                pipeline
+                    .register_matcher(Arc::new(clairvoy_plugins::ExactHashMatcherPlugin::new()));
 
                 let mut pb = progress::TerminalProgressBar::new("Initializing filesystem scan", 0);
                 let summary = pipeline.run(|stage, cur, tot| {
@@ -119,11 +136,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("|                 CLAIRVOY SERVER STATUS                      |");
                 println!("+-------------------------------------------------------------+");
                 println!("  Server URL:         {}", server);
-                println!("  Lifecycle Status:   {}", val.get("status").and_then(|v| v.as_str()).unwrap_or("unknown"));
-                println!("  Current Stage:      {}", val.get("stage").and_then(|v| v.as_str()).unwrap_or("-"));
-                println!("  Progress:           {}%", val.get("progress_pct").and_then(|v| v.as_u64()).unwrap_or(0));
-                println!("  Files Indexed:      {}", val.get("files_indexed").and_then(|v| v.as_u64()).unwrap_or(0));
-                println!("  Recoverable Space:  {:.2} GB ({:.1} MB)",
+                println!(
+                    "  Lifecycle Status:   {}",
+                    val.get("status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown")
+                );
+                println!(
+                    "  Current Stage:      {}",
+                    val.get("stage").and_then(|v| v.as_str()).unwrap_or("-")
+                );
+                println!(
+                    "  Progress:           {}%",
+                    val.get("progress_pct")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0)
+                );
+                println!(
+                    "  Files Indexed:      {}",
+                    val.get("files_indexed")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0)
+                );
+                println!(
+                    "  Recoverable Space:  {:.2} GB ({:.1} MB)",
                     val.get("wasted_gb").and_then(|v| v.as_f64()).unwrap_or(0.0),
                     val.get("wasted_mb").and_then(|v| v.as_f64()).unwrap_or(0.0)
                 );
@@ -147,8 +183,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             for w in watch_list {
                                 let id = w.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
                                 let p = w.get("path").and_then(|v| v.as_str()).unwrap_or("");
-                                let en = w.get("enabled").and_then(|v| v.as_i64()).unwrap_or(0) == 1;
-                                println!("  [{}] {} (Status: {})", id, p, if en { "ACTIVE" } else { "PAUSED" });
+                                let en =
+                                    w.get("enabled").and_then(|v| v.as_i64()).unwrap_or(0) == 1;
+                                println!(
+                                    "  [{}] {} (Status: {})",
+                                    id,
+                                    p,
+                                    if en { "ACTIVE" } else { "PAUSED" }
+                                );
                             }
                         }
                     }
@@ -156,7 +198,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("+-------------------------------------------------------------+");
             }
         }
-        Commands::Clean { server, exact, mode } => {
+        Commands::Clean {
+            server,
+            exact,
+            mode,
+        } => {
             let status_url = format!("{}/api/status", server.trim_end_matches('/'));
             let client = reqwest::Client::new();
             let res = client.get(&status_url).send().await?;
@@ -166,7 +212,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let val: serde_json::Value = res.json().await?;
             let summary = val.get("summary");
-            let groups = summary.and_then(|s| s.get("groups")).and_then(|g| g.as_array());
+            let groups = summary
+                .and_then(|s| s.get("groups"))
+                .and_then(|g| g.as_array());
 
             let mut targets = Vec::new();
             let mut total_bytes: u64 = 0;
@@ -174,7 +222,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for it in group_items {
                     let action = it.get("action").and_then(|v| v.as_str()).unwrap_or("");
                     let match_type = it.get("match_type").and_then(|v| v.as_str()).unwrap_or("");
-                    if action == "DUPLICATE" && (!exact || match_type == "ExactHash" || match_type == "EXACT_HASH") {
+                    if action == "DUPLICATE"
+                        && (!exact || match_type == "ExactHash" || match_type == "EXACT_HASH")
+                    {
                         if let Some(p) = it.get("path").and_then(|v| v.as_str()) {
                             targets.push(p.to_string());
                             let size_mb = it.get("size_mb").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -192,11 +242,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let total_gb = total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
             println!(
                 "[*] Found {} duplicate files ({:.2} GB). Cleaning in chunks of 150 (mode: {})...",
-                targets.len(), total_gb, mode
+                targets.len(),
+                total_gb,
+                mode
             );
 
             let chunk_size = 150;
-            let mut pb = progress::TerminalProgressBar::new(&format!("Batch {}", mode), targets.len());
+            let mut pb =
+                progress::TerminalProgressBar::new(&format!("Batch {}", mode), targets.len());
             let mut total_freed_files = 0;
             let mut total_freed_bytes: u64 = 0;
 
@@ -205,7 +258,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let current_processed = idx * chunk_size + chunk.len();
                 pb.update(
                     current_processed,
-                    &format!("Cleaning batch {}/{} ({:.2} MB freed)", idx + 1, targets.len().div_ceil(chunk_size), total_freed_bytes as f64 / 1_048_576.0)
+                    &format!(
+                        "Cleaning batch {}/{} ({:.2} MB freed)",
+                        idx + 1,
+                        targets.len().div_ceil(chunk_size),
+                        total_freed_bytes as f64 / 1_048_576.0
+                    ),
                 );
 
                 let payload = serde_json::json!({
@@ -216,11 +274,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let del_res = client.post(&delete_ep).json(&payload).send().await?;
                 if del_res.status().is_success() {
                     let res_body: serde_json::Value = del_res.json().await?;
-                    let freed = res_body.get("total_files_freed")
+                    let freed = res_body
+                        .get("total_files_freed")
                         .or_else(|| res_body.get("total_files_deleted"))
                         .and_then(|v| v.as_u64())
                         .unwrap_or(chunk.len() as u64) as usize;
-                    let bytes = res_body.get("total_bytes_freed").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let bytes = res_body
+                        .get("total_bytes_freed")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                     total_freed_files += freed;
                     total_freed_bytes += bytes;
                 }
@@ -228,7 +290,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             pb.finish(&format!(
                 "Batch clean complete: {} files processed in {} mode ({:.2} MB / {:.3} GB freed).",
-                total_freed_files, mode, total_freed_bytes as f64 / 1_048_576.0, total_freed_bytes as f64 / 1_073_741_824.0
+                total_freed_files,
+                mode,
+                total_freed_bytes as f64 / 1_048_576.0,
+                total_freed_bytes as f64 / 1_073_741_824.0
             ));
         }
         Commands::Ui {
@@ -262,7 +327,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             s.stage = "Scan complete".to_string();
                             s.progress_pct = 100;
                             s.files_indexed = cur;
-                            s.message = format!("Surveillance scan complete: {} files indexed", cur);
+                            s.message =
+                                format!("Surveillance scan complete: {} files indexed", cur);
                         } else {
                             s.status = "running".to_string();
                             s.stage = stage.to_string();
@@ -297,12 +363,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         l
                     }
                     Err(_) => {
-                        println!("[*] Starting Clairvoy Rust Web Server at http://{}:{} ...", host, port);
+                        println!(
+                            "[*] Starting Clairvoy Rust Web Server at http://{}:{} ...",
+                            host, port
+                        );
                         tokio::net::TcpListener::bind(addr).await?
                     }
                 }
             } else {
-                println!("[*] Starting Clairvoy Rust Web Server at http://{}:{} ...", host, port);
+                println!(
+                    "[*] Starting Clairvoy Rust Web Server at http://{}:{} ...",
+                    host, port
+                );
                 tokio::net::TcpListener::bind(addr).await?
             };
 
@@ -316,7 +388,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn stream_server_progress(server_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     let stream_url = format!("{}/api/status/stream", server_url.trim_end_matches('/'));
-    println!("[*] Connecting to live SSE status stream at {}...", stream_url);
+    println!(
+        "[*] Connecting to live SSE status stream at {}...",
+        stream_url
+    );
 
     let client = reqwest::Client::new();
     let mut res = client.get(&stream_url).send().await?;
@@ -343,16 +418,24 @@ async fn stream_server_progress(server_url: &str) -> Result<(), Box<dyn std::err
                     let status = val.get("status").and_then(|v| v.as_str()).unwrap_or("idle");
                     let stage = val.get("stage").and_then(|v| v.as_str()).unwrap_or("");
                     let message = val.get("message").and_then(|v| v.as_str()).unwrap_or("");
-                    let files_indexed = val.get("files_indexed").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-                    let pct = val.get("progress_pct").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                    let files_indexed = val
+                        .get("files_indexed")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as usize;
+                    let pct = val
+                        .get("progress_pct")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as usize;
 
                     if status == "running" {
                         pb.set_total(100);
                         let display_msg = if !message.is_empty() { message } else { stage };
                         pb.update(pct, display_msg);
                     } else if status == "completed" {
-                        let wasted_gb = val.get("wasted_gb").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                        let wasted_mb = val.get("wasted_mb").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        let wasted_gb =
+                            val.get("wasted_gb").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        let wasted_mb =
+                            val.get("wasted_mb").and_then(|v| v.as_f64()).unwrap_or(0.0);
                         pb.finish(&format!(
                             "Scan completed: {} files indexed ({:.2} MB / {:.3} GB recoverable space)",
                             files_indexed, wasted_mb, wasted_gb
@@ -394,7 +477,13 @@ mod tests {
 
     #[test]
     fn test_cli_parse_scan_with_server() {
-        let args = vec!["clairvoy-rs", "scan", "/tmp/dir1", "--server", "http://localhost:8000"];
+        let args = vec![
+            "clairvoy-rs",
+            "scan",
+            "/tmp/dir1",
+            "--server",
+            "http://localhost:8000",
+        ];
         let cli = Cli::try_parse_from(args).expect("Should parse scan command with server");
         match cli.command {
             Commands::Scan { paths, server } => {
@@ -407,7 +496,13 @@ mod tests {
 
     #[test]
     fn test_cli_parse_status() {
-        let args = vec!["clairvoy-rs", "status", "--follow", "--server", "http://127.0.0.1:9000"];
+        let args = vec![
+            "clairvoy-rs",
+            "status",
+            "--follow",
+            "--server",
+            "http://127.0.0.1:9000",
+        ];
         let cli = Cli::try_parse_from(args).expect("Should parse status command");
         match cli.command {
             Commands::Status { server, follow } => {
@@ -423,7 +518,11 @@ mod tests {
         let args = vec!["clairvoy-rs", "clean", "--exact", "--mode", "hardlink"];
         let cli = Cli::try_parse_from(args).expect("Should parse clean command");
         match cli.command {
-            Commands::Clean { server, exact, mode } => {
+            Commands::Clean {
+                server,
+                exact,
+                mode,
+            } => {
                 assert_eq!(server, "http://127.0.0.1:8000");
                 assert!(exact);
                 assert_eq!(mode, "hardlink");

@@ -282,9 +282,11 @@ async fn execute_scan_cycle(
 
     let db_clone = Arc::clone(db);
     let progress_cb = progress.cloned();
-    tokio::task::spawn_blocking(move || run_delta_pipeline(&db_clone, scan_paths, &watched_records, progress_cb))
-        .await
-        .map_err(|e| EngineError::Config(format!("Scan task execution failed: {e}")))?
+    tokio::task::spawn_blocking(move || {
+        run_delta_pipeline(&db_clone, scan_paths, &watched_records, progress_cb)
+    })
+    .await
+    .map_err(|e| EngineError::Config(format!("Scan task execution failed: {e}")))?
 }
 
 /// Executes deduplication pipeline and saves results to SQLite.
@@ -327,7 +329,11 @@ fn run_delta_pipeline(
     }
 
     if let Some(ref cb) = progress {
-        cb("Scan complete", summary.total_files_scanned, summary.total_files_scanned);
+        cb(
+            "Scan complete",
+            summary.total_files_scanned,
+            summary.total_files_scanned,
+        );
     }
 
     // Delta cache indexing: crawl and update file_index

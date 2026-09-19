@@ -233,7 +233,10 @@ pub async fn handle_tailwind_js() -> impl axum::response::IntoResponse {
     eprintln!("[HTTP] GET /static/tailwind.js (serving offline tailwind bundle)");
     (
         [
-            (header::CONTENT_TYPE, "application/javascript; charset=utf-8"),
+            (
+                header::CONTENT_TYPE,
+                "application/javascript; charset=utf-8",
+            ),
             (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
         ],
         TAILWIND_JS,
@@ -381,7 +384,10 @@ pub async fn handle_scan(
         return Json(serde_json::json!({ "status": "error", "message": "No paths provided" }));
     }
 
-    let paths_strings: Vec<String> = paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
+    let paths_strings: Vec<String> = paths
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
 
     {
         let mut s = state.scan_state.lock().unwrap();
@@ -527,7 +533,9 @@ pub async fn handle_runs_load(
                 );
                 s.summary = Some(summary.clone());
                 s.error = None;
-                return Ok(Json(serde_json::json!({ "status": "loaded", "summary": summary })));
+                return Ok(Json(
+                    serde_json::json!({ "status": "loaded", "summary": summary }),
+                ));
             }
         }
     }
@@ -544,7 +552,9 @@ pub async fn handle_runs_load(
             if let Ok(content) = std::fs::read_to_string(&history_file) {
                 if let Ok(runs) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
                     runs.iter()
-                        .find(|r| r.get("run_id").and_then(|id| id.as_str()) == Some(run_id.as_str()))
+                        .find(|r| {
+                            r.get("run_id").and_then(|id| id.as_str()) == Some(run_id.as_str())
+                        })
                         .and_then(|r| r.get("summary_json").and_then(|s| s.as_str()))
                         .map(PathBuf::from)
                 } else {
@@ -584,15 +594,16 @@ pub async fn handle_runs_load(
         )
     })?;
 
-    let summary: clairvoy_core::models::ScanSummary = serde_json::from_str(&file_content).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "status": "error",
-                "message": format!("Invalid summary schema: {}", e)
-            })),
-        )
-    })?;
+    let summary: clairvoy_core::models::ScanSummary =
+        serde_json::from_str(&file_content).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "message": format!("Invalid summary schema: {}", e)
+                })),
+            )
+        })?;
 
     {
         let mut s = state.scan_state.lock().unwrap();
@@ -609,7 +620,9 @@ pub async fn handle_runs_load(
         s.error = None;
     }
 
-    Ok(Json(serde_json::json!({ "status": "loaded", "summary": summary })))
+    Ok(Json(
+        serde_json::json!({ "status": "loaded", "summary": summary }),
+    ))
 }
 
 pub async fn handle_duplicates(
@@ -673,7 +686,10 @@ pub async fn handle_watch_paths_add(
     {
         let mut s = state.scan_state.lock().unwrap();
         s.status = "running".to_string();
-        s.stage = format!("Initial baseline surveillance scan for '{}'...", payload.path);
+        s.stage = format!(
+            "Initial baseline surveillance scan for '{}'...",
+            payload.path
+        );
         s.progress_pct = 0;
         s.files_indexed = 0;
         s.elapsed_seconds = 0.0;
@@ -706,10 +722,12 @@ pub async fn handle_watch_paths_toggle(
     let paths = db
         .list_watched_paths()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let record = paths
-        .into_iter()
-        .find(|p| p.id == id)
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Watched path {} not found", id)))?;
+    let record = paths.into_iter().find(|p| p.id == id).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Watched path {} not found", id),
+        )
+    })?;
 
     let new_enabled = explicit_enabled.unwrap_or(!record.enabled);
     db.toggle_watched_path(id, new_enabled)
@@ -775,9 +793,7 @@ pub async fn handle_watch_daemon_toggle(
     }
 }
 
-pub async fn handle_browse_directories(
-    Query(query): Query<BrowseQuery>,
-) -> Json<BrowseResponse> {
+pub async fn handle_browse_directories(Query(query): Query<BrowseQuery>) -> Json<BrowseResponse> {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .map(PathBuf::from)
@@ -808,8 +824,10 @@ pub async fn handle_browse_directories(
                         let has_children = std::fs::read_dir(&path)
                             .map(|mut r| {
                                 r.any(|e| {
-                                    e.map(|sub| sub.file_type().map(|st| st.is_dir()).unwrap_or(false))
-                                        .unwrap_or(false)
+                                    e.map(|sub| {
+                                        sub.file_type().map(|st| st.is_dir()).unwrap_or(false)
+                                    })
+                                    .unwrap_or(false)
                                 })
                             })
                             .unwrap_or(false);
@@ -830,7 +848,9 @@ pub async fn handle_browse_directories(
         directories.truncate(300);
     }
 
-    let parent_path = target_path.parent().map(|p| p.to_string_lossy().to_string());
+    let parent_path = target_path
+        .parent()
+        .map(|p| p.to_string_lossy().to_string());
 
     Json(BrowseResponse {
         current_path: target_path.to_string_lossy().to_string(),
@@ -864,7 +884,12 @@ pub async fn handle_thumbnail_or_media(
         .header(header::CONTENT_TYPE, mime)
         .header(header::CACHE_CONTROL, "public, max-age=86400")
         .body(Body::from(bytes))
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to build response"))
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to build response",
+            )
+        })
 }
 
 pub async fn handle_override_keeper(
@@ -1112,9 +1137,13 @@ pub async fn handle_reports_csv(
     State(state): State<ServerState>,
 ) -> Result<Response, (StatusCode, &'static str)> {
     let s = state.scan_state.lock().unwrap();
-    let summary = s.summary.as_ref().ok_or((StatusCode::NOT_FOUND, "No active scan summary"))?;
+    let summary = s
+        .summary
+        .as_ref()
+        .ok_or((StatusCode::NOT_FOUND, "No active scan summary"))?;
 
-    let mut csv = String::from("group_id,match_type,action,category,similarity,size_mb,path,dimensions\n");
+    let mut csv =
+        String::from("group_id,match_type,action,category,similarity,size_mb,path,dimensions\n");
     for g in &summary.groups {
         csv.push_str(&format!(
             "{},{:?},{:?},{:?},{},{:.2},\"{}\",\"{}\"\n",
@@ -1136,7 +1165,12 @@ pub async fn handle_reports_csv(
             "attachment; filename=\"clairvoy_duplicates.csv\"",
         )
         .body(Body::from(csv))
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create CSV response"))
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to create CSV response",
+            )
+        })
 }
 
 pub async fn handle_delete_script(
@@ -1144,10 +1178,15 @@ pub async fn handle_delete_script(
     Query(query): Query<DeleteScriptQuery>,
 ) -> Result<Response, (StatusCode, &'static str)> {
     let s = state.scan_state.lock().unwrap();
-    let summary = s.summary.as_ref().ok_or((StatusCode::NOT_FOUND, "No active scan summary"))?;
+    let summary = s
+        .summary
+        .as_ref()
+        .ok_or((StatusCode::NOT_FOUND, "No active scan summary"))?;
     let mode = query.mode.unwrap_or_else(|| "trash".to_string());
 
-    let mut script = String::from("#!/usr/bin/env bash\n# Clairvoy Duplicate Removal Script\nset -euo pipefail\n\n");
+    let mut script = String::from(
+        "#!/usr/bin/env bash\n# Clairvoy Duplicate Removal Script\nset -euo pipefail\n\n",
+    );
     if mode == "trash" {
         script.push_str("TRASH_DIR=\"./.clairvoy_trash\"\nmkdir -p \"$TRASH_DIR\"\n\n");
     }
@@ -1170,7 +1209,12 @@ pub async fn handle_delete_script(
             format!("attachment; filename=\"delete_duplicates_{}.sh\"", mode),
         )
         .body(Body::from(script))
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create script response"))
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to create script response",
+            )
+        })
 }
 
 pub fn auto_load_recent_run(state: &SharedScanState) {
@@ -1225,8 +1269,9 @@ pub fn auto_load_recent_run_with_db(state: &SharedScanState, db_opt: Option<&Dat
                     let p = PathBuf::from(summary_path_str);
                     if p.is_file() {
                         if let Ok(sc_content) = std::fs::read_to_string(&p) {
-                            if let Ok(summary) =
-                                serde_json::from_str::<clairvoy_core::models::ScanSummary>(&sc_content)
+                            if let Ok(summary) = serde_json::from_str::<
+                                clairvoy_core::models::ScanSummary,
+                            >(&sc_content)
                             {
                                 if let Ok(mut s) = state.lock() {
                                     let wasted_mb = summary.wasted_mb;
@@ -1236,7 +1281,10 @@ pub fn auto_load_recent_run_with_db(state: &SharedScanState, db_opt: Option<&Dat
                                     s.progress_pct = 100;
                                     s.files_indexed = summary.total_files_scanned;
                                     s.elapsed_seconds = summary.duration_seconds;
-                                    s.run_id = r.get("run_id").and_then(|v| v.as_str()).map(|x| x.to_string());
+                                    s.run_id = r
+                                        .get("run_id")
+                                        .and_then(|v| v.as_str())
+                                        .map(|x| x.to_string());
                                     s.wasted_bytes = summary.wasted_bytes;
                                     s.wasted_mb = wasted_mb;
                                     s.wasted_gb = wasted_gb;
@@ -1297,9 +1345,7 @@ pub async fn handle_maintenance_prune_missing(
 }
 
 pub fn build_router_with_state(state: SharedScanState) -> Router {
-    let db = Arc::new(Mutex::new(
-        Database::open_in_memory().unwrap(),
-    ));
+    let db = Arc::new(Mutex::new(Database::open_in_memory().unwrap()));
     build_router_full(ServerState {
         scan_state: state,
         db,
@@ -1334,18 +1380,33 @@ pub fn build_router_full(state: ServerState) -> Router {
         .route("/api/runs", get(handle_runs))
         .route("/api/runs/load", post(handle_runs_load))
         .route("/api/duplicates", get(handle_duplicates))
-        .route("/api/watch/paths", get(handle_watch_paths_list).post(handle_watch_paths_add))
-        .route("/api/watch/paths/:id/toggle", post(handle_watch_paths_toggle))
+        .route(
+            "/api/watch/paths",
+            get(handle_watch_paths_list).post(handle_watch_paths_add),
+        )
+        .route(
+            "/api/watch/paths/:id/toggle",
+            post(handle_watch_paths_toggle),
+        )
         .route("/api/watch/paths/:id", delete(handle_watch_paths_delete))
         .route("/api/watch/daemon/toggle", post(handle_watch_daemon_toggle))
-        .route("/api/system/browse-directories", get(handle_browse_directories))
+        .route(
+            "/api/system/browse-directories",
+            get(handle_browse_directories),
+        )
         .route("/api/system/pick-folder", post(handle_pick_folder))
         .route("/api/thumbnail", get(handle_thumbnail_or_media))
         .route("/api/media", get(handle_thumbnail_or_media))
-        .route("/api/clusters/override-keeper", post(handle_override_keeper))
+        .route(
+            "/api/clusters/override-keeper",
+            post(handle_override_keeper),
+        )
         .route("/api/delete/execute", post(handle_delete_execute))
         .route("/api/quarantine/execute", post(handle_quarantine_execute))
-        .route("/api/maintenance/prune-missing", post(handle_maintenance_prune_missing))
+        .route(
+            "/api/maintenance/prune-missing",
+            post(handle_maintenance_prune_missing),
+        )
         .route("/api/reports/csv", get(handle_reports_csv))
         .route("/api/reports/delete-script", get(handle_delete_script))
         .layer(CorsLayer::permissive())

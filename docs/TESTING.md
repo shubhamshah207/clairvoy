@@ -1,64 +1,96 @@
 # Clairvoy Testing & Verification Guide
 
-This document outlines the testing conventions, fixtures, fast feedback loops, and linting standards for Clairvoy.
+This document outlines the testing conventions, fixtures, fast feedback loops, and linter standards for the pure Rust Clairvoy workspace.
 
 ---
 
-## 1. Environment & Fast Feedback Loop
+## 1. Fast Feedback Loop & Commands
 
-Tests are run using `pytest` with `pytest-asyncio`. Python 3.12+ in the project conda environment must be used.
+Clairvoy is built as a pure Rust cargo workspace. Tests and linter verification run via standard Cargo commands:
 
 ```bash
-# Run entire test suite (fast execution under 4 seconds)
-/home/shubhamshah207/miniconda3/bin/pytest -v
+# Set Cargo path if needed
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-# Run only matcher plugin tests
-/home/shubhamshah207/miniconda3/bin/pytest tests/test_matcher_plugins.py -v
+# Run entire workspace test suite
+cargo test --workspace
 
-# Run only pipeline integration tests
-/home/shubhamshah207/miniconda3/bin/pytest tests/test_pipeline.py -v
+# Run tests for a specific crate
+cargo test -p clairvoy-core
+cargo test -p clairvoy-server
+cargo test -p clairvoy-engine
 
-# Run documentation & asset integrity tests
-/home/shubhamshah207/miniconda3/bin/pytest tests/test_docs_integrity.py -v
+# Run a specific integration test file
+cargo test -p clairvoy-server --test test_server
+cargo test -p clairvoy-engine --test test_watcher
+
+# Run with verbose stdout capture
+cargo test --workspace -- --nocapture
+
+# Run workspace Clippy with strict zero-warning policy
+cargo clippy --workspace --all-targets -- -D warnings
+
+# Build release binary
+cargo build --workspace --release
 ```
 
 ---
 
-## 2. Test Suite Structure
+## 2. Test Suite Structure by Crate
 
-- [`tests/test_plugin_system.py`](file:///home/shubhamshah207/clairvoy/tests/test_plugin_system.py): Plugin contracts, registration, dynamic directory loading, entry points, thread safety.
-- [`tests/test_matcher_plugins.py`](file:///home/shubhamshah207/clairvoy/tests/test_matcher_plugins.py): ExactHashMatcher and ArchiveInspector plugins.
-- [`tests/test_media_matchers.py`](file:///home/shubhamshah207/clairvoy/tests/test_media_matchers.py): PhotoVision (DINOv2) and VideoKeyframe matcher plugins.
-- [`tests/test_action_plugins.py`](file:///home/shubhamshah207/clairvoy/tests/test_action_plugins.py): SafeQuarantine and Hardlink action plugins.
-- [`tests/test_pipeline.py`](file:///home/shubhamshah207/clairvoy/tests/test_pipeline.py): End-to-end deduplication pipeline, short-circuit pruning, composite keeper scoring.
-- [`tests/test_cli_plugins.py`](file:///home/shubhamshah207/clairvoy/tests/test_cli_plugins.py): Typer CLI commands (`plugins list`, `plugins info`, `--enable-plugin`, `--action`).
-- [`tests/test_security.py`](file:///home/shubhamshah207/clairvoy/tests/test_security.py): Enterprise security tests: path traversal, root safety, shell argument escaping.
-- [`tests/test_storage_engine.py`](file:///home/shubhamshah207/clairvoy/tests/test_storage_engine.py): Multi-threaded file scanner, 128KB QuickHash, SHA-256 digests.
-- [`tests/test_vision_engine.py`](file:///home/shubhamshah207/clairvoy/tests/test_vision_engine.py): ONNX Runtime embedding inference, cosine distance, DSU clustering.
-- [`tests/test_document_matcher.py`](file:///home/shubhamshah207/clairvoy/tests/test_document_matcher.py): Tier 5 document text and tabular row-permutation matching (.pdf, .docx, .csv, .tsv).
-- [`tests/test_run_manager.py`](file:///home/shubhamshah207/clairvoy/tests/test_run_manager.py): Persistent RunManager, history recording, and report auto-discovery.
-- [`tests/test_cli_runs.py`](file:///home/shubhamshah207/clairvoy/tests/test_cli_runs.py): CLI commands `clairvoy runs list`, `clairvoy runs show`, and UI run preloading flags.
-- [`tests/test_web_api.py`](file:///home/shubhamshah207/clairvoy/tests/test_web_api.py): FastAPI backend endpoints, thumbnail security, scan triggers, runs listing, and report loading.
-- [`tests/test_docs_integrity.py`](file:///home/shubhamshah207/clairvoy/tests/test_docs_integrity.py): Verification of README, screenshots, AGENTS.md, symlinks, diagrams.
+```
++---------------------------------------------------------------------------------------------------------+
+|                                    CLAIRVOY TEST SUITE STRUCTURE                                        |
++---------------------------------------------------------------------------------------------------------+
+| [crates/clairvoy-core]                                                                                  |
+|   └── tests/test_database.rs       : SQLite WAL mode, schema migration, transactions, missing file prune|
+| [crates/clairvoy-scanner]                                                                               |
+|   └── tests/test_scanner.rs        : Parallel crawler, SIMD XXH3 quickhash, bounded flume backpressure  |
+| [crates/clairvoy-model]                                                                                 |
+|   └── tests/test_model.rs          : Perceptual dHash backend, model registry parsing, distances       |
+| [crates/clairvoy-plugins]                                                                               |
+|   ├── tests/test_exact_hash.rs     : BLAKE3 SIMD hashing, 0-byte file filtering, exact clusters        |
+|   └── tests/test_photo_vision.rs   : Perceptual photo similarity clustering, cosine distance thresholds |
+| [crates/clairvoy-engine]                                                                                |
+|   ├── tests/test_pipeline.rs       : Chained multi-tier deduplication, short-circuit pruning, scoring   |
+|   └── tests/test_watcher.rs        : Autonomous watcher daemon, sliding debounce quiet window, sweeps   |
+| [crates/clairvoy-server]                                                                                |
+|   └── tests/test_server.rs         : Axum API endpoints, SSE streams, watch targets CRUD, Smart Clean  |
+| [crates/clairvoy-cli]                                                                                   |
+|   └── tests/test_cli.rs            : CLI argument parsing, --no-daemon flag parsing, subcommands        |
++---------------------------------------------------------------------------------------------------------+
+```
+
+### Detailed Crate Responsibilities
+
+- [`crates/clairvoy-core`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core): Validates canonical data structures (`FileEntry`, `DuplicateRecord`, `ScanSummary`), plugin traits, and `Database` SQLite persistence (storing scan runs, duplicate clusters, file index, and atomic item removal).
+- [`crates/clairvoy-scanner`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-scanner): Validates high-speed directory walking via `jwalk`, bounded queue streaming (`flume::bounded(2048)`), and rapid candidate discrimination via 4KB XXH3 hashing.
+- [`crates/clairvoy-model`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-model): Validates pluggable model runtimes and zero-dependency 64-bit perceptual hashing.
+- [`crates/clairvoy-plugins`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-plugins): Validates Tier 1 exact BLAKE3 deduplication and Tier 2 visual perceptual similarity clustering.
+- [`crates/clairvoy-engine`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-engine): Validates multi-tier execution orchestration, short-circuit candidate pruning, `CompositeKeeperStrategy` score calculations, and background filesystem surveillance via `AutonomousWatcher`.
+- [`crates/clairvoy-server`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-server): Validates Axum endpoints (`/api/status`, `/api/scan`, `/api/runs`, `/api/watch/paths`, `/api/status/stream`), safe trash isolation, and single-page application delivery.
+- [`crates/clairvoy-cli`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-cli): Validates CLI command-line interface invocation and argument parsing for `clairvoy-rs`.
 
 ---
 
-## 3. Linting & Formatting Standards
+## 3. Linter & Static Analysis Standards
 
-Linting must pass with 0 errors or warnings before any pull request or commit.
+All code submitted to the repository must pass Rust's strict Clippy checks without warnings:
 
 ```bash
-# Check code style & lints
-/home/shubhamshah207/miniconda3/bin/ruff check .
+cargo clippy --workspace --all-targets -- -D warnings
+```
 
-# Automatically fix fixable lints
-/home/shubhamshah207/miniconda3/bin/ruff check --fix .
+Format verification:
+```bash
+cargo fmt --all -- --check
 ```
 
 ---
 
 ## 4. Testing Invariants
 
-1. **Zero-Destruction**: Tests must use temporary workspaces (`tmp_path` fixture) and never operate on real user files.
-2. **Local Execution**: All tests must pass completely offline without internet connectivity.
-3. **Graceful Degradation**: Video and ML tests must verify graceful fallbacks when optional native libraries or models are absent.
+1. **Zero-Destruction Guarantee**: Tests must strictly use temporary directories (`tempfile::TempDir`) and never operate on live user directories.
+2. **100% Offline Execution**: All unit, integration, and mock tests must pass without external internet connectivity or unauthenticated network requests.
+3. **Memory Ceiling ($\le 50\text{MB}$)**: Scanner and pipeline tests assert bounded queue backpressure and memory consumption across synthetic workloads.
+4. **Idempotence & Safety**: Safe deletion and quarantine actions must verify rollback logs and enforce that designated keeper files can never be removed.

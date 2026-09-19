@@ -820,14 +820,8 @@
 
                         <!-- Review Actions -->
                         <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-[#28292a] justify-end mt-2">
-                            <button onclick="filterBySimilarAndSelect()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10" title="Filter gallery to similar items and select candidates">
-                                <span>Select Similar</span>
-                            </button>
-                            <button id="trackSimilarReviewBtn" onclick="setMatchTypeFilter('SIMILAR')" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10 flex items-center gap-1.5" title="Review similar and near-duplicate clusters">
-                                <span>🔍 Review Similar</span>
-                            </button>
-                            <button onclick="openFirstSimilarDiff()" class="m3-button-primary text-xs !py-1.5 !px-3.5 shadow-md shadow-[#8ab4f8]/20 flex items-center gap-1.5" title="Open first similar cluster in side-by-side diff comparison">
-                                <span>⇄ Review Diff</span>
+                            <button id="trackSimilarReviewBtn" onclick="setMatchTypeFilter('SIMILAR')" class="m3-button-primary text-xs !py-1.5 !px-4 shadow-md shadow-[#8ab4f8]/20 flex items-center gap-1.5 cursor-pointer font-semibold" title="Review similar photo bursts, edits, and document revisions">
+                                <span>🔍 Start Guided Review</span>
                             </button>
                         </div>
                     </div>
@@ -3397,7 +3391,7 @@
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-sm font-bold text-white truncate max-w-sm sm:max-w-md" title="${primaryName}">${primaryName}</span>
                                 <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${isExact ? 'bg-[#81c995]/20 text-[#81c995] border border-[#81c995]/30' : 'bg-[#1a3860] text-[#8ab4f8] border border-[#8ab4f8]/30'}">
-                                    ${isExact ? '⚡ 100% EXACT CLONE' : '🔍 ' + cluster.match_type}
+                                    ${isExact ? '⚡ 100% Exact Clone' : (cluster.match_type === 'VISUAL_AI_NEAR_DUPLICATE' ? '🔍 Similar Photo / Burst' : (cluster.match_type === 'CONTENT_NEAR_DUPLICATE' ? '📄 Document Revision' : '🔍 Similar Match'))}
                                 </span>
                                 <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#81c995]/15 text-[#81c995]">${wastedMb} MB wasted</span>
                             </div>
@@ -3414,9 +3408,10 @@
                                 title="${allDupesSelected ? 'Deselect duplicates' : 'Keep designated best copy and mark duplicates for removal'}">
                             <span>${allDupesSelected ? '✓ Clean Ready' : (isExact ? '⚡ Keep Original & Clean Copy' : '★ Keep Best & Clean Rest')}</span>
                         </button>
-                        <button onclick="openPhotoLightbox(${cluster.group_id}, '${encodeURIComponent(cluster.items[0].path)}')"
-                                class="m3-button-secondary text-xs !py-1 !px-3 hover:text-[#8ab4f8]">
-                            <span>⇄ Compare Diff</span>
+                        <button onclick="openComparisonStudio(${cluster.group_id}, '${encodeURIComponent(cluster.items[0].path)}')"
+                                class="m3-button-secondary text-xs !py-1 !px-3 hover:text-[#8ab4f8]"
+                                title="Open side-by-side comparison studio">
+                            <span>⇄ Compare</span>
                         </button>
                     </div>
                 </div>

@@ -36,7 +36,10 @@ impl TerminalProgressBar {
         self.current = current;
         let now = Instant::now();
         // Throttle updates to at most once every 50ms unless it's the end
-        if now.duration_since(self.last_rendered).as_millis() < 40 && current < self.total && self.total > 0 {
+        if now.duration_since(self.last_rendered).as_millis() < 40
+            && current < self.total
+            && self.total > 0
+        {
             return;
         }
         self.last_rendered = now;
