@@ -1,9 +1,9 @@
 """
 Clairvoy Web UI Component
-Google Material Design 3 (M3) Storage Optimization Studio.
+Google Material Design 3 (M3) Storage Optimization & Photos Deduplication Studio.
 Inspired by Google Photos, Google Drive, Google Files, and Google One.
-100% offline, zero-dependency, ultra-minimal code with Photos Grid, Drive List,
-Google floating search bar, navigation rail, and Safe Trash/Permanent Deletion.
+100% offline, zero-dependency, ultra-minimal code with fluid Photos Grid, Drive List,
+morphing Top Selection Bar (zero floating bottom windows), and Safe Trash/Permanent Deletion.
 """
 
 from clairvoy.core.config import VERSION
@@ -16,7 +16,7 @@ def get_index_html() -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clairvoy | Google Storage & Photos Deduplication Studio</title>
+    <title>Clairvoy Photos | Google Storage & Multimodal Deduplication</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {{
@@ -82,10 +82,6 @@ def get_index_html() -> str:
             border-radius: 20px;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }}
-        .m3-card:hover {{
-            border-color: rgba(255, 255, 255, 0.18);
-            background-color: var(--md-sys-color-surface-high);
-        }}
         .m3-chip {{
             border-radius: 9999px;
             border: 1px solid var(--md-sys-color-outline);
@@ -118,7 +114,7 @@ def get_index_html() -> str:
             border-radius: 9999px;
             font-weight: 600;
             font-size: 13px;
-            padding: 8px 18px;
+            padding: 7px 18px;
             transition: all 0.15s ease;
             display: inline-flex;
             align-items: center;
@@ -137,7 +133,7 @@ def get_index_html() -> str:
             border-radius: 9999px;
             font-weight: 500;
             font-size: 13px;
-            padding: 8px 16px;
+            padding: 7px 16px;
             transition: all 0.15s ease;
             display: inline-flex;
             align-items: center;
@@ -155,7 +151,7 @@ def get_index_html() -> str:
             border-radius: 9999px;
             font-weight: 600;
             font-size: 13px;
-            padding: 8px 16px;
+            padding: 7px 16px;
             transition: all 0.15s ease;
             display: inline-flex;
             align-items: center;
@@ -166,52 +162,63 @@ def get_index_html() -> str:
             background-color: rgba(242, 139, 130, 0.25);
             border-color: rgba(242, 139, 130, 0.5);
         }}
-        /* Google Photos Checkbox Chip */
+
+        /* Google Photos Circular Checkmark */
         .gp-check-circle {{
-            width: 22px;
-            height: 22px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             border: 2px solid rgba(255, 255, 255, 0.7);
-            background: rgba(0, 0, 0, 0.35);
+            background: rgba(0, 0, 0, 0.45);
             backdrop-filter: blur(4px);
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
+            user-select: none;
+        }}
+        .gp-check-circle:hover {{
+            border-color: #ffffff;
+            transform: scale(1.08);
         }}
         .gp-check-circle.checked {{
-            background-color: var(--md-sys-color-primary);
-            border-color: var(--md-sys-color-primary);
-        }}
-        .gp-check-circle.checked svg {{
-            opacity: 1;
+            background-color: #8ab4f8;
+            border-color: #8ab4f8;
+            opacity: 1 !important;
         }}
         .gp-check-circle svg {{
             opacity: 0;
             color: #131314;
             transition: opacity 0.1s ease;
         }}
+        .gp-check-circle.checked svg {{
+            opacity: 1;
+        }}
     </style>
 </head>
-<body class="min-h-screen pb-32 custom-scrollbar bg-[#131314] text-[#e3e3e3]">
+<body class="min-h-screen custom-scrollbar bg-[#131314] text-[#e3e3e3]">
 
-    <!-- Google Material App Bar -->
-    <header class="sticky top-0 z-40 bg-[#1e1f20]/95 backdrop-blur-md border-b border-[#28292a] px-4 lg:px-8 py-3">
-        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+    <!-- Google Photos Top App Bar (Morphs into Selection Bar when items are selected) -->
+    <header id="topAppBar" class="sticky top-0 z-40 bg-[#1e1f20]/95 backdrop-blur-md border-b border-[#28292a] px-4 lg:px-8 py-2.5 transition-all">
 
-            <!-- Logo & Brand (Google 4-Colors) -->
+        <!-- Default Header (Shown when 0 items selected) -->
+        <div id="defaultHeader" class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <!-- Google Photos Logo & Brand -->
             <div class="flex items-center gap-3 flex-shrink-0">
-                <div class="flex items-center gap-1.5">
-                    <span class="w-2.5 h-2.5 rounded-full bg-[#4285F4]"></span>
-                    <span class="w-2.5 h-2.5 rounded-full bg-[#EA4335]"></span>
-                    <span class="w-2.5 h-2.5 rounded-full bg-[#FBBC05]"></span>
-                    <span class="w-2.5 h-2.5 rounded-full bg-[#34A853]"></span>
+                <!-- Google 4-Color Pinwheel -->
+                <div class="relative w-7 h-7 flex items-center justify-center">
+                    <svg class="w-7 h-7" viewBox="0 0 48 48" fill="none">
+                        <path d="M24 12V24H12C12 17.37 17.37 12 24 12Z" fill="#4285F4"/>
+                        <path d="M36 24H24V12C30.63 12 36 17.37 36 24Z" fill="#EA4335"/>
+                        <path d="M24 36V24H36C36 30.63 30.63 36 24 36Z" fill="#FBBC05"/>
+                        <path d="M12 24H24V36C17.37 36 12 30.63 12 24Z" fill="#34A853"/>
+                    </svg>
                 </div>
                 <div class="flex items-baseline gap-2">
-                    <span class="text-xl font-bold tracking-tight text-white flex items-center gap-1.5">
+                    <span class="text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
                         Clairvoy
-                        <span class="text-xs font-semibold text-[#8ab4f8] bg-[#1a3860] px-2 py-0.5 rounded-full">Storage</span>
+                        <span class="text-xs font-semibold text-[#8ab4f8] bg-[#1a3860] px-2 py-0.5 rounded-full">Photos</span>
                     </span>
                     <span class="hidden md:inline text-[11px] font-mono text-[#8e918f]">v{VERSION}</span>
                 </div>
@@ -224,17 +231,15 @@ def get_index_html() -> str:
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
                     <input type="text" id="searchInput" oninput="onSearchInput(this.value)"
-                           placeholder="Search files, folders, duplicate formats..."
+                           placeholder="Search duplicate photos, documents, filenames..."
                            class="w-full bg-transparent text-sm text-[#e3e3e3] placeholder-[#8e918f] focus:outline-none">
-                    <button id="clearSearchBtn" onclick="clearSearch()" class="hidden text-[#8e918f] hover:text-white ml-2 text-sm">
-                        ✕
-                    </button>
+                    <button id="clearSearchBtn" onclick="clearSearch()" class="hidden text-[#8e918f] hover:text-white ml-2 text-sm">✕</button>
                 </div>
             </div>
 
             <!-- Runs Selector & Scan Trigger -->
             <div class="flex items-center gap-2 flex-shrink-0">
-                <!-- Google Account / Run Selector -->
+                <!-- Past Runs Dropdown -->
                 <div class="hidden sm:flex items-center bg-[#28292a] border border-[#3c4043] rounded-full px-3 py-1.5 text-xs text-[#c4c7c5]">
                     <span class="mr-1.5">📂</span>
                     <select id="runsDropdown" onchange="onRunSelected(this.value)" class="bg-transparent text-xs text-[#e3e3e3] focus:outline-none cursor-pointer max-w-[180px] truncate">
@@ -247,6 +252,42 @@ def get_index_html() -> str:
                 </button>
 
                 <div class="w-2.5 h-2.5 rounded-full bg-[#81c995] animate-pulse" title="100% Offline & Local"></div>
+            </div>
+        </div>
+
+        <!-- Google Photos Top Selection Bar (Morphs into view when >=1 item selected) -->
+        <div id="selectionHeader" class="hidden max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <!-- Left: Deselect ✕ & Selected Counter -->
+            <div class="flex items-center gap-4">
+                <button onclick="applySelectionRule('NONE')" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-lg text-white font-bold transition" title="Clear selection">
+                    ✕
+                </button>
+                <div class="flex items-baseline gap-2">
+                    <span id="topSelectedCount" class="text-base font-bold text-white">0 selected</span>
+                    <span id="topSelectedSpace" class="text-xs text-[#8ab4f8] font-mono">(0.000 GB)</span>
+                </div>
+            </div>
+
+            <!-- Right: Bulk Action Buttons -->
+            <div class="flex items-center gap-2 overflow-x-auto py-0.5">
+                <button onclick="applySelectionRule('ALL')" class="m3-button-secondary !py-1.5 !px-3 text-xs">Select All</button>
+                <button onclick="applySelectionRule('NONE')" class="m3-button-secondary !py-1.5 !px-3 text-xs">Clear</button>
+
+                <button onclick="openTrashDialog()" class="m3-button-secondary !py-1.5 !px-3.5 text-xs text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10" title="Safely move duplicates to .clairvoy_trash/">
+                    <span>🗑️ Move to Trash</span>
+                </button>
+
+                <button onclick="openPermanentDeleteDialog()" class="m3-button-danger !py-1.5 !px-3.5 text-xs" title="Permanently unlink duplicate files">
+                    <span>⚠️ Delete Permanently</span>
+                </button>
+
+                <button onclick="openQuarantineModal()" class="m3-button-secondary !py-1.5 !px-3.5 text-xs text-[#fdd663] border-[#fdd663]/40 hover:bg-[#fdd663]/10" title="Move to quarantine directory">
+                    <span>📦 Quarantine</span>
+                </button>
+
+                <a id="downloadCsvBtn" href="/api/reports/csv" download class="m3-button-secondary !py-1.5 !px-3 text-xs" title="Export CSV Report">
+                    <span>📄 CSV</span>
+                </a>
             </div>
         </div>
     </header>
@@ -287,30 +328,25 @@ def get_index_html() -> str:
         </div>
     </div>
 
-    <!-- Main Studio Layout (Nav Rail + Content Area) -->
-    <div class="max-w-7xl mx-auto px-4 lg:px-8 pt-6 flex flex-col md:flex-row gap-6">
+    <!-- Main Google Photos Layout (Nav Rail + Fluid Workspace) -->
+    <div class="max-w-7xl mx-auto px-4 lg:px-8 pt-6 pb-12 flex flex-col md:flex-row gap-6">
 
         <!-- Google Navigation Rail (Left Sidebar) -->
-        <aside class="w-full md:w-56 flex-shrink-0 flex md:flex-col gap-1.5 overflow-x-auto pb-2 md:pb-0">
-            <button onclick="switchNavSection('CLEANUP')" id="navBtn_CLEANUP"
-                    class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8]">
-                <span class="text-base">🧹</span>
-                <span>Clean up</span>
-            </button>
+        <aside class="w-full md:w-52 flex-shrink-0 flex md:flex-col gap-1.5 overflow-x-auto pb-2 md:pb-0">
             <button onclick="switchNavSection('PHOTOS')" id="navBtn_PHOTOS"
-                    class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                    class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8]">
                 <span class="text-base">🖼️</span>
-                <span>Photos View</span>
+                <span>Photos</span>
             </button>
             <button onclick="switchNavSection('DRIVE')" id="navBtn_DRIVE"
                     class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
                 <span class="text-base">📁</span>
                 <span>Drive List</span>
             </button>
-            <button onclick="switchNavSection('DUPLICATES')" id="navBtn_DUPLICATES"
+            <button onclick="switchNavSection('CLEANUP')" id="navBtn_CLEANUP"
                     class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
-                <span class="text-base">🗂️</span>
-                <span>All Clusters</span>
+                <span class="text-base">🧹</span>
+                <span>Clean up</span>
             </button>
             <button onclick="switchNavSection('TRASH')" id="navBtn_TRASH"
                     class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
@@ -322,9 +358,9 @@ def get_index_html() -> str:
         <!-- Main Workspace -->
         <main class="flex-1 min-w-0">
 
-            <!-- Google One Clean-Up Hero Card -->
-            <section id="cleanupHeroCard" class="m3-card p-6 md:p-8 mb-6 relative overflow-hidden">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <!-- Google One Clean-Up Hero Card (Storage Breakdown) -->
+            <section id="cleanupHeroCard" class="m3-card p-6 mb-6 relative overflow-hidden">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
                     <div>
                         <div class="flex items-center gap-2 text-xs font-bold text-[#8ab4f8] uppercase tracking-wider mb-1">
                             <span>Google Storage Manager</span>
@@ -334,11 +370,9 @@ def get_index_html() -> str:
                         </h2>
                         <p id="heroWastedMb" class="text-xs text-[#8e918f] font-mono mt-0.5">0 MB recoverable across duplicates</p>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <div class="text-right text-xs text-[#8e918f] font-mono">
-                            <div id="heroClusterCount" class="font-bold text-[#e3e3e3]">0 duplicate clusters</div>
-                            <div id="heroFileCount">0 files analyzed</div>
-                        </div>
+                    <div class="text-right text-xs text-[#8e918f] font-mono">
+                        <div id="heroClusterCount" class="font-bold text-[#e3e3e3]">0 duplicate clusters</div>
+                        <div id="heroFileCount">0 files analyzed</div>
                     </div>
                 </div>
 
@@ -372,7 +406,7 @@ def get_index_html() -> str:
             </section>
 
             <!-- Filter Chips Toolbar & View Mode Controls -->
-            <section class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-2">
+            <section class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-1">
                 <!-- Modality Filter Chips (Google Style) -->
                 <div class="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1">
                     <button onclick="setModalityTab('ALL')" id="tab_ALL" class="m3-chip active">
@@ -392,7 +426,7 @@ def get_index_html() -> str:
                     </button>
                 </div>
 
-                <!-- Right View Controls: Match Type, Sort, View Toggle -->
+                <!-- Right View Controls: Sort & Mode Toggle -->
                 <div class="flex items-center gap-2 self-end sm:self-auto">
                     <!-- Sort Dropdown -->
                     <select onchange="onSortOrderChange(this.value)"
@@ -405,11 +439,11 @@ def get_index_html() -> str:
                     <!-- View Toggle Button (Photos Grid vs Drive List) -->
                     <div class="flex items-center bg-[#202124] border border-[#3c4043] rounded-full p-0.5">
                         <button onclick="setViewMode('grid')" id="viewModeGridBtn"
-                                class="px-2.5 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]" title="Google Photos Grid View">
-                            ▦ Grid
+                                class="px-3 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]" title="Google Photos Grid View">
+                            ▦ Photos
                         </button>
                         <button onclick="setViewMode('list')" id="viewModeListBtn"
-                                class="px-2.5 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white" title="Google Drive List View">
+                                class="px-3 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white" title="Google Drive List View">
                             ☰ List
                         </button>
                     </div>
@@ -430,8 +464,8 @@ def get_index_html() -> str:
                 </div>
             </div>
 
-            <!-- Dynamic Clusters Container (Google Photos Grid or Google Drive List) -->
-            <div id="clustersGallery" class="space-y-6"></div>
+            <!-- Dynamic Clusters Gallery (Google Photos Fluid Grid or Drive List) -->
+            <div id="clustersGallery" class="space-y-8"></div>
 
             <!-- Pagination Navigation Bar -->
             <div class="flex justify-center items-center gap-4 mt-8 pt-4">
@@ -448,67 +482,71 @@ def get_index_html() -> str:
         </main>
     </div>
 
-    <!-- Google Contextual Selection Action Bar (Appears when items are selected) -->
-    <div id="contextualActionBar"
-         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[94%] max-w-4xl bg-[#28292a]/95 backdrop-blur-xl border border-[#3c4043] rounded-full px-5 py-3 shadow-2xl flex flex-wrap items-center justify-between gap-4 transition-all duration-300">
-        <div class="flex items-center gap-3">
-            <span class="w-6 h-6 rounded-full bg-[#1a3860] text-[#8ab4f8] flex items-center justify-center font-bold text-xs">✓</span>
-            <div>
-                <div id="dockSelectedSpace" class="font-bold text-white text-sm">0.000 GB selected</div>
-                <div id="dockSelectedCount" class="text-[11px] text-[#8e918f] font-mono">0 duplicate files selected</div>
-            </div>
-        </div>
-
-        <div class="flex items-center gap-2">
-            <!-- Quick Selection Presets -->
-            <button onclick="applySelectionRule('ALL')" class="m3-button-secondary !py-1.5 !px-3 text-xs">Select All</button>
-            <button onclick="applySelectionRule('NONE')" class="m3-button-secondary !py-1.5 !px-3 text-xs">Clear</button>
-
-            <!-- Actions -->
-            <button onclick="openTrashDialog()" id="dockTrashBtn" class="m3-button-secondary !py-1.5 !px-3.5 text-xs text-[#8ab4f8] border-[#8ab4f8]/30">
-                <span>🗑️ Move to Trash</span>
-            </button>
-            <button onclick="openPermanentDeleteDialog()" id="dockDeleteBtn" class="m3-button-danger !py-1.5 !px-3.5 text-xs">
-                <span>⚠️ Delete Permanently</span>
-            </button>
-            <button onclick="openQuarantineModal()" id="dockQuarantineBtn" class="m3-button-secondary !py-1.5 !px-3.5 text-xs text-[#fdd663] border-[#fdd663]/30">
-                <span>📦 Quarantine</span>
-            </button>
-
-            <a id="downloadCsvBtn" href="/api/reports/csv" download class="m3-button-secondary !py-1.5 !px-3 text-xs" title="Export CSV Report">
-                <span>📄 CSV</span>
-            </a>
-        </div>
-    </div>
-
-    <!-- Google Photos Side-by-Side Comparison Lightbox Modal -->
-    <div id="comparisonModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-        <div class="bg-[#1e1f20] border border-[#3c4043] rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
-            <div class="px-6 py-4 border-b border-[#28292a] flex justify-between items-center">
-                <div>
-                    <h3 id="modalClusterTitle" class="text-base font-bold text-white">Side-by-Side Comparison</h3>
-                    <p id="modalClusterSubtitle" class="text-xs text-[#8e918f] font-mono">Compare Keeper against Candidate Duplicate</p>
+    <!-- Google Photos Full-Screen Lightbox Viewer (Single Photo + Side-by-Side Diff) -->
+    <div id="photoLightboxModal" class="hidden fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col">
+        <!-- Top Lightbox Bar -->
+        <div class="px-5 py-3 border-b border-white/10 flex items-center justify-between gap-4 bg-[#1e1f20]/80">
+            <div class="flex items-center gap-3 min-w-0">
+                <button onclick="closePhotoLightbox()" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-xl text-white transition" title="Back to gallery">
+                    ←
+                </button>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span id="lbClusterTitle" class="text-sm font-bold text-white">Cluster #1</span>
+                        <span id="lbMatchType" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">MATCH</span>
+                    </div>
+                    <p id="lbFileName" class="text-xs text-[#8e918f] font-mono truncate max-w-md">image.jpg</p>
                 </div>
-                <button onclick="closeComparisonModal()" class="text-[#8e918f] hover:text-white text-lg px-2">✕</button>
             </div>
 
-            <div class="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 custom-scrollbar">
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button id="lbMakeKeeperBtn" onclick="swapKeeperInLightbox()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8]">
+                    <span>★ Make Keeper</span>
+                </button>
+                <button onclick="toggleLightboxDiff()" id="lbDiffBtn" class="m3-button-secondary text-xs !py-1.5 !px-3">
+                    <span>⇄ Side-by-Side</span>
+                </button>
+                <button onclick="toggleLightboxInfo()" id="lbInfoBtn" class="m3-button-secondary text-xs !py-1.5 !px-3" title="Toggle file details">
+                    <span>ℹ️ Details</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Lightbox Content Area -->
+        <div class="flex-1 min-h-0 flex overflow-hidden relative">
+            <!-- Navigation Arrows -->
+            <button onclick="navigateLightbox(-1)" id="lbPrevBtn"
+                    class="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 text-white flex items-center justify-center text-2xl transition">
+                ‹
+            </button>
+            <button onclick="navigateLightbox(1)" id="lbNextBtn"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 text-white flex items-center justify-center text-2xl transition">
+                ›
+            </button>
+
+            <!-- Single Photo View -->
+            <div id="lbSingleView" class="flex-1 flex items-center justify-center p-4 min-w-0">
+                <div id="lbImageContainer" class="max-w-full max-h-[80vh] flex items-center justify-center"></div>
+            </div>
+
+            <!-- Side-by-Side Diff View -->
+            <div id="lbDiffView" class="hidden flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-6 min-w-0 overflow-y-auto custom-scrollbar">
                 <!-- Keeper Column -->
-                <div class="bg-[#131314] rounded-2xl p-4 border border-[#81c995]/40 flex flex-col justify-between">
+                <div class="bg-[#131314] rounded-2xl p-4 border border-[#81c995]/50 flex flex-col justify-between">
                     <div>
                         <div class="flex justify-between items-center mb-3">
                             <span class="text-xs font-bold bg-[#81c995]/20 text-[#81c995] px-2.5 py-1 rounded-full flex items-center gap-1">
-                                <span>★</span> Designated Keeper
+                                <span>★</span> Designated Keeper (Preserved)
                             </span>
-                            <span id="modalKeeperCategory" class="text-xs font-mono text-[#8e918f] uppercase">PHOTO</span>
+                            <span id="lbDiffKeeperCat" class="text-xs font-mono text-[#8e918f] uppercase">PHOTO</span>
                         </div>
-                        <div id="modalKeeperPreview" class="w-full h-64 rounded-xl bg-black flex items-center justify-center overflow-hidden mb-3 border border-[#28292a]"></div>
+                        <div id="lbDiffKeeperPreview" class="w-full h-72 rounded-xl bg-black flex items-center justify-center overflow-hidden mb-3 border border-[#28292a]"></div>
                         <div class="space-y-1.5 text-xs">
-                            <div id="modalKeeperName" class="font-bold text-white truncate">filename.jpg</div>
-                            <div id="modalKeeperPath" class="text-[10px] text-[#8e918f] font-mono break-all">/path/to/file</div>
+                            <div id="lbDiffKeeperName" class="font-bold text-white truncate">original.jpg</div>
+                            <div id="lbDiffKeeperPath" class="text-[10px] text-[#8e918f] font-mono break-all">/path/to/original</div>
                             <div class="flex gap-4 font-mono text-[#c4c7c5] pt-1">
-                                <span>Size: <strong id="modalKeeperSize" class="text-white">0 MB</strong></span>
-                                <span>Resolution: <strong id="modalKeeperDim" class="text-white">N/A</strong></span>
+                                <span>Size: <strong id="lbDiffKeeperSize" class="text-white">0 MB</strong></span>
+                                <span>Resolution: <strong id="lbDiffKeeperDim" class="text-white">N/A</strong></span>
                             </div>
                         </div>
                     </div>
@@ -517,29 +555,71 @@ def get_index_html() -> str:
                     </div>
                 </div>
 
-                <!-- Duplicate Column -->
-                <div class="bg-[#131314] rounded-2xl p-4 border border-[#f28b82]/40 flex flex-col justify-between">
+                <!-- Duplicate Candidate Column -->
+                <div class="bg-[#131314] rounded-2xl p-4 border border-[#f28b82]/50 flex flex-col justify-between">
                     <div>
                         <div class="flex justify-between items-center mb-3">
                             <span class="text-xs font-bold bg-[#f28b82]/20 text-[#f28b82] px-2.5 py-1 rounded-full flex items-center gap-1">
                                 <span>⌧</span> Redundant Duplicate
                             </span>
-                            <span id="modalDupeSimilarity" class="text-xs font-mono text-[#fdd663]">100% Match</span>
+                            <span id="lbDiffDupeSim" class="text-xs font-mono text-[#fdd663]">100% Match</span>
                         </div>
-                        <div id="modalDupePreview" class="w-full h-64 rounded-xl bg-black flex items-center justify-center overflow-hidden mb-3 border border-[#28292a]"></div>
+                        <div id="lbDiffDupePreview" class="w-full h-72 rounded-xl bg-black flex items-center justify-center overflow-hidden mb-3 border border-[#28292a]"></div>
                         <div class="space-y-1.5 text-xs">
-                            <div id="modalDupeName" class="font-bold text-white truncate">filename_copy.jpg</div>
-                            <div id="modalDupePath" class="text-[10px] text-[#8e918f] font-mono break-all">/path/to/copy</div>
+                            <div id="lbDiffDupeName" class="font-bold text-white truncate">duplicate.jpg</div>
+                            <div id="lbDiffDupePath" class="text-[10px] text-[#8e918f] font-mono break-all">/path/to/dupe</div>
                             <div class="flex gap-4 font-mono text-[#c4c7c5] pt-1">
-                                <span>Size: <strong id="modalDupeSize" class="text-white">0 MB</strong></span>
-                                <span>Resolution: <strong id="modalDupeDim" class="text-white">N/A</strong></span>
+                                <span>Size: <strong id="lbDiffDupeSize" class="text-white">0 MB</strong></span>
+                                <span>Resolution: <strong id="lbDiffDupeDim" class="text-white">N/A</strong></span>
                             </div>
                         </div>
                     </div>
                     <div class="mt-4 pt-3 border-t border-[#28292a] flex justify-between items-center">
-                        <button onclick="swapKeeperInModal()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8]">
-                            <span>★ Make This The Keeper</span>
+                        <button onclick="swapKeeperInLightbox()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8]">
+                            <span>★ Promote to Keeper</span>
                         </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide-in Details / Metadata Drawer -->
+            <div id="lbInfoDrawer" class="hidden w-80 bg-[#1e1f20] border-l border-white/10 p-5 flex-shrink-0 overflow-y-auto custom-scrollbar">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-sm font-bold text-white uppercase tracking-wider">File Details</h4>
+                    <button onclick="toggleLightboxInfo()" class="text-sm text-[#8e918f] hover:text-white">✕</button>
+                </div>
+                <div class="space-y-4 text-xs font-mono">
+                    <div>
+                        <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Filename</div>
+                        <div id="lbInfoName" class="text-white font-sans font-medium break-all">-</div>
+                    </div>
+                    <div>
+                        <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Absolute Path</div>
+                        <div id="lbInfoPath" class="text-[#c4c7c5] text-[11px] break-all">-</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">File Size</div>
+                            <div id="lbInfoSize" class="text-white">-</div>
+                        </div>
+                        <div>
+                            <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Dimensions</div>
+                            <div id="lbInfoDim" class="text-white">-</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Role</div>
+                            <div id="lbInfoRole" class="text-[#81c995] font-semibold">-</div>
+                        </div>
+                        <div>
+                            <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Similarity</div>
+                            <div id="lbInfoSim" class="text-[#fdd663]">-</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-[#8e918f] text-[10px] uppercase mb-0.5">Match Algorithm</div>
+                        <div id="lbInfoAlgorithm" class="text-[#8ab4f8]">-</div>
                     </div>
                 </div>
             </div>
@@ -558,7 +638,7 @@ def get_index_html() -> str:
             </div>
             <p class="text-sm text-[#c4c7c5] leading-relaxed mb-5">
                 Selected duplicate files will be safely moved into <code class="text-xs bg-[#131314] px-2 py-0.5 rounded text-[#8ab4f8]">.clairvoy_trash/</code>.
-                You can restore them back to their original locations at any time from the Trash tab.
+                You can restore them back to their original locations at any time.
             </p>
             <div class="flex justify-end gap-3">
                 <button onclick="closeTrashDialog()" class="m3-button-secondary text-xs">Cancel</button>
@@ -629,15 +709,17 @@ def get_index_html() -> str:
         let currentPage = 1;
         let perPage = 25;
         let viewMode = 'grid'; // 'grid' (Photos) | 'list' (Drive)
-        let currentNav = 'CLEANUP'; // 'CLEANUP' | 'PHOTOS' | 'DRIVE' | 'DUPLICATES' | 'TRASH'
+        let currentNav = 'PHOTOS'; // 'PHOTOS' | 'DRIVE' | 'CLEANUP' | 'TRASH'
         let pollTimer = null;
 
         // Tracks excluded file paths from batch actions (set of paths)
         let excludedPaths = new Set();
 
-        // Comparison modal active references
-        let modalActiveCluster = null;
-        let modalActiveDupe = null;
+        // Lightbox state
+        let lbCluster = null;
+        let lbItemIndex = 0;
+        let lbIsDiff = false;
+        let lbIsInfoOpen = false;
 
         // Initialization
         window.addEventListener('DOMContentLoaded', async () => {{
@@ -653,6 +735,20 @@ def get_index_html() -> str:
             }} catch (e) {{
                 console.error("Initial status error:", e);
             }}
+
+            // Global keyboard navigation for Lightbox
+            window.addEventListener('keydown', (e) => {{
+                const modal = document.getElementById('photoLightboxModal');
+                if (modal.classList.contains('hidden')) return;
+
+                if (e.key === 'Escape') {{
+                    closePhotoLightbox();
+                }} else if (e.key === 'ArrowLeft') {{
+                    navigateLightbox(-1);
+                }} else if (e.key === 'ArrowRight') {{
+                    navigateLightbox(1);
+                }}
+            }});
         }});
 
         function toggleScanDrawer() {{
@@ -664,11 +760,11 @@ def get_index_html() -> str:
             const gridBtn = document.getElementById('viewModeGridBtn');
             const listBtn = document.getElementById('viewModeListBtn');
             if (mode === 'grid') {{
-                gridBtn.className = "px-2.5 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]";
-                listBtn.className = "px-2.5 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white";
+                gridBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]";
+                listBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white";
             }} else {{
-                listBtn.className = "px-2.5 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]";
-                gridBtn.className = "px-2.5 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white";
+                listBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]";
+                gridBtn.className = "px-3 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white";
             }}
             renderCurrentPage();
         }}
@@ -683,13 +779,20 @@ def get_index_html() -> str:
                 active.className = "nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8]";
             }}
 
-            if (sec === 'PHOTOS') {{
+            const hero = document.getElementById('cleanupHeroCard');
+            if (sec === 'CLEANUP') {{
+                hero.classList.remove('hidden');
+                setModalityTab('ALL');
+            }} else if (sec === 'PHOTOS') {{
+                hero.classList.remove('hidden');
                 setModalityTab('PHOTO');
                 setViewMode('grid');
             }} else if (sec === 'DRIVE') {{
+                hero.classList.remove('hidden');
                 setViewMode('list');
-            }} else if (sec === 'CLEANUP' || sec === 'DUPLICATES') {{
-                setModalityTab('ALL');
+            }} else if (sec === 'TRASH') {{
+                hero.classList.add('hidden');
+                renderTrashSection();
             }}
         }}
 
@@ -760,7 +863,7 @@ def get_index_html() -> str:
             renderHeroStorageMeter(summary);
             renderModalityTabCounts(summary);
             applyFiltersAndSort();
-            updateDockMetrics();
+            updateTopSelectionBar();
         }}
 
         function groupRecordsIntoClusters(records) {{
@@ -888,6 +991,8 @@ def get_index_html() -> str:
         }}
 
         function renderCurrentPage() {{
+            if (currentNav === 'TRASH') return;
+
             const total = filteredClusters.length;
             const totalPages = Math.max(1, Math.ceil(total / perPage));
             if (currentPage > totalPages) currentPage = totalPages;
@@ -931,115 +1036,154 @@ def get_index_html() -> str:
         }}
 
         function isImageFile(path) {{
-            const exts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.heic', '.psd'];
+            const exts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif', '.heic', '.psd'];
             return exts.some(e => path.toLowerCase().endsWith(e));
         }}
 
-        // Google Photos Grid Card
+        // Authentic Google Photos Section with Edge-to-Edge Grid
         function createGooglePhotosCard(cluster) {{
-            const card = document.createElement('div');
-            card.className = "m3-card p-5 shadow-lg";
+            const section = document.createElement('section');
+            section.className = "space-y-3";
 
             const wastedMb = (cluster.totalWastedBytes / (1024 * 1024)).toFixed(2);
+            const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
+            const someDupesSelected = cluster.duplicates.some(d => !excludedPaths.has(d.path));
 
-            card.innerHTML = `
-                <div class="flex flex-wrap justify-between items-center pb-3 mb-4 border-b border-[#28292a] gap-2">
-                    <div class="flex items-center gap-2.5">
-                        <span class="font-bold text-white text-sm">Cluster #${{cluster.group_id}}</span>
-                        <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">${{cluster.match_type}}</span>
-                        <span class="text-[11px] font-mono text-[#8e918f]">Wasted: ${{wastedMb}} MB</span>
+            section.innerHTML = `
+                <!-- Cluster Section Header (Google Photos Timeline Header style) -->
+                <div class="flex items-center justify-between px-1 py-1">
+                    <div class="flex items-center gap-3">
+                        <div onclick="toggleClusterSelection(${{cluster.group_id}}, event)"
+                             class="gp-check-circle ${{allDupesSelected ? 'checked' : ''}}"
+                             title="${{allDupesSelected ? 'Deselect cluster' : 'Select all duplicates in cluster'}}">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <h3 class="text-sm font-bold text-white">Duplicate Set #${{cluster.group_id}}</h3>
+                            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">${{cluster.match_type}}</span>
+                            <span class="text-[11px] font-mono text-[#8e918f]">Wasted: ${{wastedMb}} MB</span>
+                        </div>
                     </div>
-                    <div>
-                        <button onclick="openComparisonLightbox(${{cluster.group_id}})" class="m3-button-secondary text-xs !py-1 !px-3">
-                            <span>🔍 Compare</span>
-                        </button>
-                    </div>
+
+                    <button onclick="openPhotoLightbox(${{cluster.group_id}}, '${{encodeURIComponent(cluster.items[0].path)}}')"
+                            class="m3-button-secondary text-xs !py-1 !px-3">
+                        <span>🔍 Compare</span>
+                    </button>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    ${{cluster.items.map(item => createPhotoTileHtml(cluster.group_id, item)).join('')}}
+                <!-- Fluid Edge-to-Edge Photo Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3">
+                    ${{cluster.items.map((item, idx) => createPhotoTileHtml(cluster.group_id, item, idx)).join('')}}
                 </div>
             `;
-            return card;
+            return section;
         }}
 
-        function createPhotoTileHtml(groupId, item) {{
+        function createPhotoTileHtml(groupId, item, idx) {{
             const isKeeper = (item.action === 'KEEP');
             const isExcluded = excludedPaths.has(item.path);
             const isChecked = !isKeeper && !isExcluded;
 
             const fname = item.path.split('/').pop();
-            const parentDir = item.path.substring(0, item.path.lastIndexOf('/'));
             const sizeStr = `${{(item.size_mb || 0).toFixed(2)}} MB`;
 
             return `
-                <div class="relative group rounded-2xl bg-[#131314] border ${{isKeeper ? 'border-[#81c995] shadow-md shadow-[#81c995]/10' : 'border-[#28292a]'}} p-3 flex flex-col justify-between overflow-hidden transition-all hover:border-[#3c4043]">
+                <div onclick="openPhotoLightbox(${{groupId}}, '${{encodeURIComponent(item.path)}}')"
+                     class="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer bg-[#1e1f20] border ${{isKeeper ? 'border-[#81c995]/80 shadow-md shadow-[#81c995]/10' : 'border-white/10'}} transition duration-200 hover:border-white/30">
 
-                    <!-- Top Bar: Checkbox or Keeper Star -->
-                    <div class="flex justify-between items-center mb-2 z-10">
+                    <!-- High-Res Thumbnail Preview -->
+                    ${{isImageFile(item.path) ? `
+                        <img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}"
+                             class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                             loading="lazy" alt="${{fname}}"
+                             onerror="this.parentElement.querySelector('.fallback-thumb').classList.remove('hidden'); this.remove();">
+                        <div class="fallback-thumb hidden w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f]">
+                            <span class="text-xl">🖼️</span>
+                            <span class="text-[10px] font-mono mt-1">PHOTO</span>
+                        </div>
+                    ` : `
+                        <div class="w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f] p-3 text-center">
+                            <span class="text-2xl mb-1">📄</span>
+                            <span class="text-xs font-semibold text-white truncate max-w-full">${{fname.split('.').pop() || 'DOC'}}</span>
+                            <span class="text-[10px] text-[#8e918f] font-mono mt-0.5">${{sizeStr}}</span>
+                        </div>
+                    `}}
+
+                    <!-- Dark Gradient Overlays for High Contrast Readability -->
+                    <div class="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-black/70 via-black/20 to-transparent pointer-events-none z-10"></div>
+                    <div class="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none z-10"></div>
+
+                    <!-- Top Left: Google Photos Check Circle -->
+                    <div class="absolute top-2.5 left-2.5 z-20">
                         ${{isKeeper ? `
-                            <span class="text-[10px] font-bold text-[#81c995] bg-[#81c995]/15 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span class="text-[10px] font-bold text-[#131314] bg-[#81c995] px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                                 <span>★</span> Keeper
                             </span>
                         ` : `
-                            <div onclick="toggleItemSelection('${{encodeURIComponent(item.path)}}')"
-                                 class="gp-check-circle ${{isChecked ? 'checked' : ''}}" title="Toggle for deletion/quarantine">
+                            <div onclick="toggleItemSelection('${{encodeURIComponent(item.path)}}', event)"
+                                 class="gp-check-circle ${{isChecked ? 'checked' : 'opacity-0 group-hover:opacity-100'}}"
+                                 title="${{isChecked ? 'Deselect from deletion' : 'Select for deletion'}}">
                                 <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                                     <polyline points="20 6 9 17 4 12"></polyline>
                                 </svg>
                             </div>
                         `}}
-                        <span class="text-[10px] font-mono text-[#8e918f] uppercase">${{item.category || 'FILE'}}</span>
                     </div>
 
-                    <!-- Thumbnail & Info -->
-                    <div class="flex gap-3 items-center mb-3">
-                        <div class="w-16 h-16 rounded-xl bg-black flex items-center justify-center overflow-hidden flex-shrink-0 border border-[#28292a]">
-                            ${{isImageFile(item.path) ? `
-                                <img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}" class="w-full h-full object-cover" loading="lazy" alt="preview"
-                                     onerror="this.parentElement.innerHTML='<span class=\\'text-xs text-[#8e918f]\\'>IMG</span>'">
+                    <!-- Top Right: Similarity Tag -->
+                    ${{!isKeeper ? `
+                        <div class="absolute top-2.5 right-2.5 z-20">
+                            <span class="text-[10px] font-mono text-[#8ab4f8] bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10">
+                                ${{item.similarity || '100%'}}
+                            </span>
+                        </div>
+                    ` : ''}}
+
+                    <!-- Bottom Details Bar -->
+                    <div class="absolute bottom-2 inset-x-2.5 z-20 flex flex-col justify-end">
+                        <div class="font-medium text-white text-xs truncate drop-shadow">${{fname}}</div>
+                        <div class="flex items-center justify-between text-[11px] text-[#c4c7c5] font-mono mt-0.5">
+                            <span>${{sizeStr}}</span>
+                            ${{!isKeeper ? `
+                                <button onclick="setKeeperOverride(${{groupId}}, '${{encodeURIComponent(item.path)}}', event)"
+                                        class="opacity-0 group-hover:opacity-100 transition text-[10px] text-[#8ab4f8] hover:text-white bg-black/70 backdrop-blur-md px-2 py-0.5 rounded-full border border-[#8ab4f8]/40"
+                                        title="Make this file the designated keeper">
+                                    ★ Keep
+                                </button>
                             ` : `
-                                <span class="text-xs font-mono text-[#8e918f] uppercase">${{fname.split('.').pop() || 'DOC'}}</span>
+                                <span class="text-[10px] text-[#81c995]">Original</span>
                             `}}
                         </div>
-                        <div class="min-w-0 flex-1 text-xs">
-                            <div class="font-medium text-white truncate" title="${{fname}}">${{fname}}</div>
-                            <div class="text-[10px] text-[#8e918f] font-mono truncate" title="${{parentDir}}">${{parentDir}}</div>
-                            <div class="text-[11px] text-[#c4c7c5] font-mono mt-1 font-semibold">${{sizeStr}}</div>
-                        </div>
-                    </div>
-
-                    <!-- Card Actions -->
-                    <div class="pt-2 border-t border-[#202124] flex justify-between items-center text-xs">
-                        ${{isKeeper ? `
-                            <span class="text-[10px] text-[#81c995] font-mono">Original retained</span>
-                        ` : `
-                            <button onclick="setKeeperOverride(${{groupId}}, '${{encodeURIComponent(item.path)}}')"
-                                    class="text-[11px] text-[#8ab4f8] hover:underline font-medium">
-                                ★ Make Keeper
-                            </button>
-                            <span class="text-[10px] font-mono text-[#8e918f]">${{item.similarity || '100%'}}</span>
-                        `}}
                     </div>
                 </div>
             `;
         }}
 
-        // Google Drive List Card
+        // Google Drive List View
         function createGoogleDriveListCard(cluster) {{
             const card = document.createElement('div');
             card.className = "m3-card p-4 shadow-lg";
 
             const wastedMb = (cluster.totalWastedBytes / (1024 * 1024)).toFixed(2);
+            const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
 
             card.innerHTML = `
                 <div class="flex justify-between items-center pb-2.5 mb-3 border-b border-[#28292a]">
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2.5">
+                        <div onclick="toggleClusterSelection(${{cluster.group_id}}, event)"
+                             class="gp-check-circle ${{allDupesSelected ? 'checked' : ''}} !w-5 !h-5"
+                             title="Select/Deselect cluster">
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
                         <span class="font-bold text-white text-xs">Cluster #${{cluster.group_id}}</span>
                         <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">${{cluster.match_type}}</span>
                         <span class="text-[10px] font-mono text-[#8e918f]">Wasted: ${{wastedMb}} MB</span>
                     </div>
-                    <button onclick="openComparisonLightbox(${{cluster.group_id}})" class="text-xs text-[#8ab4f8] hover:underline">
+                    <button onclick="openPhotoLightbox(${{cluster.group_id}}, '${{encodeURIComponent(cluster.items[0].path)}}')" class="text-xs text-[#8ab4f8] hover:underline">
                         Compare Diff
                     </button>
                 </div>
@@ -1075,7 +1219,7 @@ def get_index_html() -> str:
                 <tr class="hover:bg-[#28292a]/50 transition">
                     <td class="py-2 px-2">
                         ${{isKeeper ? `<span class="text-[#81c995]">★</span>` : `
-                            <input type="checkbox" onchange="toggleItemQuarantine('${{encodeURIComponent(item.path)}}', this.checked)"
+                            <input type="checkbox" onchange="toggleItemSelection('${{encodeURIComponent(item.path)}}')"
                                    ${{isChecked ? 'checked' : ''}} class="rounded accent-[#8ab4f8] cursor-pointer">
                         `}}
                     </td>
@@ -1089,8 +1233,8 @@ def get_index_html() -> str:
                     <td class="py-2 px-2 text-[#8e918f] truncate max-w-[240px]" title="${{item.path}}">${{item.path}}</td>
                     <td class="py-2 px-2 text-right">
                         ${{!isKeeper ? `
-                            <button onclick="setKeeperOverride(${{groupId}}, '${{encodeURIComponent(item.path)}}')"
-                                    class="text-[#8ab4f8] hover:underline text-[11px] font-sans font-medium mr-2">
+                            <button onclick="setKeeperOverride(${{groupId}}, '${{encodeURIComponent(item.path)}}', event)"
+                                     class="text-[#8ab4f8] hover:underline text-[11px] font-sans font-medium mr-2">
                                 Make Keeper
                             </button>
                         ` : '<span class="text-[#8e918f] text-[10px]">Keeper</span>'}}
@@ -1099,7 +1243,8 @@ def get_index_html() -> str:
             `;
         }}
 
-        function toggleItemSelection(encodedPath) {{
+        function toggleItemSelection(encodedPath, event) {{
+            if (event) event.stopPropagation();
             const path = decodeURIComponent(encodedPath);
             if (excludedPaths.has(path)) {{
                 excludedPaths.delete(path);
@@ -1107,20 +1252,32 @@ def get_index_html() -> str:
                 excludedPaths.add(path);
             }}
             renderCurrentPage();
-            updateDockMetrics();
+            updateTopSelectionBar();
         }}
 
-        function toggleItemQuarantine(encodedPath, isChecked) {{
-            const path = decodeURIComponent(encodedPath);
-            if (isChecked) {{
-                excludedPaths.delete(path);
+        function toggleClusterSelection(groupId, event) {{
+            if (event) event.stopPropagation();
+            const cluster = allClusters.find(c => c.group_id === groupId);
+            if (!cluster) return;
+
+            const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
+            if (allDupesSelected) {{
+                // Deselect all duplicates in this cluster
+                for (const d of cluster.duplicates) {{
+                    excludedPaths.add(d.path);
+                }}
             }} else {{
-                excludedPaths.add(path);
+                // Select all duplicates in this cluster
+                for (const d of cluster.duplicates) {{
+                    excludedPaths.delete(d.path);
+                }}
             }}
-            updateDockMetrics();
+            renderCurrentPage();
+            updateTopSelectionBar();
         }}
 
-        async function setKeeperOverride(groupId, encodedPath) {{
+        async function setKeeperOverride(groupId, encodedPath, event) {{
+            if (event) event.stopPropagation();
             const path = decodeURIComponent(encodedPath);
             try {{
                 const res = await fetch('/api/clusters/override-keeper', {{
@@ -1138,7 +1295,12 @@ def get_index_html() -> str:
                 }}
                 allClusters = groupRecordsIntoClusters(currentSummary.groups);
                 applyFiltersAndSort();
-                updateDockMetrics();
+                updateTopSelectionBar();
+
+                // If lightbox is open, refresh it
+                if (lbCluster && lbCluster.group_id === groupId) {{
+                    openPhotoLightbox(groupId, encodeURIComponent(path));
+                }}
             }} catch (e) {{
                 alert("Error setting keeper: " + e.message);
             }}
@@ -1154,10 +1316,11 @@ def get_index_html() -> str:
                 excludedPaths.clear();
             }}
             renderCurrentPage();
-            updateDockMetrics();
+            updateTopSelectionBar();
         }}
 
-        function updateDockMetrics() {{
+        // Updates Google Photos Top Selection Bar (Zero floating windows)
+        function updateTopSelectionBar() {{
             if (!currentSummary) return;
             let stagedBytes = 0;
             let stagedCount = 0;
@@ -1171,16 +1334,198 @@ def get_index_html() -> str:
 
             const mb = (stagedBytes / (1024 * 1024)).toFixed(1);
             const gb = (stagedBytes / (1024 * 1024 * 1024)).toFixed(3);
-            document.getElementById('dockSelectedSpace').innerText = `${{gb}} GB (${{mb}} MB)`;
-            document.getElementById('dockSelectedCount').innerText = `${{stagedCount.toLocaleString()}} duplicate files selected`;
 
-            // Dim or elevate contextual bar
-            const bar = document.getElementById('contextualActionBar');
-            if (stagedCount === 0) {{
-                bar.style.opacity = "0.7";
+            const defHeader = document.getElementById('defaultHeader');
+            const selHeader = document.getElementById('selectionHeader');
+
+            if (stagedCount > 0) {{
+                defHeader.classList.add('hidden');
+                selHeader.classList.remove('hidden');
+                selHeader.classList.add('flex');
+
+                document.getElementById('topSelectedCount').innerText = `${{stagedCount.toLocaleString()}} selected`;
+                document.getElementById('topSelectedSpace').innerText = `(${{gb}} GB • ${{mb}} MB)`;
             }} else {{
-                bar.style.opacity = "1";
+                selHeader.classList.add('hidden');
+                selHeader.classList.remove('flex');
+                defHeader.classList.remove('hidden');
             }}
+        }}
+
+        // Google Photos Full-Screen Lightbox
+        function openPhotoLightbox(groupId, encodedPath) {{
+            const cluster = allClusters.find(c => c.group_id === groupId);
+            if (!cluster) return;
+
+            const path = decodeURIComponent(encodedPath);
+            let idx = cluster.items.findIndex(i => i.path === path);
+            if (idx === -1) idx = 0;
+
+            lbCluster = cluster;
+            lbItemIndex = idx;
+            lbIsDiff = false;
+
+            renderLightboxView();
+            document.getElementById('photoLightboxModal').classList.remove('hidden');
+        }}
+
+        function closePhotoLightbox() {{
+            document.getElementById('photoLightboxModal').classList.add('hidden');
+            lbCluster = null;
+        }}
+
+        function navigateLightbox(dir) {{
+            if (!lbCluster || lbCluster.items.length <= 1) return;
+            lbItemIndex = (lbItemIndex + dir + lbCluster.items.length) % lbCluster.items.length;
+            renderLightboxView();
+        }}
+
+        function toggleLightboxDiff() {{
+            lbIsDiff = !lbIsDiff;
+            const diffBtn = document.getElementById('lbDiffBtn');
+            if (lbIsDiff) {{
+                diffBtn.classList.add('!bg-[#1a3860]', '!text-[#8ab4f8]');
+            }} else {{
+                diffBtn.classList.remove('!bg-[#1a3860]', '!text-[#8ab4f8]');
+            }}
+            renderLightboxView();
+        }}
+
+        function toggleLightboxInfo() {{
+            lbIsInfoOpen = !lbIsInfoOpen;
+            const drawer = document.getElementById('lbInfoDrawer');
+            const infoBtn = document.getElementById('lbInfoBtn');
+            if (lbIsInfoOpen) {{
+                drawer.classList.remove('hidden');
+                infoBtn.classList.add('!bg-[#1a3860]', '!text-[#8ab4f8]');
+            }} else {{
+                drawer.classList.add('hidden');
+                infoBtn.classList.remove('!bg-[#1a3860]', '!text-[#8ab4f8]');
+            }}
+        }}
+
+        function renderLightboxView() {{
+            if (!lbCluster) return;
+            const item = lbCluster.items[lbItemIndex];
+            const keeper = lbCluster.keeper || lbCluster.items[0];
+            const isKeeper = (item.action === 'KEEP');
+
+            document.getElementById('lbClusterTitle').innerText = `Cluster #${{lbCluster.group_id}} (${{lbItemIndex + 1}} of ${{lbCluster.items.length}})`;
+            document.getElementById('lbMatchType').innerText = lbCluster.match_type;
+            document.getElementById('lbFileName').innerText = item.path.split('/').pop();
+
+            const makeKeeperBtn = document.getElementById('lbMakeKeeperBtn');
+            if (isKeeper) {{
+                makeKeeperBtn.classList.add('opacity-50', 'pointer-events-none');
+                makeKeeperBtn.innerText = "★ Designated Keeper";
+            }} else {{
+                makeKeeperBtn.classList.remove('opacity-50', 'pointer-events-none');
+                makeKeeperBtn.innerText = "★ Make Keeper";
+            }}
+
+            const singleView = document.getElementById('lbSingleView');
+            const diffView = document.getElementById('lbDiffView');
+
+            if (lbIsDiff) {{
+                singleView.classList.add('hidden');
+                diffView.classList.remove('hidden');
+
+                // Keeper Diff Column
+                document.getElementById('lbDiffKeeperName').innerText = keeper.path.split('/').pop();
+                document.getElementById('lbDiffKeeperPath').innerText = keeper.path;
+                document.getElementById('lbDiffKeeperSize').innerText = `${{(keeper.size_mb || 0).toFixed(2)}} MB`;
+                document.getElementById('lbDiffKeeperDim').innerText = keeper.dimensions ? `${{keeper.dimensions[0]}}x${{keeper.dimensions[1]}}` : 'N/A';
+                document.getElementById('lbDiffKeeperCat').innerText = keeper.category || 'PHOTO';
+                const kpPreview = document.getElementById('lbDiffKeeperPreview');
+                if (isImageFile(keeper.path)) {{
+                    kpPreview.innerHTML = `<img src="/api/thumbnail?path=${{encodeURIComponent(keeper.path)}}" class="w-full h-full object-contain" alt="keeper">`;
+                }} else {{
+                    kpPreview.innerHTML = `<span class="text-xs font-mono text-[#8e918f] uppercase">${{keeper.path.split('.').pop()}} FILE</span>`;
+                }}
+
+                // Dupe Diff Column
+                const dupeItem = isKeeper ? (lbCluster.duplicates[0] || item) : item;
+                document.getElementById('lbDiffDupeName').innerText = dupeItem.path.split('/').pop();
+                document.getElementById('lbDiffDupePath').innerText = dupeItem.path;
+                document.getElementById('lbDiffDupeSize').innerText = `${{(dupeItem.size_mb || 0).toFixed(2)}} MB`;
+                document.getElementById('lbDiffDupeDim').innerText = dupeItem.dimensions ? `${{dupeItem.dimensions[0]}}x${{dupeItem.dimensions[1]}}` : 'N/A';
+                document.getElementById('lbDiffDupeSim').innerText = dupeItem.similarity || '100% Match';
+                const dpPreview = document.getElementById('lbDiffDupePreview');
+                if (isImageFile(dupeItem.path)) {{
+                    dpPreview.innerHTML = `<img src="/api/thumbnail?path=${{encodeURIComponent(dupeItem.path)}}" class="w-full h-full object-contain" alt="dupe">`;
+                }} else {{
+                    dpPreview.innerHTML = `<span class="text-xs font-mono text-[#8e918f] uppercase">${{dupeItem.path.split('.').pop()}} FILE</span>`;
+                }}
+            }} else {{
+                diffView.classList.add('hidden');
+                singleView.classList.remove('hidden');
+
+                const container = document.getElementById('lbImageContainer');
+                if (isImageFile(item.path)) {{
+                    container.innerHTML = `<img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}" class="max-h-[80vh] max-w-full object-contain rounded-xl shadow-2xl" alt="lightbox photo">`;
+                }} else {{
+                    container.innerHTML = `
+                        <div class="text-center p-12 bg-[#1e1f20] rounded-2xl border border-[#3c4043]">
+                            <span class="text-5xl block mb-3">📄</span>
+                            <div class="font-bold text-white text-base">${{item.path.split('/').pop()}}</div>
+                            <div class="text-xs text-[#8e918f] font-mono mt-1">${{(item.size_mb || 0).toFixed(2)}} MB</div>
+                        </div>
+                    `;
+                }}
+            }}
+
+            // Populate Info Drawer
+            document.getElementById('lbInfoName').innerText = item.path.split('/').pop();
+            document.getElementById('lbInfoPath').innerText = item.path;
+            document.getElementById('lbInfoSize').innerText = `${{(item.size_mb || 0).toFixed(2)}} MB`;
+            document.getElementById('lbInfoDim').innerText = item.dimensions ? `${{item.dimensions[0]}}x${{item.dimensions[1]}}` : 'N/A';
+            document.getElementById('lbInfoRole').innerText = isKeeper ? 'DESIGNATED KEEPER' : 'DUPLICATE CANDIDATE';
+            document.getElementById('lbInfoRole').className = isKeeper ? 'text-[#81c995] font-semibold' : 'text-[#f28b82] font-semibold';
+            document.getElementById('lbInfoSim').innerText = item.similarity || (isKeeper ? 'Original' : '100%');
+            document.getElementById('lbInfoAlgorithm').innerText = lbCluster.match_type;
+        }}
+
+        async function swapKeeperInLightbox() {{
+            if (!lbCluster) return;
+            const item = lbCluster.items[lbItemIndex];
+            await setKeeperOverride(lbCluster.group_id, encodeURIComponent(item.path));
+        }}
+
+        // Trash Section View
+        function renderTrashSection() {{
+            const gallery = document.getElementById('clustersGallery');
+            gallery.innerHTML = `
+                <div class="m3-card p-8">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-12 h-12 rounded-full bg-[#1a3860] text-[#8ab4f8] flex items-center justify-center text-2xl">🗑️</div>
+                        <div>
+                            <h3 class="text-xl font-bold text-white">Safe Trash & Audit History</h3>
+                            <p class="text-xs text-[#8e918f]">Restorable Soft Deletion & Audit Trail</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-sm text-[#c4c7c5]">
+                        <p>
+                            Clairvoy moves deleted files into <code class="text-xs bg-[#131314] px-2 py-0.5 rounded text-[#8ab4f8]">.clairvoy_trash/</code> with an immutable JSON manifest.
+                            Keeper files are mathematically protected by zero-clobber invariants.
+                        </p>
+                        <div class="bg-[#131314] rounded-2xl p-5 border border-[#3c4043] flex flex-wrap gap-4 items-center justify-between">
+                            <div>
+                                <div class="font-bold text-white text-xs">Hardened Deletion Scripts</div>
+                                <div class="text-xs text-[#8e918f] font-mono">Download a shell script to review and execute offline at your leisure.</div>
+                            </div>
+                            <div class="flex gap-2">
+                                <a href="/api/reports/delete-script?mode=trash" download class="m3-button-secondary text-xs">
+                                    <span>Download Trash Script (.sh)</span>
+                                </a>
+                                <a href="/api/reports/delete-script?mode=permanent" download class="m3-button-danger text-xs">
+                                    <span>Download Permanent Delete Script (.sh)</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }}
 
         // Dialog Functions
@@ -1237,7 +1582,6 @@ def get_index_html() -> str:
                 const freedMb = (data.total_bytes_freed / (1024 * 1024)).toFixed(2);
                 alert(`[✓] Successfully processed ${{data.total_files_deleted}} files in ${{mode.toUpperCase()}} mode (${{freedMb}} MB freed).`);
 
-                // Remove deleted items from currentSummary
                 const deletedSet = new Set(data.items.map(it => it.original_path));
                 currentSummary.groups = currentSummary.groups.filter(g => !deletedSet.has(g.path));
                 currentSummary.wasted_bytes = Math.max(0, (currentSummary.wasted_bytes || 0) - data.total_bytes_freed);
@@ -1266,60 +1610,6 @@ def get_index_html() -> str:
             }} catch (e) {{
                 alert("Quarantine error: " + e.message);
             }}
-        }}
-
-        // Side-by-Side Comparison Modal
-        function openComparisonLightbox(groupId) {{
-            const cluster = allClusters.find(c => c.group_id === groupId);
-            if (!cluster || !cluster.keeper || cluster.duplicates.length === 0) return;
-
-            modalActiveCluster = cluster;
-            modalActiveDupe = cluster.duplicates[0];
-
-            document.getElementById('modalClusterTitle').innerText = `Cluster #${{cluster.group_id}} Side-by-Side Diff`;
-            document.getElementById('modalClusterSubtitle').innerText = `${{cluster.items.length}} candidate files matching with ${{cluster.match_type}}`;
-
-            const keeper = cluster.keeper;
-            document.getElementById('modalKeeperName').innerText = keeper.path.split('/').pop();
-            document.getElementById('modalKeeperPath').innerText = keeper.path;
-            document.getElementById('modalKeeperCategory').innerText = keeper.category || 'FILE';
-            document.getElementById('modalKeeperDim').innerText = keeper.dimensions ? `${{keeper.dimensions[0]}}x${{keeper.dimensions[1]}}` : 'N/A';
-            document.getElementById('modalKeeperSize').innerText = `${{(keeper.size_mb || 0).toFixed(2)}} MB`;
-
-            const keeperPreview = document.getElementById('modalKeeperPreview');
-            if (isImageFile(keeper.path)) {{
-                keeperPreview.innerHTML = `<img src="/api/thumbnail?path=${{encodeURIComponent(keeper.path)}}" class="w-full h-full object-contain" alt="keeper">`;
-            }} else {{
-                keeperPreview.innerHTML = `<span class="text-xs font-mono text-[#8e918f] uppercase">${{keeper.path.split('.').pop()}} DOCUMENT</span>`;
-            }}
-
-            const dupe = modalActiveDupe;
-            document.getElementById('modalDupeName').innerText = dupe.path.split('/').pop();
-            document.getElementById('modalDupePath').innerText = dupe.path;
-            document.getElementById('modalDupeSimilarity').innerText = dupe.similarity || '100% Match';
-            document.getElementById('modalDupeDim').innerText = dupe.dimensions ? `${{dupe.dimensions[0]}}x${{dupe.dimensions[1]}}` : 'N/A';
-            document.getElementById('modalDupeSize').innerText = `${{(dupe.size_mb || 0).toFixed(2)}} MB`;
-
-            const dupePreview = document.getElementById('modalDupePreview');
-            if (isImageFile(dupe.path)) {{
-                dupePreview.innerHTML = `<img src="/api/thumbnail?path=${{encodeURIComponent(dupe.path)}}" class="w-full h-full object-contain" alt="duplicate">`;
-            }} else {{
-                dupePreview.innerHTML = `<span class="text-xs font-mono text-[#8e918f] uppercase">${{dupe.path.split('.').pop()}} DOCUMENT</span>`;
-            }}
-
-            document.getElementById('comparisonModal').classList.remove('hidden');
-        }}
-
-        function closeComparisonModal() {{
-            document.getElementById('comparisonModal').classList.add('hidden');
-            modalActiveCluster = null;
-            modalActiveDupe = null;
-        }}
-
-        async function swapKeeperInModal() {{
-            if (!modalActiveCluster || !modalActiveDupe) return;
-            await setKeeperOverride(modalActiveCluster.group_id, encodeURIComponent(modalActiveDupe.path));
-            closeComparisonModal();
         }}
 
         async function triggerScan() {{

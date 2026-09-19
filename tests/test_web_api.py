@@ -33,6 +33,12 @@ def test_index_page(client):
     assert response.status_code == 200
     assert "Clairvoy" in response.text
     assert "runsDropdown" in response.text
+    assert "defaultHeader" in response.text
+    assert "selectionHeader" in response.text
+    assert "photoLightboxModal" in response.text
+    assert "gp-check-circle" in response.text
+    # Floating bottom dock must NOT exist
+    assert "contextualActionBar" not in response.text
 
 
 def test_status_endpoint(client):
