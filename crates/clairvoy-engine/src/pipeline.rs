@@ -78,11 +78,12 @@ impl DeduplicationPipeline {
         let mut total_wasted_bytes = 0u64;
         let mut category_breakdown = HashMap::new();
 
-        for cluster in &all_clusters {
+        for (cluster_idx, cluster) in all_clusters.iter().enumerate() {
+            let group_id = cluster_idx + 1;
             let (keeper, dupes) = self.keeper_strategy.choose_keeper(&cluster.members);
 
             records.push(DuplicateRecord {
-                group_id: cluster.cluster_id,
+                group_id,
                 match_type: cluster.match_type,
                 action: ActionType::Keep,
                 category: keeper.category,
@@ -99,7 +100,7 @@ impl DeduplicationPipeline {
                     .entry(format!("{:?}", d.category).to_uppercase())
                     .or_insert(0) += 1;
                 records.push(DuplicateRecord {
-                    group_id: cluster.cluster_id,
+                    group_id,
                     match_type: cluster.match_type,
                     action: ActionType::Duplicate,
                     category: d.category,

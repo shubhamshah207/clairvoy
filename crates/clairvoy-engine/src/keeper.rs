@@ -18,7 +18,11 @@ impl Default for CompositeKeeperStrategy {
 impl KeeperStrategy for CompositeKeeperStrategy {
     fn score_entry(&self, entry: &FileEntry, _cluster: &[FileEntry]) -> i64 {
         let mut score = 100i64;
-        let path_str = entry.path.to_string_lossy().to_lowercase();
+        let path_str = entry
+            .path
+            .to_string_lossy()
+            .replace('\\', "/")
+            .to_lowercase();
         let fname = entry
             .path
             .file_name()
@@ -26,10 +30,25 @@ impl KeeperStrategy for CompositeKeeperStrategy {
             .unwrap_or("")
             .to_lowercase();
 
-        if path_str.contains("/trash/") || path_str.contains("/recycle") {
+        if path_str.contains("/trash/")
+            || path_str.contains("/.trash")
+            || path_str.contains("/recycle")
+            || path_str.contains("$recycle.bin")
+        {
             score -= 500;
         }
-        if fname.contains("copy") || fname.contains("-copy") {
+
+        let is_copy = fname.contains(" - copy")
+            || fname.contains("-copy")
+            || fname.contains("_copy")
+            || fname.contains("(copy)")
+            || fname.contains(" copy.")
+            || fname.contains(" copy ")
+            || fname.starts_with("copy ")
+            || fname.starts_with("copy_")
+            || fname.starts_with("copy of ");
+
+        if is_copy {
             score -= 25;
         }
         if fname.contains("thumb") {
@@ -75,15 +94,31 @@ mod tests {
         let strategy = CompositeKeeperStrategy::new();
         let normal = make_entry("/home/user/photos/photo.jpg");
         let copy = make_entry("/home/user/photos/photo - Copy.jpg");
+        let copy_underscore = make_entry("/home/user/photos/photo_copy.jpg");
+        let copy_paren = make_entry("/home/user/photos/photo (Copy).jpg");
+        let copy_prefix = make_entry("/home/user/photos/Copy of photo.jpg");
+        let photocopy = make_entry("/home/user/photos/photocopy.jpg");
+        let copyright = make_entry("/home/user/photos/copyright.png");
         let thumb = make_entry("/home/user/photos/thumb_photo.jpg");
         let edited = make_entry("/home/user/photos/photo_edited.jpg");
-        let trash = make_entry("/home/user/.local/share/trash/photo.jpg");
+        let trash_unix = make_entry("/home/user/.local/share/trash/photo.jpg");
+        let trash_win = make_entry("C:\\photos\\trash\\photo.jpg");
+        let recycle_win = make_entry("C:\\$Recycle.Bin\\S-1-5-21\\photo.jpg");
 
         assert_eq!(strategy.score_entry(&normal, &[]), 100);
         assert_eq!(strategy.score_entry(&copy, &[]), 75);
+        assert_eq!(strategy.score_entry(&copy_underscore, &[]), 75);
+        assert_eq!(strategy.score_entry(&copy_paren, &[]), 75);
+        assert_eq!(strategy.score_entry(&copy_prefix, &[]), 75);
+        // Ensure words containing copy aren't false-positive penalized
+        assert_eq!(strategy.score_entry(&photocopy, &[]), 100);
+        assert_eq!(strategy.score_entry(&copyright, &[]), 100);
+
         assert_eq!(strategy.score_entry(&thumb, &[]), 50);
         assert_eq!(strategy.score_entry(&edited, &[]), 90);
-        assert_eq!(strategy.score_entry(&trash, &[]), -400);
+        assert_eq!(strategy.score_entry(&trash_unix, &[]), -400);
+        assert_eq!(strategy.score_entry(&trash_win, &[]), -400);
+        assert_eq!(strategy.score_entry(&recycle_win, &[]), -400);
     }
 
     #[test]
