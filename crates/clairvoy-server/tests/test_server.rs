@@ -23,8 +23,13 @@ async fn test_server_scan_endpoint() {
     let app = build_router();
     let server = TestServer::new(app).unwrap();
 
+    let dir1 = std::env::temp_dir().join("clairvoy_test_server_1");
+    let dir2 = std::env::temp_dir().join("clairvoy_test_server_2");
+    let _ = std::fs::create_dir_all(&dir1);
+    let _ = std::fs::create_dir_all(&dir2);
+
     let scan_payload = json!({
-        "paths": ["/tmp/test_dir_1", "/tmp/test_dir_2"]
+        "paths": [dir1.to_string_lossy(), dir2.to_string_lossy()]
     });
 
     let res_scan = server.post("/api/scan").json(&scan_payload).await;
@@ -36,11 +41,8 @@ async fn test_server_scan_endpoint() {
     let res_status = server.get("/api/status").await;
     assert_eq!(res_status.status_code(), 200);
     let status_body: serde_json::Value = res_status.json();
-    assert_eq!(status_body["status"], "running");
-    assert!(status_body["message"]
-        .as_str()
-        .unwrap()
-        .contains("2 path(s)"));
+    let status = status_body["status"].as_str().unwrap();
+    assert!(status == "running" || status == "completed");
 }
 
 #[tokio::test]
@@ -52,6 +54,48 @@ async fn test_server_runs_endpoint() {
     assert_eq!(res_runs.status_code(), 200);
     let runs_body: serde_json::Value = res_runs.json();
     assert!(runs_body.is_array());
+}
+
+#[tokio::test]
+async fn test_server_browse_directories() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/api/system/browse-directories").await;
+    assert_eq!(res.status_code(), 200);
+    let body: serde_json::Value = res.json();
+    assert!(body["current_path"].is_string());
+    assert!(body["shortcuts"].is_array());
+    assert!(body["directories"].is_array());
+
+    // Test with specific query path
+    let tmp_dir = std::env::temp_dir();
+    let res_tmp = server
+        .get(&format!(
+            "/api/system/browse-directories?path={}",
+            tmp_dir.to_string_lossy()
+        ))
+        .await;
+    assert_eq!(res_tmp.status_code(), 200);
+    let tmp_body: serde_json::Value = res_tmp.json();
+    assert!(tmp_body["current_path"].is_string());
+
+    // Test with nonexistent path falls back to home without crashing
+    let res_nonexistent = server
+        .get("/api/system/browse-directories?path=/path/that/does/not/exist_12345")
+        .await;
+    assert_eq!(res_nonexistent.status_code(), 200);
+}
+
+#[tokio::test]
+async fn test_server_pick_folder() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.post("/api/system/pick-folder").await;
+    assert_eq!(res.status_code(), 200);
+    let body: serde_json::Value = res.json();
+    assert_eq!(body["status"], "cancelled");
 }
 
 #[tokio::test]

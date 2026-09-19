@@ -1712,6 +1712,9 @@ def get_index_html() -> str:
 
             try {{
                 const res = await fetch(`/api/system/browse-directories?path=${{encodeURIComponent(targetPath)}}`);
+                if (!res.ok) {{
+                    throw new Error(`Server returned HTTP ${{res.status}}: ${{res.statusText || 'Unable to load directory'}}`);
+                }}
                 const data = await res.json();
                 if (spinner) spinner.classList.add('hidden');
 
