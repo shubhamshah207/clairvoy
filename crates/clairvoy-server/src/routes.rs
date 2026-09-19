@@ -20,6 +20,7 @@ use tokio_stream::Stream;
 use tower_http::cors::CorsLayer;
 
 static INDEX_HTML: &str = include_str!("index.html");
+static TAILWIND_JS: &str = include_str!("tailwind.min.js");
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScanPayload {
@@ -227,6 +228,16 @@ pub async fn handle_index() -> Html<&'static str> {
     Html(INDEX_HTML)
 }
 
+pub async fn handle_tailwind_js() -> impl axum::response::IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "application/javascript; charset=utf-8"),
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+        ],
+        TAILWIND_JS,
+    )
+}
+
 pub async fn handle_status(State(state): State<ServerState>) -> Json<AppScanState> {
     let mut s = state.scan_state.lock().unwrap().clone();
     if s.status == "idle" || s.status == "completed" {
@@ -271,6 +282,10 @@ pub async fn handle_status_stream(
     let stream = async_stream::stream! {
         let mut interval = tokio::time::interval(Duration::from_millis(500));
         let mut last_seen_run_id: Option<String> = None;
+        let mut last_status: Option<String> = None;
+        let mut last_stage: Option<String> = None;
+        let mut first_tick = true;
+
         loop {
             interval.tick().await;
             let mut current_state = {
@@ -315,8 +330,31 @@ pub async fn handle_status_stream(
                 }
             }
 
-            if let Ok(json_str) = serde_json::to_string(&current_state) {
-                yield Ok(Event::default().data(json_str));
+            let is_running = current_state.status == "running";
+            let state_changed = first_tick
+                || is_running
+                || last_status.as_ref() != Some(&current_state.status)
+                || last_stage.as_ref() != Some(&current_state.stage)
+                || last_seen_run_id.as_ref() != current_state.run_id.as_ref();
+
+            if state_changed {
+                first_tick = false;
+                last_status = Some(current_state.status.clone());
+                last_stage = Some(current_state.stage.clone());
+                if let Some(ref r) = current_state.run_id {
+                    last_seen_run_id = Some(r.clone());
+                }
+
+                // Strip heavyweight groups list from SSE status stream to keep SSE events ~400 bytes
+                // instead of 6.2MB. The client loads full groups on-demand via /api/runs/load.
+                let mut sse_state = current_state.clone();
+                if let Some(ref mut summ) = sse_state.summary {
+                    summ.groups.clear();
+                }
+
+                if let Ok(json_str) = serde_json::to_string(&sse_state) {
+                    yield Ok(Event::default().data(json_str));
+                }
             }
         }
     };
@@ -1202,6 +1240,7 @@ pub fn build_router_with_services(
 pub fn build_router_full(state: ServerState) -> Router {
     Router::new()
         .route("/", get(handle_index))
+        .route("/static/tailwind.js", get(handle_tailwind_js))
         .route("/api/status", get(handle_status))
         .route("/api/status/stream", get(handle_status_stream))
         .route("/api/scan", post(handle_scan))

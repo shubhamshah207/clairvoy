@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clairvoy | Multimodal Storage Optimization & Deduplication Studio</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/tailwind.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -1721,16 +1721,21 @@
 
         let currentRunId = null;
 
-        // Initialization
+        // Initialization: defer streaming connection until window has fully completed initial load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                initStatusStream();
+            }, 200);
+        });
+
         window.addEventListener('DOMContentLoaded', async () => {
-            initStatusStream();
             await loadPastRunsList();
             await refreshTelemetryData();
             logActivityEvent('system', 'Clairvoy ambient telemetry initialized');
             try {
                 const res = await fetch('/api/status');
                 const state = await res.json();
-                if (state.status === "completed" && state.summary) {
+                if (state.status === "completed" && state.summary && state.summary.groups && state.summary.groups.length > 0) {
                     currentRunId = state.run_id;
                     loadSummaryState(state.summary, state.message);
                 } else if (state.status === "running") {
@@ -1751,6 +1756,7 @@
             } catch (e) {
                 console.error("Initial status error:", e);
             }
+        });
 
             // Global keyboard navigation & shortcuts
             window.addEventListener('keydown', (e) => {
@@ -5036,15 +5042,19 @@
                             const newRunId = state.run_id || (state.summary && state.summary.run_id);
                             if (newRunId && newRunId !== currentRunId) {
                                 currentRunId = newRunId;
-                                if (state.summary) {
+                                if (state.summary && state.summary.groups && state.summary.groups.length > 0) {
                                     loadSummaryState(state.summary, state.message);
                                 } else {
                                     loadRunReport({ run_id: newRunId });
                                 }
                                 loadPastRunsList(newRunId);
-                            } else if (!currentSummary && state.summary) {
+                            } else if (!currentSummary && (newRunId || state.summary)) {
                                 currentRunId = newRunId;
-                                loadSummaryState(state.summary, state.message);
+                                if (state.summary && state.summary.groups && state.summary.groups.length > 0) {
+                                    loadSummaryState(state.summary, state.message);
+                                } else if (newRunId) {
+                                    loadRunReport({ run_id: newRunId });
+                                }
                                 loadPastRunsList(newRunId);
                             }
                         }

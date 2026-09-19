@@ -17,6 +17,7 @@ async fn test_server_status_and_index() {
     assert_eq!(res_index.status_code(), 200);
     let index_html = res_index.text();
     assert!(index_html.contains("Clairvoy"));
+    assert!(index_html.contains("/static/tailwind.js"));
     assert!(index_html.contains("Autonomous Watcher"));
     assert!(index_html.contains("renderWatcherSection"));
     assert!(index_html.contains("initStatusStream"));
@@ -25,6 +26,20 @@ async fn test_server_status_and_index() {
     let res_status = server.get("/api/status").await;
     assert_eq!(res_status.status_code(), 200);
     assert!(res_status.text().contains("status"));
+}
+
+#[tokio::test]
+async fn test_server_static_tailwind() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/static/tailwind.js").await;
+    assert_eq!(res.status_code(), 200);
+    assert_eq!(
+        res.header("content-type"),
+        "application/javascript; charset=utf-8"
+    );
+    assert!(res.text().len() > 100_000);
 }
 
 #[tokio::test]
