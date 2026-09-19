@@ -199,7 +199,7 @@ def get_index_html() -> str:
     <!-- Google Material App Bar -->
     <header class="sticky top-0 z-40 bg-[#1e1f20]/95 backdrop-blur-md border-b border-[#28292a] px-4 lg:px-8 py-3">
         <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
-            
+
             <!-- Logo & Brand (Google 4-Colors) -->
             <div class="flex items-center gap-3 flex-shrink-0">
                 <div class="flex items-center gap-1.5">
@@ -974,7 +974,7 @@ def get_index_html() -> str:
 
             return `
                 <div class="relative group rounded-2xl bg-[#131314] border ${{isKeeper ? 'border-[#81c995] shadow-md shadow-[#81c995]/10' : 'border-[#28292a]'}} p-3 flex flex-col justify-between overflow-hidden transition-all hover:border-[#3c4043]">
-                    
+
                     <!-- Top Bar: Checkbox or Keeper Star -->
                     <div class="flex justify-between items-center mb-2 z-10">
                         ${{isKeeper ? `

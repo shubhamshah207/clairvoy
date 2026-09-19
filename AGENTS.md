@@ -92,11 +92,16 @@ All agents operating in this repository **MUST read this document** and **MUST m
 |                              +-------------+-------------+                                              |
 |                                            |                                                            |
 |                                            v                                                            |
+|                                            v                                                            |
 |                              +-------------+-------------+                                              |
 |                              |                           |                                              |
 |                              v                           v                                              |
 |                 [Action: SafeQuarantine]          [Action: Hardlink]                                    |
 |                 SafeQuarantineActionPlugin        HardlinkActionPlugin                                  |
+|                              |                                                                          |
+|                              v                                                                          |
+|                 [Action: SafeDelete]                                                                    |
+|                 DeleteEngine (Soft Trash & Permanent)                                                   |
 +---------------------------------------------------------------------------------------------------------+
 ```
 
@@ -117,9 +122,11 @@ All agents operating in this repository **MUST read this document** and **MUST m
 To preserve agent instruction budgets, in-depth guidelines are organized into dedicated documents:
 
 - **System Architecture & Deep Modules:** [`docs/ARCHITECTURE.md`](file:///home/shubhamshah207/clairvoy/docs/ARCHITECTURE.md)
-  - Details package structure, short-circuit pipeline pruning, composite keeper scoring, and Premier Web Studio architecture.
+  - Details package structure, short-circuit pipeline pruning, composite keeper scoring, DeleteEngine, and Google Material Design 3 Web Studio.
+- **Google Material Design 3 Spec & Plans:** [`docs/superpowers/specs/2026-09-18-google-material-design-system.md`](file:///home/shubhamshah207/clairvoy/docs/superpowers/specs/2026-09-18-google-material-design-system.md) & [`docs/superpowers/plans/2026-09-18-google-material-ui-and-delete.md`](file:///home/shubhamshah207/clairvoy/docs/superpowers/plans/2026-09-18-google-material-ui-and-delete.md)
+  - Details the Google Photos, Google Drive, and Google Files-inspired M3 interface, circular checkmark multi-selection, dual view modes, and Safe Trash & Permanent Deletion engine.
 - **Premier UX Design System Spec & Plans:** [`docs/superpowers/specs/2026-09-18-premier-ux-design-system.md`](file:///home/shubhamshah207/clairvoy/docs/superpowers/specs/2026-09-18-premier-ux-design-system.md) & [`docs/superpowers/plans/2026-09-18-premier-ux-redesign.md`](file:///home/shubhamshah207/clairvoy/docs/superpowers/plans/2026-09-18-premier-ux-redesign.md)
-  - Details the CleanMyMac & Immich-inspired dark-mode UI studio, side-by-side comparison lightbox, dynamic keeper overrides, and 60fps client pagination.
+  - Details the dark-mode UI foundation, side-by-side comparison lightbox, dynamic keeper overrides, and 60fps client pagination.
 - **Plugin Developer Guide:** [`docs/PLUGINS.md`](file:///home/shubhamshah207/clairvoy/docs/PLUGINS.md)
   - Details how to create custom Matcher, Keeper, and Action plugins, priority tiers, and dynamic registration.
 - **Testing & Verification Guide:** [`docs/TESTING.md`](file:///home/shubhamshah207/clairvoy/docs/TESTING.md)

@@ -337,3 +337,57 @@ Inspired by industry benchmarks **CleanMyMac X** and **Immich**, Clairvoy featur
 - **Side-by-Side Comparison Lightbox Modal**: High-resolution image/document preview modal comparing the current Keeper against any duplicate candidate with synchronized metadata diffs (file size, resolution, modification date, file path).
 - **Sticky Action Dock**: Persistent bottom dock tracking staged quarantine count and gigabytes with direct CSV export (`GET /api/reports/csv`), Shell script download (`GET /api/reports/script`), and reversible quarantine staging.
 
+---
+
+## 9. Google Material Design 3 (M3) Studio & Safe Deletion Architecture
+
+Clairvoy features an authentic, 100% offline Google Material Design 3 interface modeled directly on **Google Photos**, **Google Drive**, **Google Files**, and **Google One**:
+
+```
++-----------------------------------------------------------------------------------------+
+|                                CLAIRVOY GOOGLE M3 STUDIO                                |
++-----------------------------------------------------------------------------------------+
+|                                                                                         |
+|  [Google App Bar]   Clairvoy Storage   |   [ 🔍 Search in storage... ]   |  Dataset Chip|
+|                                                                                         |
+|  +--------------------+  +-----------------------------------------------------------+  |
+|  | GOOGLE NAV RAIL    |  | GOOGLE ONE CLEAN-UP HERO                                  |  |
+|  |                    |  | Clean up space: 68.22 GB used by duplicates               |  |
+|  | [🧹 Clean up]     |  | [=== Photos: 52GB ===][== Videos ==][= Docs =][= Files =] |  |
+|  | [🖼️ Photos]       |  +-----------------------------------------------------------+  |
+|  | [📁 Drive Files]   |                                                              |  |
+|  | [🗂️ All Duplicates]|  +-----------------------------------------------------------+  |
+|  | [🗑️ Trash / Audit] |  | FILTER CHIPS & VIEW TOGGLE: [ ▦ Grid ] [ ☰ List ]          |  |
+|  |                    |  +-----------------------------------------------------------+  |
+|  |                    |                                                              |  |
+|  |                    |  +-----------------------------------------------------------+  |
+|  |                    |  | CONTEXTUAL ACTION BAR (Visible when items selected)       |  |
+|  |                    |  | [✕] 18 items selected (1.4 GB) | [Select All]             |  |
+|  |                    |  | Actions: [ 🗑️ Move to Trash ] [ ⚠️ Delete ] [ 📦 Quarantine]|  |
+|  |                    |  +-----------------------------------------------------------+  |
+|  +--------------------+  +-----------------------------------------------------------+  |
++-----------------------------------------------------------------------------------------+
+                                        |
+                 +----------------------+----------------------+
+                 v                                             v
+       [Quarantine Engine]                               [Delete Engine]
+       clairvoy/engines/quarantine.py                    clairvoy/engines/delete_engine.py
+                 |                                             |
+                 +---> _duplicate_quarantine/                  +---> .clairvoy_trash/ (Soft)
+                 +---> quarantine_manifest.json                +---> os.unlink() (Permanent)
+                                                               +---> deletion_audit.json
+```
+
+### Key Capabilities:
+- **Google Material Design 3 Design System**: Offline tokenized design system using Google's signature colors (`#8ab4f8` Blue, `#ea4335` Red, `#fbbc05` Yellow, `#34a853` Green) and rounded surfaces.
+- **Google Floating Search Bar**: Prominent rounded pill search bar with real-time debounced filtering across all clusters.
+- **Google Navigation Rail**: Left desktop rail supporting 1-click switching between *Clean up*, *Photos View*, *Drive List*, *All Clusters*, and *Trash*.
+- **Google Photos Grid View & Circular Checkmarks**: Visual image tiles featuring Google Photos-style top-left circular selection chips for multi-item actions.
+- **Google Drive List View**: Dense metadata table view with file names, sizes, match types, paths, and row-level quick actions.
+- **Contextual Selection Action Bar**: Floating top/bottom action bar displaying live selection counters and triggering bulk operations.
+- **Safe Deletion Engine (`DeleteEngine`)**:
+  - **Mode A: Soft Delete (Move to Trash)**: Isolates files to `.clairvoy_trash/` with a rollback manifest for 1-click restoration via `POST /api/delete/restore`.
+  - **Mode B: Permanent Deletion**: Unlinks duplicate files permanently while enforcing hard assertions that `KEEP` files can never be deleted, producing an immutable audit log.
+  - **Shell Script Generation (`GET /api/reports/delete-script`)**: Generates an audit-ready `delete_duplicates.sh` script with posix quoting and `rm -f --` safety.
+
+

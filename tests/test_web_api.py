@@ -3,6 +3,7 @@ Integration Tests for FastAPI Web Application Endpoints
 """
 
 import json
+
 import pytest
 from fastapi.testclient import TestClient
 
