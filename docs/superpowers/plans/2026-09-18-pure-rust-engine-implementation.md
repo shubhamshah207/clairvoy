@@ -520,7 +520,7 @@ git commit -m "feat(rust): implement high-speed parallel filesystem scanner"
   - `PerceptualHashBackend`: Zero-weight, instant fallback using blockhash/pHash.
   - `ModelRegistry`: Parses `models.toml` and returns configured model backend.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 // crates/clairvoy-model/tests/test_model.rs
@@ -547,12 +547,12 @@ fn test_perceptual_hash_backend() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p clairvoy-model`
 Expected: FAIL (crate not implemented)
 
-- [ ] **Step 3: Implement `clairvoy-model` crate**
+- [x] **Step 3: Implement `clairvoy-model` crate**
 
 Create `crates/clairvoy-model/Cargo.toml`:
 ```toml
@@ -664,12 +664,12 @@ pub use perceptual::PerceptualHashBackend;
 pub use traits::ModelBackend;
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p clairvoy-model`
 Expected: PASS (1 test passing)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/clairvoy-model
