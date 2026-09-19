@@ -9,6 +9,8 @@ clairvoy-core = { path = "../clairvoy-core" }
 clairvoy-scanner = { path = "../clairvoy-scanner" }
 clairvoy-plugins = { path = "../clairvoy-plugins" }
 serde_json = "1.0"
+notify = "6.1"
+tokio = { version = "1.38", features = ["full"] }
 
 [dev-dependencies]
 tempfile = "3"
