@@ -50,6 +50,13 @@ def test_index_page(client):
     assert "catBtn_VIDEO" in response.text
     assert "clearCategoryFilterChip" in response.text
     assert "sidebarClearAllBtn" in response.text
+    # Smart clean recommendation banner and selection preset rules
+    assert "smartCleanHero" in response.text
+    assert "smartCleanGb" in response.text
+    assert "selectionRuleSelect" in response.text
+    # Toast notification and shortcuts modal
+    assert "toastNotification" in response.text
+    assert "shortcutsModal" in response.text
 
 
 def test_status_endpoint(client):

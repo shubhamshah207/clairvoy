@@ -252,6 +252,10 @@ def get_index_html() -> str:
                     <span>⚡</span> <span>Scan</span>
                 </button>
 
+                <button onclick="toggleShortcutsModal()" class="hidden md:inline-flex m3-button-secondary text-xs !py-1.5 !px-3 text-[#c4c7c5] hover:text-white" title="Keyboard Shortcuts (?)">
+                    <span>⌨️</span> <span class="hidden lg:inline">Shortcuts</span>
+                </button>
+
                 <div class="w-2.5 h-2.5 rounded-full bg-[#81c995] animate-pulse" title="100% Offline & Local"></div>
             </div>
         </div>
@@ -551,6 +555,48 @@ def get_index_html() -> str:
                     <div class="flex items-center gap-1.5">
                         <span class="w-2.5 h-2.5 rounded-full bg-[#f28b82]"></span>
                         <span>Files: <strong id="legendFile" class="text-white font-mono">0</strong></span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Smart Clean Recommendation Hero Banner (CleanMyMac / Gemini 2 Parity) -->
+            <section id="smartCleanHero" class="hidden m3-card p-5 mb-5 bg-gradient-to-r from-[#1a3860]/40 via-[#1e1f20] to-[#1e1f20] border border-[#8ab4f8]/30 relative overflow-hidden shadow-xl">
+                <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3.5">
+                        <div class="w-11 h-11 rounded-2xl bg-[#1a3860] border border-[#8ab4f8]/30 flex items-center justify-center text-2xl flex-shrink-0 shadow-md">
+                            ✨
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold uppercase tracking-wider text-[#8ab4f8]">Smart Clean Recommendation</span>
+                                <span id="smartCleanBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#81c995]/20 text-[#81c995] font-bold">100% Safe</span>
+                            </div>
+                            <h3 class="text-lg md:text-xl font-bold text-white mt-0.5 flex items-baseline gap-2">
+                                Reclaim <span id="smartCleanGb" class="text-[#8ab4f8]">0.00</span> GB of storage
+                            </h3>
+                            <p class="text-xs text-[#c4c7c5] mt-0.5 max-w-2xl leading-relaxed">
+                                Best copy in each duplicate set is automatically kept. Safely clean redundant copies or customize selection rules.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2 flex-shrink-0 w-full lg:w-auto justify-end">
+                        <select id="selectionRuleSelect" onchange="applySelectionPreset(this.value)" class="bg-[#202124] border border-[#3c4043] rounded-full px-3 py-1.5 text-xs text-[#c4c7c5] focus:outline-none cursor-pointer">
+                            <option value="AUTO">Rule: Keep Best Copy (Auto)</option>
+                            <option value="OLDEST">Rule: Keep Oldest File</option>
+                            <option value="NEWEST">Rule: Keep Newest File</option>
+                            <option value="SHORTEST_PATH">Rule: Keep Shortest Path</option>
+                            <option value="ALL">Select All Duplicates</option>
+                            <option value="NONE">Clear All Selections</option>
+                        </select>
+
+                        <button onclick="openTrashDialog()" class="m3-button-primary !py-1.5 !px-3.5 text-xs font-semibold shadow-md shadow-[#8ab4f8]/20 flex items-center gap-1.5">
+                            <span>🗑️ Move to Trash</span>
+                        </button>
+
+                        <button onclick="openQuarantineModal()" class="m3-button-secondary !py-1.5 !px-3 text-xs text-[#fdd663] border-[#fdd663]/40 hover:bg-[#fdd663]/10">
+                            <span>📦 Quarantine</span>
+                        </button>
                     </div>
                 </div>
             </section>
@@ -864,6 +910,59 @@ def get_index_html() -> str:
         </div>
     </div>
 
+    <!-- Toast Notification Pill -->
+    <div id="toastNotification"
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1e1f20]/95 text-white border border-white/20 backdrop-blur-xl px-5 py-2.5 rounded-full shadow-2xl text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 pointer-events-none opacity-0 translate-y-4">
+        <span>✓</span>
+        <span>Notification message</span>
+    </div>
+
+    <!-- Keyboard Shortcuts Cheat Sheet Modal -->
+    <div id="shortcutsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#1e1f20] border border-[#3c4043] rounded-3xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-[#28292a]">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">⌨️</span>
+                    <h3 class="text-base font-bold text-white">Keyboard Shortcuts</h3>
+                </div>
+                <button onclick="toggleShortcutsModal()" class="text-[#8e918f] hover:text-white text-sm">✕</button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
+                    <span class="text-[#c4c7c5]">Open Lightbox / Compare</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">Space / Enter</kbd>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
+                    <span class="text-[#c4c7c5]">Navigate Lightbox Items</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">← / →</kbd>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
+                    <span class="text-[#c4c7c5]">Toggle Side-by-Side Diff</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">Space / D</kbd>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
+                    <span class="text-[#c4c7c5]">Promote Current Item to Keeper</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-[#81c995]">K</kbd>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
+                    <span class="text-[#c4c7c5]">Toggle Duplicate Selection</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-[#8ab4f8]">X / Del</kbd>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-[#28292a]">
+                    <span class="text-[#c4c7c5]">Close Lightbox / Modals</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">Esc</kbd>
+                </div>
+                <div class="flex justify-between items-center py-1">
+                    <span class="text-[#c4c7c5]">Toggle Shortcuts Help</span>
+                    <kbd class="px-2 py-1 bg-[#131314] rounded border border-white/10 font-mono text-white">?</kbd>
+                </div>
+            </div>
+            <div class="mt-5 flex justify-end">
+                <button onclick="toggleShortcutsModal()" class="m3-button-secondary text-xs">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Client-Side JavaScript Engine -->
     <script>
         // State Management
@@ -919,20 +1018,127 @@ def get_index_html() -> str:
                 console.error("Initial status error:", e);
             }}
 
-            // Global keyboard navigation for Lightbox
+            // Global keyboard navigation & shortcuts
             window.addEventListener('keydown', (e) => {{
-                const modal = document.getElementById('photoLightboxModal');
-                if (modal.classList.contains('hidden')) return;
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {{
+                    return;
+                }}
 
-                if (e.key === 'Escape') {{
-                    closePhotoLightbox();
-                }} else if (e.key === 'ArrowLeft') {{
-                    navigateLightbox(-1);
-                }} else if (e.key === 'ArrowRight') {{
-                    navigateLightbox(1);
+                const modal = document.getElementById('photoLightboxModal');
+                const isLbOpen = modal && !modal.classList.contains('hidden');
+
+                if (e.key === '?') {{
+                    toggleShortcutsModal();
+                    e.preventDefault();
+                    return;
+                }}
+
+                if (isLbOpen) {{
+                    if (e.key === 'Escape') {{
+                        closePhotoLightbox();
+                        e.preventDefault();
+                    }} else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {{
+                        navigateLightbox(-1);
+                        e.preventDefault();
+                    }} else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {{
+                        navigateLightbox(1);
+                        e.preventDefault();
+                    }} else if (e.key === ' ' || e.key === 'Spacebar') {{
+                        toggleLightboxDiff();
+                        e.preventDefault();
+                    }} else if (e.key === 'k' || e.key === 'K') {{
+                        swapKeeperInLightbox();
+                        e.preventDefault();
+                    }} else if (e.key === 'x' || e.key === 'X' || e.key === 'Delete') {{
+                        if (lbCluster && lbCluster.items[lbItemIndex]) {{
+                            const cur = lbCluster.items[lbItemIndex];
+                            if (cur.action !== 'KEEP') {{
+                                toggleItemSelection(encodeURIComponent(cur.path));
+                                showToast(excludedPaths.has(cur.path) ? "Item excluded from cleaning." : "Item marked for cleaning.", "🗑️");
+                            }}
+                        }}
+                        e.preventDefault();
+                    }} else if (e.key === 'i' || e.key === 'I') {{
+                        toggleLightboxInfo();
+                        e.preventDefault();
+                    }}
+                }} else {{
+                    if (e.key === 'Escape') {{
+                        closeTrashDialog();
+                        closePermanentDeleteDialog();
+                        closeQuarantineModal();
+                        const scModal = document.getElementById('shortcutsModal');
+                        if (scModal && !scModal.classList.contains('hidden')) toggleShortcutsModal();
+                        const scDrawer = document.getElementById('scanDrawer');
+                        if (scDrawer && !scDrawer.classList.contains('hidden')) toggleScanDrawer();
+                    }} else if (e.key === 'ArrowLeft') {{
+                        if (currentPage > 1) changePage(currentPage - 1);
+                    }} else if (e.key === 'ArrowRight') {{
+                        const totalPages = Math.max(1, Math.ceil(filteredClusters.length / perPage));
+                        if (currentPage < totalPages) changePage(currentPage + 1);
+                    }}
                 }}
             }});
         }});
+
+        function showToast(msg, icon = '✓') {{
+            const toast = document.getElementById('toastNotification');
+            if (!toast) return;
+            toast.innerHTML = `<span class="text-sm">${{icon}}</span> <span>${{msg}}</span>`;
+            toast.classList.remove('opacity-0', 'translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            if (window._toastTimer) clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => {{
+                toast.classList.add('opacity-0', 'translate-y-4');
+                toast.classList.remove('opacity-100', 'translate-y-0');
+            }}, 2600);
+        }}
+
+        function toggleShortcutsModal() {{
+            const m = document.getElementById('shortcutsModal');
+            if (m) m.classList.toggle('hidden');
+        }}
+
+        function applySelectionPreset(rule) {{
+            if (!currentSummary || !allClusters || allClusters.length === 0) return;
+
+            if (rule === 'ALL') {{
+                excludedPaths.clear();
+                showToast("All duplicate copies selected for removal.", "🗑️");
+            }} else if (rule === 'NONE') {{
+                for (const c of allClusters) {{
+                    for (const d of c.duplicates) {{
+                        excludedPaths.add(d.path);
+                    }}
+                }}
+                showToast("All selections cleared.", "✕");
+            }} else if (rule === 'AUTO') {{
+                excludedPaths.clear();
+                showToast("Reset to Best Copy recommendation.", "✨");
+            }} else if (rule === 'OLDEST' || rule === 'NEWEST' || rule === 'SHORTEST_PATH') {{
+                for (const c of allClusters) {{
+                    let best = c.items[0];
+                    if (rule === 'SHORTEST_PATH') {{
+                        best = [...c.items].sort((a, b) => a.path.length - b.path.length)[0];
+                    }} else if (rule === 'OLDEST') {{
+                        best = [...c.items].sort((a, b) => (a.mtime || 0) - (b.mtime || 0))[0];
+                    }} else if (rule === 'NEWEST') {{
+                        best = [...c.items].sort((a, b) => (b.mtime || 0) - (a.mtime || 0))[0];
+                    }}
+                    for (const it of c.items) {{
+                        it.action = (it.path === best.path) ? 'KEEP' : 'DUPLICATE';
+                    }}
+                    c.keeper = best;
+                    c.duplicates = c.items.filter(it => it.path !== best.path);
+                }}
+                excludedPaths.clear();
+                const ruleName = rule === 'SHORTEST_PATH' ? 'Shortest Path' : (rule === 'OLDEST' ? 'Oldest Copy' : 'Newest Copy');
+                showToast(`Auto-Rule applied: Keep ${{ruleName}}.`, "⚡");
+            }}
+
+            renderCurrentPage();
+            updateTopSelectionBar();
+        }}
 
         function toggleScanDrawer() {{
             document.getElementById('scanDrawer').classList.toggle('hidden');
@@ -1001,18 +1207,22 @@ def get_index_html() -> str:
                 }}
             }});
 
+            const smartHero = document.getElementById('smartCleanHero');
             if (sec === 'CLEANUP') {{
                 if (hero) hero.classList.remove('hidden');
+                if (smartHero && currentSummary && (currentSummary.wasted_gb || 0) > 0) smartHero.classList.remove('hidden');
                 if (gallery) gallery.classList.remove('hidden');
                 activeModality = 'ALL';
                 currentPage = 1;
                 applyFiltersAndSort();
             }} else if (sec === 'DRIVE') {{
                 if (hero) hero.classList.add('hidden');
+                if (smartHero && currentSummary && (currentSummary.wasted_gb || 0) > 0) smartHero.classList.remove('hidden');
                 if (gallery) gallery.classList.remove('hidden');
                 setViewMode('list');
             }} else if (sec === 'TRASH') {{
                 if (hero) hero.classList.add('hidden');
+                if (smartHero) smartHero.classList.add('hidden');
                 renderTrashSection();
             }}
         }}
@@ -1152,6 +1362,18 @@ def get_index_html() -> str:
             if (sideMb) sideMb.innerText = wastedMbStr;
             const sideClusters = document.getElementById('sideClusterCount');
             if (sideClusters) sideClusters.innerText = clusterCountStr;
+
+            // Update Smart Clean Recommendation Banner
+            const smartHero = document.getElementById('smartCleanHero');
+            if (smartHero) {{
+                if ((summary.wasted_gb || 0) > 0 && currentNav !== 'TRASH') {{
+                    smartHero.classList.remove('hidden');
+                    const scGb = document.getElementById('smartCleanGb');
+                    if (scGb) scGb.innerText = (summary.wasted_gb || 0).toFixed(2);
+                }} else {{
+                    smartHero.classList.add('hidden');
+                }}
+            }}
 
             const cb = summary.category_breakdown || {{}};
             const totalDupes = Math.max(1, (summary.groups ? summary.groups.filter(g => g.action === 'DUPLICATE').length : 1));
@@ -1423,44 +1645,60 @@ def get_index_html() -> str:
             window.scrollTo({{ top: document.getElementById('clustersGallery').offsetTop - 90, behavior: 'smooth' }});
         }}
 
-        // Authentic Google Photos Section with Edge-to-Edge Fluid Grid
+        // Authentic Google Photos Duplicate Set Card (Cohesive M3 Card with Primary File, Path, Badges & 1-Click Clean)
         function createGooglePhotosCard(cluster) {{
-            const section = document.createElement('section');
-            section.className = "space-y-3";
+            const card = document.createElement('div');
+            card.className = "m3-card p-4 sm:p-5 border border-[#28292a] hover:border-[#3c4043] transition-all duration-200 bg-[#1e1f20]/90 shadow-md";
 
             const wastedMb = (cluster.totalWastedBytes / (1024 * 1024)).toFixed(2);
             const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
+            const representative = cluster.keeper || cluster.items[0];
+            const primaryName = representative.path.split('/').pop();
+            const parentDir = representative.path.substring(0, representative.path.lastIndexOf('/'));
 
             // Determine Grid Column classes based on thumbnailSize
-            let gridColsClass = "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3";
+            let gridColsClass = "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3";
             if (thumbnailSize === 'small') {{
-                gridColsClass = "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-1.5 sm:gap-2";
+                gridColsClass = "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2";
             }} else if (thumbnailSize === 'large') {{
-                gridColsClass = "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5";
+                gridColsClass = "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5";
             }}
 
-            section.innerHTML = `
-                <!-- Cluster Section Header (Google Photos Timeline Header style) -->
-                <div class="flex items-center justify-between px-1 py-1">
-                    <div class="flex items-center gap-3">
+            card.innerHTML = `
+                <!-- Cluster Header: Primary filename, path context, badges, 1-click clean & diff -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-3 border-b border-[#28292a]">
+                    <div class="flex items-center gap-3 min-w-0">
                         <div onclick="toggleClusterSelection(${{cluster.group_id}}, event)"
-                             class="gp-check-circle ${{allDupesSelected ? 'checked' : ''}}"
-                             title="${{allDupesSelected ? 'Deselect cluster' : 'Select all duplicates in cluster'}}">
+                             class="gp-check-circle ${{allDupesSelected ? 'checked' : ''}} flex-shrink-0"
+                             title="${{allDupesSelected ? 'Deselect cluster' : 'Mark duplicates for cleaning and keep best copy'}}">
                             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
                         </div>
-                        <div class="flex items-baseline gap-2">
-                            <h3 class="text-sm font-bold text-white">Duplicate Set #${{cluster.group_id}}</h3>
-                            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">${{cluster.match_type}}</span>
-                            <span class="text-[11px] font-mono text-[#8e918f]">Wasted: ${{wastedMb}} MB</span>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-sm font-bold text-white truncate max-w-sm sm:max-w-md" title="${{primaryName}}">${{primaryName}}</span>
+                                <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">${{cluster.match_type}}</span>
+                                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#81c995]/15 text-[#81c995]">${{wastedMb}} MB wasted</span>
+                            </div>
+                            <div class="text-[11px] text-[#8e918f] font-mono truncate mt-0.5" title="${{parentDir}}">
+                                📁 ${{parentDir}} • ${{cluster.items.length}} copies (${{cluster.duplicates.length}} duplicate${{cluster.duplicates.length === 1 ? '' : 's'}})
+                            </div>
                         </div>
                     </div>
 
-                    <button onclick="openPhotoLightbox(${{cluster.group_id}}, '${{encodeURIComponent(cluster.items[0].path)}}')"
-                            class="m3-button-secondary text-xs !py-1 !px-3">
-                        <span>🔍 Compare</span>
-                    </button>
+                    <!-- Cluster Actions: 1-Click Clean & Compare -->
+                    <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                        <button onclick="toggleClusterSelection(${{cluster.group_id}}, event)"
+                                class="m3-button-secondary text-xs !py-1 !px-3 ${{allDupesSelected ? 'text-[#8ab4f8] border-[#8ab4f8]/40' : ''}}"
+                                title="${{allDupesSelected ? 'Deselect duplicates' : 'Keep designated best copy and mark duplicates for removal'}}">
+                            <span>${{allDupesSelected ? '✓ Clean Ready' : '★ Keep Best & Clean Rest'}}</span>
+                        </button>
+                        <button onclick="openPhotoLightbox(${{cluster.group_id}}, '${{encodeURIComponent(cluster.items[0].path)}}')"
+                                class="m3-button-secondary text-xs !py-1 !px-3 hover:text-[#8ab4f8]">
+                            <span>⇄ Compare Diff</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Fluid Edge-to-Edge Photo Grid -->
@@ -1468,7 +1706,7 @@ def get_index_html() -> str:
                     ${{cluster.items.map((item, idx) => createPhotoTileHtml(cluster.group_id, item, idx)).join('')}}
                 </div>
             `;
-            return section;
+            return card;
         }}
 
         function createPhotoTileHtml(groupId, item, idx) {{
@@ -1568,12 +1806,12 @@ def get_index_html() -> str:
                             <div>
                                 ${{isKeeper ? `
                                     <span class="text-xs font-bold text-[#131314] bg-[#81c995] px-3 py-1 rounded-full flex items-center gap-1 shadow-md">
-                                        <span>★</span> Designated Keeper
+                                        <span>★</span> BEST COPY (KEEPER)
                                     </span>
                                 ` : `
                                     <div onclick="toggleItemSelection('${{encodeURIComponent(item.path)}}', event)"
                                          class="gp-check-circle !w-7 !h-7 ${{isChecked ? 'checked' : 'opacity-0 group-hover:opacity-100'}}"
-                                         title="${{isChecked ? 'Deselect' : 'Select for deletion'}}">
+                                         title="${{isChecked ? 'Deselect from deletion' : 'Select for deletion'}}">
                                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                                             <polyline points="20 6 9 17 4 12"></polyline>
                                         </svg>
@@ -1603,11 +1841,12 @@ def get_index_html() -> str:
                                 <span>${{sizeStr}} ${{dimStr ? '• ' + dimStr : ''}}</span>
                                 ${{!isKeeper ? `
                                     <button onclick="setKeeperOverride(${{groupId}}, '${{encodeURIComponent(item.path)}}', event)"
-                                            class="m3-button-secondary !py-1 !px-3 text-xs text-[#8ab4f8] hover:text-white bg-black/80 backdrop-blur-md border-[#8ab4f8]/40 shadow">
-                                        ★ Make Keeper
+                                            class="m3-button-secondary !py-1 !px-3 text-xs text-[#8ab4f8] hover:text-white bg-black/80 backdrop-blur-md border-[#8ab4f8]/40 shadow"
+                                            title="Make this file the designated keeper">
+                                        ★ Keep This
                                     </button>
                                 ` : `
-                                    <span class="text-xs text-[#81c995] font-semibold">✓ Preserved Original</span>
+                                    <span class="text-xs text-[#81c995] font-semibold flex items-center gap-1">✓ Preserved Original (Kept)</span>
                                 `}}
                             </div>
                         </div>
@@ -1618,7 +1857,7 @@ def get_index_html() -> str:
             // Medium (Default Google Photos Tile)
             return `
                 <div onclick="openPhotoLightbox(${{groupId}}, '${{encodeURIComponent(item.path)}}')"
-                     class="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer bg-[#1e1f20] border ${{isKeeper ? 'border-[#81c995]/80 shadow-md shadow-[#81c995]/10' : 'border-white/10'}} transition duration-200 hover:border-white/30">
+                     class="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer bg-[#1e1f20] border ${{isKeeper ? 'border-2 border-[#81c995] shadow-md shadow-[#81c995]/15 bg-[#81c995]/5' : 'border border-white/10 hover:border-white/30'}} transition duration-200">
 
                     <!-- High-Res Thumbnail Preview -->
                     ${{isMedia ? `
@@ -1645,8 +1884,8 @@ def get_index_html() -> str:
                     <!-- Top Left: Google Photos Check Circle -->
                     <div class="absolute top-2.5 left-2.5 z-20">
                         ${{isKeeper ? `
-                            <span class="text-[10px] font-bold text-[#131314] bg-[#81c995] px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                                <span>★</span> Keeper
+                            <span class="text-[10px] font-bold text-[#131314] bg-[#81c995] px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                                <span>★</span> BEST COPY
                             </span>
                         ` : `
                             <div onclick="toggleItemSelection('${{encodeURIComponent(item.path)}}', event)"
@@ -1668,7 +1907,7 @@ def get_index_html() -> str:
                             </span>
                         ` : ''}}
                         ${{!isKeeper ? `
-                            <span class="text-[10px] font-mono text-[#8ab4f8] bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10">
+                            <span class="text-[10px] font-mono text-[#8ab4f8] bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 font-bold">
                                 ${{item.similarity || '100%'}}
                             </span>
                         ` : ''}}
@@ -1681,12 +1920,12 @@ def get_index_html() -> str:
                             <span>${{sizeStr}}</span>
                             ${{!isKeeper ? `
                                 <button onclick="setKeeperOverride(${{groupId}}, '${{encodeURIComponent(item.path)}}', event)"
-                                        class="opacity-0 group-hover:opacity-100 transition text-[10px] text-[#8ab4f8] hover:text-white bg-black/70 backdrop-blur-md px-2 py-0.5 rounded-full border border-[#8ab4f8]/40"
+                                        class="opacity-0 group-hover:opacity-100 transition text-[10px] text-[#8ab4f8] hover:text-white bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-[#8ab4f8]/40 shadow"
                                         title="Make this file the designated keeper">
-                                    ★ Keep
+                                    ★ Keep This
                                 </button>
                             ` : `
-                                <span class="text-[10px] text-[#81c995]">Original</span>
+                                <span class="text-[10px] text-[#81c995] font-semibold flex items-center gap-0.5">✓ Original</span>
                             `}}
                         </div>
                     </div>
@@ -1697,28 +1936,45 @@ def get_index_html() -> str:
         // Google Drive List View (Adapts to Thumbnail / Icon Size)
         function createGoogleDriveListCard(cluster) {{
             const card = document.createElement('div');
-            card.className = "m3-card p-4 shadow-lg";
+            card.className = "m3-card p-4 sm:p-5 shadow-lg border border-[#28292a] hover:border-[#3c4043] transition-all bg-[#1e1f20]/90";
 
             const wastedMb = (cluster.totalWastedBytes / (1024 * 1024)).toFixed(2);
             const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
+            const representative = cluster.keeper || cluster.items[0];
+            const primaryName = representative.path.split('/').pop();
+            const parentDir = representative.path.substring(0, representative.path.lastIndexOf('/'));
 
             card.innerHTML = `
-                <div class="flex justify-between items-center pb-2.5 mb-3 border-b border-[#28292a]">
-                    <div class="flex items-center gap-2.5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-3 border-b border-[#28292a]">
+                    <div class="flex items-center gap-3 min-w-0">
                         <div onclick="toggleClusterSelection(${{cluster.group_id}}, event)"
-                             class="gp-check-circle ${{allDupesSelected ? 'checked' : ''}} !w-5 !h-5"
-                             title="Select/Deselect cluster">
+                             class="gp-check-circle ${{allDupesSelected ? 'checked' : ''}} !w-5 !h-5 flex-shrink-0"
+                             title="${{allDupesSelected ? 'Deselect cluster' : 'Mark duplicates for cleaning and keep best copy'}}">
                             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
                         </div>
-                        <span class="font-bold text-white text-xs">Cluster #${{cluster.group_id}}</span>
-                        <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">${{cluster.match_type}}</span>
-                        <span class="text-[10px] font-mono text-[#8e918f]">Wasted: ${{wastedMb}} MB</span>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-bold text-white text-xs truncate max-w-sm" title="${{primaryName}}">${{primaryName}}</span>
+                                <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">${{cluster.match_type}}</span>
+                                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#81c995]/15 text-[#81c995]">${{wastedMb}} MB wasted</span>
+                            </div>
+                            <div class="text-[11px] text-[#8e918f] font-mono truncate mt-0.5" title="${{parentDir}}">
+                                📁 ${{parentDir}} • ${{cluster.items.length}} copies
+                            </div>
+                        </div>
                     </div>
-                    <button onclick="openPhotoLightbox(${{cluster.group_id}}, '${{encodeURIComponent(cluster.items[0].path)}}')" class="text-xs text-[#8ab4f8] hover:underline">
-                        Compare Diff
-                    </button>
+                    <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                        <button onclick="toggleClusterSelection(${{cluster.group_id}}, event)"
+                                class="m3-button-secondary text-xs !py-1 !px-3 ${{allDupesSelected ? 'text-[#8ab4f8] border-[#8ab4f8]/40' : ''}}"
+                                title="${{allDupesSelected ? 'Deselect duplicates' : 'Keep designated best copy and mark duplicates for removal'}}">
+                            <span>${{allDupesSelected ? '✓ Clean Ready' : '★ Keep Best & Clean Rest'}}</span>
+                        </button>
+                        <button onclick="openPhotoLightbox(${{cluster.group_id}}, '${{encodeURIComponent(cluster.items[0].path)}}')" class="m3-button-secondary text-xs !py-1 !px-3 hover:text-[#8ab4f8]">
+                            <span>⇄ Compare Diff</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -1842,6 +2098,9 @@ def get_index_html() -> str:
                 applyFiltersAndSort();
                 updateTopSelectionBar();
 
+                const fname = path.split('/').pop();
+                showToast(`Promoted "${{fname}}" to Keeper in Cluster #${{groupId}}`, "★");
+
                 // If lightbox is open, refresh it
                 if (lbCluster && lbCluster.group_id === groupId) {{
                     openPhotoLightbox(groupId, encodeURIComponent(path));
@@ -1857,8 +2116,10 @@ def get_index_html() -> str:
                 for (const item of currentSummary.groups) {{
                     if (item.action === 'DUPLICATE') excludedPaths.add(item.path);
                 }}
+                showToast("Cleared duplicate selection.", "✕");
             }} else if (rule === 'ALL') {{
                 excludedPaths.clear();
+                showToast("Selected all duplicate candidates.", "✓");
             }}
             renderCurrentPage();
             updateTopSelectionBar();

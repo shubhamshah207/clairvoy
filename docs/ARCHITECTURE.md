@@ -381,6 +381,34 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
 ```
 
 ### Key Capabilities:
+- **Smart Clean Recommendation Hero Banner (Gemini 2 & CleanMyMac Parity)**:
+  - Prominent recoverable storage recommendation banner (`#smartCleanHero`) calculating total reclaimable gigabytes.
+  - Automated selection rule presets:
+    - `Keep Best Copy (Auto)`: Preserves highest resolution/original files.
+    - `Keep Oldest File`: Keeps oldest timestamp.
+    - `Keep Newest File`: Keeps newest timestamp.
+    - `Keep Shortest Path`: Keeps cleanest, least nested path.
+    - `Select All Duplicates` / `Clear All Selections`.
+  - 1-Click Direct Actions: `[🗑️ Move Duplicates to Trash]` and `[📦 Quarantine]`.
+- **Cohesive Cluster Cards**:
+  - Each duplicate set is encapsulated in a unified, elevated M3 card (`.m3-card`) displaying:
+    - Primary file name and parent folder path hint (`📁 /path/to/folder • X copies`).
+    - Match algorithm badge (`Exact Byte Hash`, `Visual AI Match`, etc.).
+    - Reclaimable space badge (`-XX MB wasted`).
+    - Cluster-level 1-click action button: `[★ Keep Best & Clean Rest]` / `[✓ Clean Ready]`.
+    - Direct `[⇄ Compare Diff]` side-by-side inspection launcher.
+- **Crystal-Clear Keeper vs Duplicate Visual Identity**:
+  - **Keeper Tile**: Framed in Google Emerald (`border-2 border-[#81c995] bg-[#81c995]/5`), prominent `★ BEST COPY (KEEPER)` badge, and `✓ Preserved Original (Kept)` subtitle.
+  - **Duplicate Candidates**: Red-accented checkmarks when marked for removal, similarity match pill, and 1-click `★ Keep This` promotion button on hover.
+- **Rich Keyboard Navigation & Shortcuts**:
+  - `Space` / `Enter`: Launch Lightbox / toggle side-by-side split comparison.
+  - `←` / `→` / `A` / `D`: Navigate items in lightbox or paginate gallery.
+  - `K`: Promote currently viewed duplicate to Keeper.
+  - `X` / `Del`: Toggle duplicate selection for deletion.
+  - `Esc`: Dismiss lightbox, drawers, or dialogs.
+  - `?`: Open interactive Keyboard Shortcuts cheat-sheet modal (`#shortcutsModal`).
+- **Interactive Toast Notifications**:
+  - Slide-up pill notifications (`#toastNotification`) giving instant tactile feedback for keeper promotions, preset applications, and batch actions.
 - **Google Photos Top Selection Bar (Zero Floating Windows)**:
   - Eliminates obstructing bottom floating docks or modal pill bars.
   - When 1 or more photos/files are selected, the Top App Bar smoothly morphs into the Google Photos Selection Bar (`[✕]` Deselect, `{count} selected ({size})`, `[Select All]`, `[🗑️ Move to Trash]`, `[⚠️ Delete Permanently]`, `[📦 Quarantine]`, `[📄 CSV]`).
@@ -400,7 +428,6 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
   - Full-screen pitch-black viewer with top action bar (`[← Back]`, `[★ Make Keeper]`, `[⇄ Side-by-Side Diff]`, `[ℹ️ Details]`).
   - Renders native `<video controls autoplay>` for video files and high-resolution `<img>` for photos.
   - Instant side-by-side comparison mode comparing keeper against duplicate candidates with synchronized dimensions, size, and paths for both photos and video playback.
-  - Arrow navigation (`‹` and `›`) and keyboard shortcuts (`Esc`, `ArrowLeft`, `ArrowRight`).
 - **Google Drive List View**:
   - Tabular view for reviewing documents, archives, and spreadsheets with synced selection state and thumbnail previews.
 - **Safe Deletion Engine (`DeleteEngine`)**:
