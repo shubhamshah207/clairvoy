@@ -1,0 +1,18 @@
+[package]
+name = "clairvoy-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "clairvoy-rs"
+path = "src/main.rs"
+
+[dependencies]
+clairvoy-core = { path = "../clairvoy-core" }
+clairvoy-engine = { path = "../clairvoy-engine" }
+clairvoy-plugins = { path = "../clairvoy-plugins" }
+clairvoy-server = { path = "../clairvoy-server" }
+axum = "0.7"
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1.38", features = ["full"] }
