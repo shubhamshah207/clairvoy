@@ -39,6 +39,11 @@ def test_index_page(client):
     assert "gp-check-circle" in response.text
     # Floating bottom dock must NOT exist
     assert "contextualActionBar" not in response.text
+    # Left-bottom storage widget and thumbnail size controls
+    assert "sideWastedGb" in response.text
+    assert "sizeBtn_small" in response.text
+    assert "sizeBtn_medium" in response.text
+    assert "sizeBtn_large" in response.text
 
 
 def test_status_endpoint(client):

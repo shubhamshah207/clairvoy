@@ -3,7 +3,7 @@ Clairvoy Web UI Component
 Google Material Design 3 (M3) Storage Optimization & Photos Deduplication Studio.
 Inspired by Google Photos, Google Drive, Google Files, and Google One.
 100% offline, zero-dependency, ultra-minimal code with fluid Photos Grid, Drive List,
-morphing Top Selection Bar (zero floating bottom windows), and Safe Trash/Permanent Deletion.
+morphing Top Selection Bar, persistent Left-Bottom Storage Manager, and Small/Medium/Large thumbnail controls.
 """
 
 from clairvoy.core.config import VERSION
@@ -331,35 +331,90 @@ def get_index_html() -> str:
     <!-- Main Google Photos Layout (Nav Rail + Fluid Workspace) -->
     <div class="max-w-7xl mx-auto px-4 lg:px-8 pt-6 pb-12 flex flex-col md:flex-row gap-6">
 
-        <!-- Google Navigation Rail (Left Sidebar) -->
-        <aside class="w-full md:w-52 flex-shrink-0 flex md:flex-col gap-1.5 overflow-x-auto pb-2 md:pb-0">
-            <button onclick="switchNavSection('PHOTOS')" id="navBtn_PHOTOS"
-                    class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8]">
-                <span class="text-base">🖼️</span>
-                <span>Photos</span>
-            </button>
-            <button onclick="switchNavSection('DRIVE')" id="navBtn_DRIVE"
-                    class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
-                <span class="text-base">📁</span>
-                <span>Drive List</span>
-            </button>
-            <button onclick="switchNavSection('CLEANUP')" id="navBtn_CLEANUP"
-                    class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
-                <span class="text-base">🧹</span>
-                <span>Clean up</span>
-            </button>
-            <button onclick="switchNavSection('TRASH')" id="navBtn_TRASH"
-                    class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
-                <span class="text-base">🗑️</span>
-                <span>Trash & Audit</span>
-            </button>
+        <!-- Google Navigation Rail (Left Sidebar with Bottom Storage Card) -->
+        <aside class="w-full md:w-60 flex-shrink-0 flex md:flex-col justify-between gap-6 pb-2 md:pb-0 md:sticky md:top-16 md:h-[calc(100vh-5.5rem)]">
+
+            <!-- Top Navigation Links -->
+            <div class="flex md:flex-col gap-1.5 w-full overflow-x-auto md:overflow-x-visible pb-1 md:pb-0">
+                <button onclick="switchNavSection('PHOTOS')" id="navBtn_PHOTOS"
+                        class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8]">
+                    <span class="text-base">🖼️</span>
+                    <span>Photos</span>
+                </button>
+                <button onclick="switchNavSection('DRIVE')" id="navBtn_DRIVE"
+                        class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                    <span class="text-base">📁</span>
+                    <span>Drive List</span>
+                </button>
+                <button onclick="switchNavSection('CLEANUP')" id="navBtn_CLEANUP"
+                        class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                    <span class="text-base">🧹</span>
+                    <span>Clean up</span>
+                </button>
+                <button onclick="switchNavSection('TRASH')" id="navBtn_TRASH"
+                        class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                    <span class="text-base">🗑️</span>
+                    <span>Trash & Audit</span>
+                </button>
+            </div>
+
+            <!-- Google Photos / Google Drive Storage Section (Bottom Left) -->
+            <div class="m3-card p-4 border border-[#3c4043]/60 bg-[#1e1f20] w-full hidden md:block mt-auto shadow-lg">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">☁️</span>
+                        <span class="text-xs font-bold text-white uppercase tracking-wider">Storage</span>
+                    </div>
+                    <span id="sideClusterCount" class="text-[10px] text-[#8e918f] font-mono">0 clusters</span>
+                </div>
+
+                <!-- Multi-Colored Storage Meter -->
+                <div class="w-full bg-[#131314] rounded-full h-2 overflow-hidden flex border border-[#3c4043] mb-2.5">
+                    <div id="sideSegPhoto" class="bg-[#8ab4f8] h-full transition-all duration-500" style="width: 0%;" title="Photos"></div>
+                    <div id="sideSegScreenshot" class="bg-[#fdd663] h-full transition-all duration-500" style="width: 0%;" title="Screenshots"></div>
+                    <div id="sideSegDocument" class="bg-[#81c995] h-full transition-all duration-500" style="width: 0%;" title="Documents"></div>
+                    <div id="sideSegFile" class="bg-[#f28b82] h-full transition-all duration-500" style="width: 0%;" title="Large / Other Files"></div>
+                </div>
+
+                <!-- Recoverable Space Numbers -->
+                <div class="text-xs text-white font-semibold flex items-baseline justify-between mb-0.5">
+                    <span><span id="sideWastedGb" class="text-[#8ab4f8] text-sm font-bold">0.000</span> GB</span>
+                    <span class="text-[10px] text-[#8e918f] font-mono">recoverable</span>
+                </div>
+                <div id="sideWastedMb" class="text-[10px] text-[#8e918f] font-mono truncate mb-3">0 MB wasted across duplicates</div>
+
+                <!-- Category Mini-Breakdown -->
+                <div class="space-y-1.5 text-[11px] text-[#c4c7c5] font-mono mb-3 pb-2.5 border-b border-[#28292a]">
+                    <div class="flex justify-between items-center">
+                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#8ab4f8]"></span> Photos</span>
+                        <strong id="sideLegendPhoto" class="text-white font-mono">0</strong>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#fdd663]"></span> Screenshots</span>
+                        <strong id="sideLegendScreenshot" class="text-white font-mono">0</strong>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#81c995]"></span> Documents</span>
+                        <strong id="sideLegendDocument" class="text-white font-mono">0</strong>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#f28b82]"></span> Files</span>
+                        <strong id="sideLegendFile" class="text-white font-mono">0</strong>
+                    </div>
+                </div>
+
+                <!-- Clean Up Space Button -->
+                <button onclick="switchNavSection('CLEANUP')" class="w-full m3-button-secondary justify-center text-xs !py-1.5 hover:bg-[#303134]">
+                    <span>🧹 Clean up space</span>
+                </button>
+            </div>
         </aside>
 
         <!-- Main Workspace -->
         <main class="flex-1 min-w-0">
 
-            <!-- Google One Clean-Up Hero Card (Storage Breakdown) -->
-            <section id="cleanupHeroCard" class="m3-card p-6 mb-6 relative overflow-hidden">
+            <!-- Google One Dedicated Clean-Up Section (Shown ONLY when Clean up tab is active) -->
+            <section id="cleanupHeroCard" class="hidden m3-card p-6 mb-6 relative overflow-hidden">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
                     <div>
                         <div class="flex items-center gap-2 text-xs font-bold text-[#8ab4f8] uppercase tracking-wider mb-1">
@@ -405,7 +460,7 @@ def get_index_html() -> str:
                 </div>
             </section>
 
-            <!-- Filter Chips Toolbar & View Mode Controls -->
+            <!-- Filter Chips Toolbar & View Controls -->
             <section class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-1">
                 <!-- Modality Filter Chips (Google Style) -->
                 <div class="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1">
@@ -426,8 +481,8 @@ def get_index_html() -> str:
                     </button>
                 </div>
 
-                <!-- Right View Controls: Sort & Mode Toggle -->
-                <div class="flex items-center gap-2 self-end sm:self-auto">
+                <!-- Right View Controls: Sort, Thumbnail/Icon Size, Mode Toggle -->
+                <div class="flex items-center gap-2 self-end sm:self-auto flex-wrap">
                     <!-- Sort Dropdown -->
                     <select onchange="onSortOrderChange(this.value)"
                             class="bg-[#202124] border border-[#3c4043] rounded-full px-3 py-1.5 text-xs text-[#c4c7c5] focus:outline-none cursor-pointer">
@@ -435,6 +490,25 @@ def get_index_html() -> str:
                         <option value="DUPES_DESC">Most Duplicates</option>
                         <option value="SIMILARITY_DESC">Similarity Score</option>
                     </select>
+
+                    <!-- Thumbnail / Icon Size Toggle (Small / Medium / Large) -->
+                    <div class="flex items-center bg-[#202124] border border-[#3c4043] rounded-full p-0.5" title="Thumbnail / Icon Size">
+                        <button onclick="setThumbnailSize('small')" id="sizeBtn_small"
+                                class="px-2.5 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white"
+                                title="Small Icons / Dense View">
+                            Small
+                        </button>
+                        <button onclick="setThumbnailSize('medium')" id="sizeBtn_medium"
+                                class="px-2.5 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]"
+                                title="Medium Icons / Standard">
+                            Medium
+                        </button>
+                        <button onclick="setThumbnailSize('large')" id="sizeBtn_large"
+                                class="px-2.5 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white"
+                                title="Large Icons / Big Previews">
+                            Large
+                        </button>
+                    </div>
 
                     <!-- View Toggle Button (Photos Grid vs Drive List) -->
                     <div class="flex items-center bg-[#202124] border border-[#3c4043] rounded-full p-0.5">
@@ -709,6 +783,7 @@ def get_index_html() -> str:
         let currentPage = 1;
         let perPage = 25;
         let viewMode = 'grid'; // 'grid' (Photos) | 'list' (Drive)
+        let thumbnailSize = 'medium'; // 'small' | 'medium' | 'large'
         let currentNav = 'PHOTOS'; // 'PHOTOS' | 'DRIVE' | 'CLEANUP' | 'TRASH'
         let pollTimer = null;
 
@@ -769,6 +844,21 @@ def get_index_html() -> str:
             renderCurrentPage();
         }}
 
+        function setThumbnailSize(size) {{
+            thumbnailSize = size;
+            ['small', 'medium', 'large'].forEach(s => {{
+                const btn = document.getElementById('sizeBtn_' + s);
+                if (btn) {{
+                    if (s === size) {{
+                        btn.className = "px-2.5 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]";
+                    }} else {{
+                        btn.className = "px-2.5 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white";
+                    }}
+                }}
+            }});
+            renderCurrentPage();
+        }}
+
         function switchNavSection(sec) {{
             currentNav = sec;
             document.querySelectorAll('.nav-rail-btn').forEach(btn => {{
@@ -784,11 +874,11 @@ def get_index_html() -> str:
                 hero.classList.remove('hidden');
                 setModalityTab('ALL');
             }} else if (sec === 'PHOTOS') {{
-                hero.classList.remove('hidden');
+                hero.classList.add('hidden');
                 setModalityTab('PHOTO');
                 setViewMode('grid');
             }} else if (sec === 'DRIVE') {{
-                hero.classList.remove('hidden');
+                hero.classList.add('hidden');
                 setViewMode('list');
             }} else if (sec === 'TRASH') {{
                 hero.classList.add('hidden');
@@ -896,10 +986,28 @@ def get_index_html() -> str:
         }}
 
         function renderHeroStorageMeter(summary) {{
-            document.getElementById('heroWastedGb').innerText = (summary.wasted_gb || 0).toFixed(3);
-            document.getElementById('heroWastedMb').innerText = `${{(summary.wasted_mb || 0).toLocaleString()}} MB recoverable across duplicates`;
-            document.getElementById('heroFileCount').innerText = `${{(summary.total_files_scanned || 0).toLocaleString()}} files analyzed`;
-            document.getElementById('heroClusterCount').innerText = `${{(summary.total_duplicate_groups || 0).toLocaleString()}} clusters`;
+            const wastedGbStr = (summary.wasted_gb || 0).toFixed(3);
+            const wastedMbStr = `${{(summary.wasted_mb || 0).toLocaleString()}} MB recoverable across duplicates`;
+            const fileCountStr = `${{(summary.total_files_scanned || 0).toLocaleString()}} files analyzed`;
+            const clusterCountStr = `${{(summary.total_duplicate_groups || 0).toLocaleString()}} clusters`;
+
+            // Update Top Clean-up Hero (when visible)
+            const heroGb = document.getElementById('heroWastedGb');
+            if (heroGb) heroGb.innerText = wastedGbStr;
+            const heroMb = document.getElementById('heroWastedMb');
+            if (heroMb) heroMb.innerText = wastedMbStr;
+            const heroFiles = document.getElementById('heroFileCount');
+            if (heroFiles) heroFiles.innerText = fileCountStr;
+            const heroClusters = document.getElementById('heroClusterCount');
+            if (heroClusters) heroClusters.innerText = clusterCountStr;
+
+            // Update Left-Bottom Persistent Sidebar Storage Card (Google Photos / Drive style)
+            const sideGb = document.getElementById('sideWastedGb');
+            if (sideGb) sideGb.innerText = wastedGbStr;
+            const sideMb = document.getElementById('sideWastedMb');
+            if (sideMb) sideMb.innerText = wastedMbStr;
+            const sideClusters = document.getElementById('sideClusterCount');
+            if (sideClusters) sideClusters.innerText = clusterCountStr;
 
             const cb = summary.category_breakdown || {{}};
             const totalDupes = Math.max(1, (summary.groups ? summary.groups.filter(g => g.action === 'DUPLICATE').length : 1));
@@ -908,15 +1016,46 @@ def get_index_html() -> str:
             const pDoc = ((cb.DOCUMENT || 0) / totalDupes) * 100;
             const pFile = Math.max(0, 100 - (pPhoto + pScreens + pDoc));
 
-            document.getElementById('segPhoto').style.width = pPhoto + '%';
-            document.getElementById('segScreenshot').style.width = pScreens + '%';
-            document.getElementById('segDocument').style.width = pDoc + '%';
-            document.getElementById('segFile').style.width = pFile + '%';
+            // Meters
+            ['segPhoto', 'sideSegPhoto'].forEach(id => {{
+                const el = document.getElementById(id);
+                if (el) el.style.width = pPhoto + '%';
+            }});
+            ['segScreenshot', 'sideSegScreenshot'].forEach(id => {{
+                const el = document.getElementById(id);
+                if (el) el.style.width = pScreens + '%';
+            }});
+            ['segDocument', 'sideSegDocument'].forEach(id => {{
+                const el = document.getElementById(id);
+                if (el) el.style.width = pDoc + '%';
+            }});
+            ['segFile', 'sideSegFile'].forEach(id => {{
+                const el = document.getElementById(id);
+                if (el) el.style.width = pFile + '%';
+            }});
 
-            document.getElementById('legendPhoto').innerText = `${{cb.PHOTO || 0}} files`;
-            document.getElementById('legendScreenshot').innerText = `${{cb.SCREENSHOT || 0}} files`;
-            document.getElementById('legendDocument').innerText = `${{cb.DOCUMENT || 0}} files`;
-            document.getElementById('legendFile').innerText = `${{cb.FILE || 0}} files`;
+            // Legend Numbers
+            const photoCount = `${{cb.PHOTO || 0}} files`;
+            const screenCount = `${{cb.SCREENSHOT || 0}} files`;
+            const docCount = `${{cb.DOCUMENT || 0}} files`;
+            const fileCount = `${{cb.FILE || 0}} files`;
+
+            ['legendPhoto', 'sideLegendPhoto'].forEach(id => {{
+                const el = document.getElementById(id);
+                if (el) el.innerText = photoCount;
+            }});
+            ['legendScreenshot', 'sideLegendScreenshot'].forEach(id => {{
+                const el = document.getElementById(id);
+                if (el) el.innerText = screenCount;
+            }});
+            ['legendDocument', 'sideLegendDocument'].forEach(id => {{
+                const el = document.getElementById(id);
+                if (el) el.innerText = docCount;
+            }});
+            ['legendFile', 'sideLegendFile'].forEach(id => {{
+                const el = document.getElementById(id);
+                if (el) el.innerText = fileCount;
+            }});
         }}
 
         function renderModalityTabCounts(summary) {{
@@ -1047,7 +1186,14 @@ def get_index_html() -> str:
 
             const wastedMb = (cluster.totalWastedBytes / (1024 * 1024)).toFixed(2);
             const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
-            const someDupesSelected = cluster.duplicates.some(d => !excludedPaths.has(d.path));
+
+            // Determine Grid Column classes based on thumbnailSize
+            let gridColsClass = "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3";
+            if (thumbnailSize === 'small') {{
+                gridColsClass = "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-1.5 sm:gap-2";
+            }} else if (thumbnailSize === 'large') {{
+                gridColsClass = "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5";
+            }}
 
             section.innerHTML = `
                 <!-- Cluster Section Header (Google Photos Timeline Header style) -->
@@ -1074,7 +1220,7 @@ def get_index_html() -> str:
                 </div>
 
                 <!-- Fluid Edge-to-Edge Photo Grid -->
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3">
+                <div class="grid ${{gridColsClass}}">
                     ${{cluster.items.map((item, idx) => createPhotoTileHtml(cluster.group_id, item, idx)).join('')}}
                 </div>
             `;
@@ -1087,8 +1233,131 @@ def get_index_html() -> str:
             const isChecked = !isKeeper && !isExcluded;
 
             const fname = item.path.split('/').pop();
+            const parentDir = item.path.substring(0, item.path.lastIndexOf('/'));
             const sizeStr = `${{(item.size_mb || 0).toFixed(2)}} MB`;
+            const dimStr = item.dimensions ? `${{item.dimensions[0]}}×${{item.dimensions[1]}}` : '';
 
+            // Render according to thumbnailSize: 'small' | 'medium' | 'large'
+            if (thumbnailSize === 'small') {{
+                // Small Icons: compact dense tiles
+                return `
+                    <div onclick="openPhotoLightbox(${{groupId}}, '${{encodeURIComponent(item.path)}}')"
+                         class="group relative aspect-square rounded-xl overflow-hidden cursor-pointer bg-[#1e1f20] border ${{isKeeper ? 'border-[#81c995] shadow' : 'border-white/10'}} transition duration-200 hover:border-white/40">
+
+                        ${{isImageFile(item.path) ? `
+                            <img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}"
+                                 class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                 loading="lazy" alt="${{fname}}"
+                                 onerror="this.parentElement.querySelector('.fallback-thumb').classList.remove('hidden'); this.remove();">
+                            <div class="fallback-thumb hidden w-full h-full flex items-center justify-center bg-[#131314] text-[#8e918f]">
+                                <span class="text-xs">🖼️</span>
+                            </div>
+                        ` : `
+                            <div class="w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f] p-1 text-center">
+                                <span class="text-base mb-0.5">📄</span>
+                                <span class="text-[9px] font-mono truncate max-w-full text-white">${{fname.split('.').pop() || 'DOC'}}</span>
+                            </div>
+                        `}}
+
+                        <!-- Gradient -->
+                        <div class="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/85 to-transparent pointer-events-none z-10"></div>
+
+                        <!-- Top-Left Mini Checkmark -->
+                        <div class="absolute top-1.5 left-1.5 z-20">
+                            ${{isKeeper ? `
+                                <span class="text-[9px] font-bold text-[#131314] bg-[#81c995] px-1.5 py-0.2 rounded-full shadow">★</span>
+                            ` : `
+                                <div onclick="toggleItemSelection('${{encodeURIComponent(item.path)}}', event)"
+                                     class="gp-check-circle !w-4 !h-4 ${{isChecked ? 'checked' : 'opacity-0 group-hover:opacity-100'}}">
+                                    <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                            `}}
+                        </div>
+
+                        <!-- Bottom Minimal Size -->
+                        <div class="absolute bottom-1 inset-x-1.5 z-20 text-[9px] text-[#c4c7c5] font-mono truncate">
+                            ${{sizeStr}}
+                        </div>
+                    </div>
+                `;
+            }}
+
+            if (thumbnailSize === 'large') {{
+                // Large Icons / Previews: spacious, rich high-res card with full details
+                return `
+                    <div onclick="openPhotoLightbox(${{groupId}}, '${{encodeURIComponent(item.path)}}')"
+                         class="group relative aspect-square rounded-3xl overflow-hidden cursor-pointer bg-[#1e1f20] border-2 ${{isKeeper ? 'border-[#81c995] shadow-lg shadow-[#81c995]/15' : 'border-white/10'}} transition duration-300 hover:border-white/40">
+
+                        ${{isImageFile(item.path) ? `
+                            <img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}"
+                                 class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                 loading="lazy" alt="${{fname}}"
+                                 onerror="this.parentElement.querySelector('.fallback-thumb').classList.remove('hidden'); this.remove();">
+                            <div class="fallback-thumb hidden w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f]">
+                                <span class="text-4xl mb-2">🖼️</span>
+                                <span class="text-xs font-mono uppercase">Image File</span>
+                            </div>
+                        ` : `
+                            <div class="w-full h-full flex flex-col items-center justify-center bg-[#131314] text-[#8e918f] p-6 text-center">
+                                <span class="text-5xl mb-3">📄</span>
+                                <span class="text-sm font-bold text-white truncate max-w-full">${{fname}}</span>
+                                <span class="text-xs text-[#8ab4f8] font-mono mt-1">${{sizeStr}}</span>
+                            </div>
+                        `}}
+
+                        <!-- Gradient overlays -->
+                        <div class="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/80 via-black/30 to-transparent pointer-events-none z-10"></div>
+                        <div class="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10"></div>
+
+                        <!-- Top Bar: Checkmark & Badges -->
+                        <div class="absolute top-3 inset-x-3 z-20 flex justify-between items-center">
+                            <div>
+                                ${{isKeeper ? `
+                                    <span class="text-xs font-bold text-[#131314] bg-[#81c995] px-3 py-1 rounded-full flex items-center gap-1 shadow-md">
+                                        <span>★</span> Designated Keeper
+                                    </span>
+                                ` : `
+                                    <div onclick="toggleItemSelection('${{encodeURIComponent(item.path)}}', event)"
+                                         class="gp-check-circle !w-7 !h-7 ${{isChecked ? 'checked' : 'opacity-0 group-hover:opacity-100'}}"
+                                         title="${{isChecked ? 'Deselect' : 'Select for deletion'}}">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                    </div>
+                                `}}
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                ${{!isKeeper ? `
+                                    <span class="text-xs font-mono text-[#8ab4f8] bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 font-bold">
+                                        ${{item.similarity || '100%'}} Match
+                                    </span>
+                                ` : ''}}
+                            </div>
+                        </div>
+
+                        <!-- Bottom Detailed Overlay -->
+                        <div class="absolute bottom-3 inset-x-3.5 z-20 flex flex-col justify-end space-y-1">
+                            <div class="font-bold text-white text-sm truncate drop-shadow">${{fname}}</div>
+                            <div class="text-[11px] text-[#8e918f] font-mono truncate" title="${{parentDir}}">${{parentDir}}</div>
+                            <div class="flex items-center justify-between text-xs text-[#c4c7c5] font-mono pt-1">
+                                <span>${{sizeStr}} ${{dimStr ? '• ' + dimStr : ''}}</span>
+                                ${{!isKeeper ? `
+                                    <button onclick="setKeeperOverride(${{groupId}}, '${{encodeURIComponent(item.path)}}', event)"
+                                            class="m3-button-secondary !py-1 !px-3 text-xs text-[#8ab4f8] hover:text-white bg-black/80 backdrop-blur-md border-[#8ab4f8]/40 shadow">
+                                        ★ Make Keeper
+                                    </button>
+                                ` : `
+                                    <span class="text-xs text-[#81c995] font-semibold">✓ Preserved Original</span>
+                                `}}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }}
+
+            // Medium (Default Google Photos Tile)
             return `
                 <div onclick="openPhotoLightbox(${{groupId}}, '${{encodeURIComponent(item.path)}}')"
                      class="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer bg-[#1e1f20] border ${{isKeeper ? 'border-[#81c995]/80 shadow-md shadow-[#81c995]/10' : 'border-white/10'}} transition duration-200 hover:border-white/30">
@@ -1161,7 +1430,7 @@ def get_index_html() -> str:
             `;
         }}
 
-        // Google Drive List View
+        // Google Drive List View (Adapts to Thumbnail / Icon Size)
         function createGoogleDriveListCard(cluster) {{
             const card = document.createElement('div');
             card.className = "m3-card p-4 shadow-lg";
@@ -1193,6 +1462,7 @@ def get_index_html() -> str:
                         <thead>
                             <tr class="text-[#8e918f] border-b border-[#202124]">
                                 <th class="py-1.5 px-2 w-8"></th>
+                                ${{thumbnailSize === 'large' ? '<th class="py-1.5 px-2 w-16">Preview</th>' : ''}}
                                 <th class="py-1.5 px-2">Name</th>
                                 <th class="py-1.5 px-2">Role</th>
                                 <th class="py-1.5 px-2">Size</th>
@@ -1214,24 +1484,36 @@ def get_index_html() -> str:
             const isExcluded = excludedPaths.has(item.path);
             const isChecked = !isKeeper && !isExcluded;
             const fname = item.path.split('/').pop();
+            const padClass = (thumbnailSize === 'small') ? 'py-1 px-2 text-[11px]' : 'py-2 px-2';
 
             return `
-                <tr class="hover:bg-[#28292a]/50 transition">
-                    <td class="py-2 px-2">
+                <tr class="hover:bg-[#28292a]/50 transition cursor-pointer" onclick="openPhotoLightbox(${{groupId}}, '${{encodeURIComponent(item.path)}}')">
+                    <td class="${{padClass}}" onclick="event.stopPropagation()">
                         ${{isKeeper ? `<span class="text-[#81c995]">★</span>` : `
                             <input type="checkbox" onchange="toggleItemSelection('${{encodeURIComponent(item.path)}}')"
                                    ${{isChecked ? 'checked' : ''}} class="rounded accent-[#8ab4f8] cursor-pointer">
                         `}}
                     </td>
-                    <td class="py-2 px-2 font-medium text-white truncate max-w-[200px]" title="${{fname}}">${{fname}}</td>
-                    <td class="py-2 px-2">
+                    ${{thumbnailSize === 'large' ? `
+                        <td class="${{padClass}}">
+                            <div class="w-12 h-12 rounded-lg bg-black overflow-hidden flex items-center justify-center border border-white/10">
+                                ${{isImageFile(item.path) ? `
+                                    <img src="/api/thumbnail?path=${{encodeURIComponent(item.path)}}" class="w-full h-full object-cover" loading="lazy">
+                                ` : `
+                                    <span class="text-xs">📄</span>
+                                `}}
+                            </div>
+                        </td>
+                    ` : ''}}
+                    <td class="${{padClass}} font-medium text-white truncate max-w-[200px]" title="${{fname}}">${{fname}}</td>
+                    <td class="${{padClass}}">
                         <span class="px-2 py-0.5 rounded-full text-[10px] ${{isKeeper ? 'bg-[#81c995]/15 text-[#81c995]' : 'bg-[#f28b82]/15 text-[#f28b82]'}}">
                             ${{item.action}}
                         </span>
                     </td>
-                    <td class="py-2 px-2 text-[#c4c7c5]">${{(item.size_mb || 0).toFixed(2)}} MB</td>
-                    <td class="py-2 px-2 text-[#8e918f] truncate max-w-[240px]" title="${{item.path}}">${{item.path}}</td>
-                    <td class="py-2 px-2 text-right">
+                    <td class="${{padClass}} text-[#c4c7c5]">${{(item.size_mb || 0).toFixed(2)}} MB</td>
+                    <td class="${{padClass}} text-[#8e918f] truncate max-w-[240px]" title="${{item.path}}">${{item.path}}</td>
+                    <td class="${{padClass}} text-right" onclick="event.stopPropagation()">
                         ${{!isKeeper ? `
                             <button onclick="setKeeperOverride(${{groupId}}, '${{encodeURIComponent(item.path)}}', event)"
                                      class="text-[#8ab4f8] hover:underline text-[11px] font-sans font-medium mr-2">
