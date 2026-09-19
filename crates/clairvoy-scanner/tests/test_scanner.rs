@@ -2,6 +2,7 @@ use clairvoy_core::models::ImageCategory;
 use clairvoy_scanner::{compute_quick_hash_4kb, scan_filesystem, scan_roots};
 use std::fs::{self, File};
 use std::io::Write;
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 #[test]
@@ -87,20 +88,33 @@ fn test_scanner_excludes_and_categories() {
     let empty = dir.path().join("empty.png");
     File::create(&empty).unwrap();
 
-    // Excluded directory files: should be skipped
-    let git_dir = dir.path().join(".git");
-    fs::create_dir_all(&git_dir).unwrap();
-    File::create(git_dir.join("head_commit.jpg"))
-        .unwrap()
-        .write_all(b"git photo")
-        .unwrap();
+    // Excluded directory files: should all be skipped
+    let excluded_subdirs = [
+        ".git",
+        ".svn",
+        "node_modules",
+        "__pycache__",
+        ".cache",
+        "_duplicate_quarantine",
+        "_dedupe_reports",
+        "_logs",
+        "_zips",
+        ".vscode",
+        ".idea",
+        "$RECYCLE.BIN",
+        "System Volume Information",
+        ".venv",
+        "venv",
+    ];
 
-    let node_dir = dir.path().join("node_modules");
-    fs::create_dir_all(&node_dir).unwrap();
-    File::create(node_dir.join("package_icon.png"))
-        .unwrap()
-        .write_all(b"pkg icon")
-        .unwrap();
+    for sub in &excluded_subdirs {
+        let sub_dir = dir.path().join(sub);
+        fs::create_dir_all(&sub_dir).unwrap();
+        File::create(sub_dir.join("skip_me.jpg"))
+            .unwrap()
+            .write_all(b"skip photo")
+            .unwrap();
+    }
 
     let (entries, media_count) = scan_roots(&[dir.path().to_path_buf()]).unwrap();
     assert_eq!(
@@ -121,6 +135,21 @@ fn test_scanner_excludes_and_categories() {
     let doc_entry = entries.iter().find(|e| e.path == doc).unwrap();
     assert_eq!(doc_entry.category, ImageCategory::File);
     assert!(!doc_entry.is_media);
+}
+
+#[test]
+fn test_scan_roots_and_filesystem_nonexistent_root() {
+    let missing_root = PathBuf::from("/nonexistent/directory/path/never_exists");
+
+    // scan_roots should fail with NotFound
+    let res_roots = scan_roots(std::slice::from_ref(&missing_root));
+    assert!(res_roots.is_err());
+    assert_eq!(res_roots.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+
+    // scan_filesystem should also fail with NotFound
+    let (tx, _rx) = flume::bounded(2048);
+    let res_fs = scan_filesystem(&[missing_root], tx);
+    assert!(res_fs.is_err());
 }
 
 #[test]

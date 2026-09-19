@@ -2,6 +2,7 @@ use clairvoy_core::errors::EngineError;
 use clairvoy_core::models::{FileEntry, ImageCategory};
 use jwalk::WalkDirGeneric;
 use std::collections::HashSet;
+use std::io;
 use std::path::PathBuf;
 
 pub const SUPPORTED_IMAGE_EXTS: &[&str] = &[
@@ -19,6 +20,14 @@ pub const EXCLUDED_DIRS: &[&str] = &[
     ".cache",
     "_duplicate_quarantine",
     "_dedupe_reports",
+    "_logs",
+    "_zips",
+    ".vscode",
+    ".idea",
+    "$RECYCLE.BIN",
+    "System Volume Information",
+    ".venv",
+    "venv",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,20 +36,19 @@ pub struct ScanStats {
     pub media_files: usize,
 }
 
-fn convert_dir_entry(
-    entry: jwalk::DirEntry<((), ())>,
-) -> Result<Option<FileEntry>, std::io::Error> {
+fn convert_dir_entry(entry: jwalk::DirEntry<((), ())>) -> Option<FileEntry> {
     if !entry.file_type.is_file() {
-        return Ok(None);
+        return None;
     }
 
-    let metadata = match entry.metadata() {
-        Ok(m) => m,
-        Err(e) => return Err(std::io::Error::other(e)),
+    // Gracefully skip files with unreadable metadata (e.g. PermissionDenied, NotFound)
+    let Ok(metadata) = entry.metadata() else {
+        return None;
     };
+
     let size_bytes = metadata.len();
     if size_bytes == 0 {
-        return Ok(None);
+        return None;
     }
 
     let path = entry.path();
@@ -68,16 +76,25 @@ fn convert_dir_entry(
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    Ok(Some(FileEntry {
+    Some(FileEntry {
         path,
         size_bytes,
         modified_epoch,
         is_media,
         category,
-    }))
+    })
 }
 
-pub fn scan_roots(roots: &[PathBuf]) -> Result<(Vec<FileEntry>, usize), std::io::Error> {
+pub fn scan_roots(roots: &[PathBuf]) -> Result<(Vec<FileEntry>, usize), io::Error> {
+    for root in roots {
+        if !root.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Scan root does not exist: {}", root.display()),
+            ));
+        }
+    }
+
     let mut entries = Vec::new();
     let mut media_count = 0;
     let excluded: HashSet<&str> = EXCLUDED_DIRS.iter().copied().collect();
@@ -99,7 +116,7 @@ pub fn scan_roots(roots: &[PathBuf]) -> Result<(Vec<FileEntry>, usize), std::io:
             });
 
         for entry in walker.into_iter().flatten() {
-            if let Some(file_entry) = convert_dir_entry(entry)? {
+            if let Some(file_entry) = convert_dir_entry(entry) {
                 if file_entry.is_media {
                     media_count += 1;
                 }
@@ -115,6 +132,15 @@ pub fn scan_filesystem(
     roots: &[PathBuf],
     sender: flume::Sender<FileEntry>,
 ) -> Result<ScanStats, EngineError> {
+    for root in roots {
+        if !root.exists() {
+            return Err(EngineError::Io(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Scan root does not exist: {}", root.display()),
+            )));
+        }
+    }
+
     let mut stats = ScanStats::default();
     let excluded: HashSet<&str> = EXCLUDED_DIRS.iter().copied().collect();
 
@@ -135,7 +161,7 @@ pub fn scan_filesystem(
             });
 
         for entry in walker.into_iter().flatten() {
-            if let Some(file_entry) = convert_dir_entry(entry)? {
+            if let Some(file_entry) = convert_dir_entry(entry) {
                 stats.total_files += 1;
                 if file_entry.is_media {
                     stats.media_files += 1;
