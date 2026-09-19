@@ -1,14 +1,22 @@
-use crate::state::{AppScanState, SharedScanState};
+use crate::state::{AppScanState, ServerState, SharedScanState};
 use axum::body::Body;
-use axum::extract::{Query, State};
+use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::{header, StatusCode};
-use axum::response::{Html, Json, Response};
-use axum::routing::{get, post};
+use axum::response::{
+    sse::{Event, KeepAlive, Sse},
+    Html, Json, Response,
+};
+use axum::routing::{delete, get, post};
 use axum::Router;
+use clairvoy_core::db::{Database, DuplicateClusterRecord, WatchedPathRecord};
+use clairvoy_engine::watcher::AutonomousWatcher;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio_stream::Stream;
 use tower_http::cors::CorsLayer;
 
 static INDEX_HTML: &str = include_str!("index.html");
@@ -104,6 +112,30 @@ pub struct DeleteScriptQuery {
     pub mode: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct WatchPathPayload {
+    pub path: String,
+    pub recursive: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct WatchTogglePayload {
+    pub enabled: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct DaemonTogglePayload {
+    pub action: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DuplicatesQuery {
+    pub run_id: Option<String>,
+    pub category: Option<String>,
+    pub offset: Option<usize>,
+    pub limit: Option<usize>,
+}
+
 fn get_mime_type(path: &Path) -> &'static str {
     match path
         .extension()
@@ -195,13 +227,33 @@ pub async fn handle_index() -> Html<&'static str> {
     Html(INDEX_HTML)
 }
 
-pub async fn handle_status(State(state): State<SharedScanState>) -> Json<AppScanState> {
-    let s = state.lock().unwrap();
+pub async fn handle_status(State(state): State<ServerState>) -> Json<AppScanState> {
+    let s = state.scan_state.lock().unwrap();
     Json(s.clone())
 }
 
+pub async fn handle_status_stream(
+    State(state): State<ServerState>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let stream = async_stream::stream! {
+        let mut interval = tokio::time::interval(Duration::from_millis(500));
+        loop {
+            interval.tick().await;
+            let current_state = {
+                let s = state.scan_state.lock().unwrap();
+                s.clone()
+            };
+            if let Ok(json_str) = serde_json::to_string(&current_state) {
+                yield Ok(Event::default().data(json_str));
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
 pub async fn handle_scan(
-    State(state): State<SharedScanState>,
+    State(state): State<ServerState>,
     Json(payload): Json<ScanPayload>,
 ) -> Json<serde_json::Value> {
     let paths: Vec<PathBuf> = if let Some(ref p_list) = payload.paths {
@@ -219,7 +271,7 @@ pub async fn handle_scan(
     let paths_strings: Vec<String> = paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
 
     {
-        let mut s = state.lock().unwrap();
+        let mut s = state.scan_state.lock().unwrap();
         s.status = "running".to_string();
         s.stage = "Initializing scan".to_string();
         s.progress_pct = 0;
@@ -229,7 +281,8 @@ pub async fn handle_scan(
         s.error = None;
     }
 
-    let state_clone = Arc::clone(&state);
+    let state_clone = Arc::clone(&state.scan_state);
+    let db_clone = Arc::clone(&state.db);
     let paths_clone = paths.clone();
 
     tokio::task::spawn_blocking(move || {
@@ -253,6 +306,16 @@ pub async fn handle_scan(
 
         match run_res {
             Ok(summary) => {
+                let run_id = format!(
+                    "run_{}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_micros()
+                );
+                if let Ok(db_guard) = db_clone.lock() {
+                    let _ = db_guard.save_scan_run(&run_id, &summary);
+                }
                 if let Ok(mut s) = state_clone.lock() {
                     s.status = "completed".to_string();
                     s.stage = "Scan completed".to_string();
@@ -282,9 +345,18 @@ pub async fn handle_scan(
 }
 
 pub async fn handle_runs(
+    State(state): State<ServerState>,
     Query(query): Query<RunsQuery>,
 ) -> Json<serde_json::Value> {
-    let limit = query.limit.unwrap_or(30);
+    let limit = query.limit.unwrap_or(50);
+    if let Ok(db_guard) = state.db.lock() {
+        if let Ok(runs) = db_guard.list_scan_runs(limit) {
+            if !runs.is_empty() {
+                return Json(serde_json::to_value(runs).unwrap_or_else(|_| serde_json::json!([])));
+            }
+        }
+    }
+
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .map(PathBuf::from)
@@ -305,7 +377,7 @@ pub async fn handle_runs(
 }
 
 pub async fn handle_runs_load(
-    State(state): State<SharedScanState>,
+    State(state): State<ServerState>,
     Json(payload): Json<LoadRunRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let summary_path: Option<PathBuf> = if let Some(ref p) = payload.path {
@@ -371,7 +443,7 @@ pub async fn handle_runs_load(
     })?;
 
     {
-        let mut s = state.lock().unwrap();
+        let mut s = state.scan_state.lock().unwrap();
         s.status = "completed".to_string();
         s.stage = "Scan summary loaded".to_string();
         s.progress_pct = 100;
@@ -386,6 +458,158 @@ pub async fn handle_runs_load(
     }
 
     Ok(Json(serde_json::json!({ "status": "loaded", "summary": summary })))
+}
+
+pub async fn handle_duplicates(
+    State(state): State<ServerState>,
+    Query(query): Query<DuplicatesQuery>,
+) -> Result<Json<Vec<DuplicateClusterRecord>>, (StatusCode, String)> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let run_id = match query.run_id {
+        Some(id) => id,
+        None => {
+            let latest = db
+                .list_scan_runs(1)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            match latest.into_iter().next() {
+                Some(r) => r.run_id,
+                None => return Ok(Json(Vec::new())),
+            }
+        }
+    };
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit.unwrap_or(50);
+    let category = query.category.as_deref();
+
+    let clusters = db
+        .get_duplicate_clusters(&run_id, category, offset, limit)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(clusters))
+}
+
+pub async fn handle_watch_paths_list(
+    State(state): State<ServerState>,
+) -> Result<Json<Vec<WatchedPathRecord>>, (StatusCode, String)> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let paths = db
+        .list_watched_paths()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(paths))
+}
+
+pub async fn handle_watch_paths_add(
+    State(state): State<ServerState>,
+    Json(payload): Json<WatchPathPayload>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let id = db
+        .add_watched_path(&payload.path, payload.recursive.unwrap_or(true))
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    drop(db);
+
+    if let Some(ref watcher) = state.watcher {
+        let _ = watcher.trigger_scan_now();
+    }
+
+    Ok(Json(serde_json::json!({
+        "status": "watching",
+        "id": id,
+        "path": payload.path,
+    })))
+}
+
+pub async fn handle_watch_paths_toggle(
+    State(state): State<ServerState>,
+    AxumPath(id): AxumPath<i64>,
+    payload: Option<Json<WatchTogglePayload>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let explicit_enabled = payload.and_then(|Json(p)| p.enabled);
+    let paths = db
+        .list_watched_paths()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let record = paths
+        .into_iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Watched path {} not found", id)))?;
+
+    let new_enabled = explicit_enabled.unwrap_or(!record.enabled);
+    db.toggle_watched_path(id, new_enabled)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    drop(db);
+
+    if let Some(ref watcher) = state.watcher {
+        let _ = watcher.trigger_scan_now();
+    }
+
+    Ok(Json(serde_json::json!({
+        "status": "updated",
+        "id": id,
+        "enabled": new_enabled,
+    })))
+}
+
+pub async fn handle_watch_paths_delete(
+    State(state): State<ServerState>,
+    AxumPath(id): AxumPath<i64>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    db.remove_watched_path(id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::json!({ "status": "deleted", "id": id })))
+}
+
+pub async fn handle_watch_daemon_toggle(
+    State(state): State<ServerState>,
+    payload: Option<Json<DaemonTogglePayload>>,
+) -> Json<serde_json::Value> {
+    if let Some(ref watcher) = state.watcher {
+        let action = payload
+            .and_then(|Json(p)| p.action)
+            .unwrap_or_else(|| "toggle".to_string());
+
+        match action.to_lowercase().as_str() {
+            "pause" => watcher.pause(),
+            "resume" => watcher.resume(),
+            _ => {
+                if watcher.is_paused() {
+                    watcher.resume();
+                } else {
+                    watcher.pause();
+                }
+            }
+        }
+        let is_paused = watcher.is_paused();
+        Json(serde_json::json!({
+            "status": "ok",
+            "paused": is_paused,
+            "active": true,
+        }))
+    } else {
+        Json(serde_json::json!({
+            "status": "disabled",
+            "paused": true,
+            "active": false,
+        }))
+    }
 }
 
 pub async fn handle_browse_directories(
@@ -481,10 +705,10 @@ pub async fn handle_thumbnail_or_media(
 }
 
 pub async fn handle_override_keeper(
-    State(state): State<SharedScanState>,
+    State(state): State<ServerState>,
     Json(payload): Json<OverrideKeeperRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, &'static str)> {
-    let mut s = state.lock().unwrap();
+    let mut s = state.scan_state.lock().unwrap();
     if let Some(ref mut summary) = s.summary {
         let mut cluster_found = false;
         let mut target_found = false;
@@ -516,7 +740,7 @@ pub async fn handle_override_keeper(
 }
 
 pub async fn handle_delete_execute(
-    State(state): State<SharedScanState>,
+    State(state): State<ServerState>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let mut deleted_count = 0;
@@ -553,7 +777,7 @@ pub async fn handle_delete_execute(
     }
 
     {
-        let mut s = state.lock().unwrap();
+        let mut s = state.scan_state.lock().unwrap();
         if let Some(ref mut summary) = s.summary {
             summary.groups.retain(|g| !deleted_paths.contains(&g.path));
             summary.wasted_bytes = summary.wasted_bytes.saturating_sub(freed_bytes);
@@ -571,10 +795,10 @@ pub async fn handle_delete_execute(
 }
 
 pub async fn handle_quarantine_execute(
-    State(state): State<SharedScanState>,
+    State(state): State<ServerState>,
     Json(payload): Json<QuarantineRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let s = state.lock().unwrap();
+    let s = state.scan_state.lock().unwrap();
     let summary = match s.summary {
         Some(ref sm) => sm.clone(),
         None => {
@@ -634,9 +858,9 @@ pub async fn handle_quarantine_execute(
 }
 
 pub async fn handle_reports_csv(
-    State(state): State<SharedScanState>,
+    State(state): State<ServerState>,
 ) -> Result<Response, (StatusCode, &'static str)> {
-    let s = state.lock().unwrap();
+    let s = state.scan_state.lock().unwrap();
     let summary = s.summary.as_ref().ok_or((StatusCode::NOT_FOUND, "No active scan summary"))?;
 
     let mut csv = String::from("group_id,match_type,action,category,similarity,size_mb,path,dimensions\n");
@@ -665,10 +889,10 @@ pub async fn handle_reports_csv(
 }
 
 pub async fn handle_delete_script(
-    State(state): State<SharedScanState>,
+    State(state): State<ServerState>,
     Query(query): Query<DeleteScriptQuery>,
 ) -> Result<Response, (StatusCode, &'static str)> {
-    let s = state.lock().unwrap();
+    let s = state.scan_state.lock().unwrap();
     let summary = s.summary.as_ref().ok_or((StatusCode::NOT_FOUND, "No active scan summary"))?;
     let mode = query.mode.unwrap_or_else(|| "trash".to_string());
 
@@ -740,19 +964,48 @@ pub fn auto_load_recent_run(state: &SharedScanState) {
     }
 }
 
+pub fn build_router_with_state(state: SharedScanState) -> Router {
+    let db = Arc::new(Mutex::new(
+        Database::open(None).unwrap_or_else(|_| Database::open_in_memory().unwrap()),
+    ));
+    build_router_full(ServerState {
+        scan_state: state,
+        db,
+        watcher: None,
+    })
+}
+
 pub fn build_router() -> Router {
     let state: SharedScanState = Default::default();
     auto_load_recent_run(&state);
     build_router_with_state(state)
 }
 
-pub fn build_router_with_state(state: SharedScanState) -> Router {
+pub fn build_router_with_services(
+    state: SharedScanState,
+    db: Arc<Mutex<Database>>,
+    watcher: Option<Arc<AutonomousWatcher>>,
+) -> Router {
+    build_router_full(ServerState {
+        scan_state: state,
+        db,
+        watcher,
+    })
+}
+
+pub fn build_router_full(state: ServerState) -> Router {
     Router::new()
         .route("/", get(handle_index))
         .route("/api/status", get(handle_status))
+        .route("/api/status/stream", get(handle_status_stream))
         .route("/api/scan", post(handle_scan))
         .route("/api/runs", get(handle_runs))
         .route("/api/runs/load", post(handle_runs_load))
+        .route("/api/duplicates", get(handle_duplicates))
+        .route("/api/watch/paths", get(handle_watch_paths_list).post(handle_watch_paths_add))
+        .route("/api/watch/paths/:id/toggle", post(handle_watch_paths_toggle))
+        .route("/api/watch/paths/:id", delete(handle_watch_paths_delete))
+        .route("/api/watch/daemon/toggle", post(handle_watch_daemon_toggle))
         .route("/api/system/browse-directories", get(handle_browse_directories))
         .route("/api/system/pick-folder", post(handle_pick_folder))
         .route("/api/thumbnail", get(handle_thumbnail_or_media))

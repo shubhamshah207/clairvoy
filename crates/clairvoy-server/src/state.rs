@@ -30,3 +30,13 @@ impl Default for AppScanState {
 }
 
 pub type SharedScanState = Arc<Mutex<AppScanState>>;
+
+use clairvoy_core::db::Database;
+use clairvoy_engine::watcher::AutonomousWatcher;
+
+#[derive(Clone)]
+pub struct ServerState {
+    pub scan_state: SharedScanState,
+    pub db: Arc<Mutex<Database>>,
+    pub watcher: Option<Arc<AutonomousWatcher>>,
+}
