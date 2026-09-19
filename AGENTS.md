@@ -34,7 +34,8 @@ All agents operating in this repository **MUST read this document** and **MUST m
 - **Rust Native CLI (`clairvoy-rs`):**
   ```bash
   cargo run --bin clairvoy-rs -- scan /path/to/folder
-  cargo run --bin clairvoy-rs -- ui --port 8080 --host 0.0.0.0
+  cargo run --bin clairvoy-rs -- ui --port 8000 --host 0.0.0.0
+  cargo run --bin clairvoy-rs -- ui --no-daemon
   ```
 
 ---
