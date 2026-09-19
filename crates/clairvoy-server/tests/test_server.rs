@@ -15,7 +15,12 @@ async fn test_server_status_and_index() {
 
     let res_index = server.get("/").await;
     assert_eq!(res_index.status_code(), 200);
-    assert!(res_index.text().contains("Clairvoy"));
+    let index_html = res_index.text();
+    assert!(index_html.contains("Clairvoy"));
+    assert!(index_html.contains("Autonomous Watcher"));
+    assert!(index_html.contains("renderWatcherSection"));
+    assert!(index_html.contains("initStatusStream"));
+    assert!(index_html.contains("addCurrentFolderToWatcher"));
 
     let res_status = server.get("/api/status").await;
     assert_eq!(res_status.status_code(), 200);

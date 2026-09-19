@@ -509,6 +509,11 @@
                     <span class="text-base">🗑️</span>
                     <span>Trash & Audit</span>
                 </button>
+                <button onclick="switchNavSection('WATCHER')" id="navBtn_WATCHER"
+                        class="nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                    <span class="text-base">👁️</span>
+                    <span>Autonomous Watcher</span>
+                </button>
             </div>
 
             <!-- Google Photos / Google Drive Storage Section (Bottom Left) -->
@@ -1033,6 +1038,9 @@
                 <button onclick="refreshBrowserCurrent()" class="text-xs text-[#8e918f] hover:text-white px-2 py-1 cursor-pointer" title="Refresh">
                     🔄
                 </button>
+                <button onclick="addCurrentFolderToWatcher()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10" title="Add this folder to Autonomous Background Watcher">
+                    <span>👁️ Watch Folder</span>
+                </button>
             </div>
 
             <!-- Body: Left Shortcuts Rail & Right Directory Table -->
@@ -1353,7 +1361,8 @@
         let perPage = 25;
         let viewMode = 'grid'; // 'grid' (Photos) | 'list' (Drive)
         let thumbnailSize = 'medium'; // 'small' | 'medium' | 'large'
-        let currentNav = 'ALL'; // 'ALL' | 'DRIVE' | 'CLEANUP' | 'TRASH'
+        let currentNav = 'ALL'; // 'ALL' | 'DRIVE' | 'CLEANUP' | 'TRASH' | 'WATCHER'
+        let watcherDaemonPaused = false;
         let pollTimer = null;
 
         // Tracks selected duplicate file paths for batch actions (Set of paths)
@@ -1387,6 +1396,7 @@
 
         // Initialization
         window.addEventListener('DOMContentLoaded', async () => {
+            initStatusStream();
             await loadPastRunsList();
             try {
                 const res = await fetch('/api/status');
@@ -2050,7 +2060,7 @@
             if (sideClearBtn) sideClearBtn.classList.add('hidden');
 
             // Update tools buttons in sidebar
-            ['DRIVE', 'CLEANUP', 'TRASH'].forEach(s => {
+            ['DRIVE', 'CLEANUP', 'TRASH', 'WATCHER'].forEach(s => {
                 const btn = document.getElementById('navBtn_' + s);
                 if (btn) {
                     if (s === sec) {
@@ -2078,6 +2088,11 @@
                 if (hero) hero.classList.add('hidden');
                 if (smartHero) smartHero.classList.add('hidden');
                 renderTrashSection();
+            } else if (sec === 'WATCHER') {
+                if (hero) hero.classList.add('hidden');
+                if (smartHero) smartHero.classList.add('hidden');
+                if (gallery) gallery.classList.remove('hidden');
+                renderWatcherSection();
             }
         }
 
@@ -2221,7 +2236,7 @@
             // Update Smart Clean Recommendation Banner & Dual Recommendation Panels
             const smartHero = document.getElementById('smartCleanHero');
             if (smartHero) {
-                if ((summary.wasted_gb || 0) > 0 && currentNav !== 'TRASH') {
+                if ((summary.wasted_gb || 0) > 0 && currentNav !== 'TRASH' && currentNav !== 'WATCHER') {
                     smartHero.classList.remove('hidden');
                     const scGb = document.getElementById('smartCleanGb');
                     if (scGb) scGb.innerText = (summary.wasted_gb || 0).toFixed(2);
@@ -2382,7 +2397,7 @@
             });
 
             // Reset tools buttons in sidebar
-            ['DRIVE', 'CLEANUP', 'TRASH'].forEach(s => {
+            ['DRIVE', 'CLEANUP', 'TRASH', 'WATCHER'].forEach(s => {
                 const b = document.getElementById('navBtn_' + s);
                 if (b) b.className = "nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]";
             });
@@ -2512,7 +2527,7 @@
         }
 
         function renderCurrentPage() {
-            if (currentNav === 'TRASH') return;
+            if (currentNav === 'TRASH' || currentNav === 'WATCHER') return;
 
             const total = filteredClusters.length;
             const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -3266,6 +3281,280 @@
                     </div>
                 </div>
             `;
+        }
+
+        // --- Autonomous Watcher & Storage Surveillance Operations ---
+
+        function initStatusStream() {
+            if (!window.EventSource) return;
+            try {
+                const evtSource = new EventSource('/api/status/stream');
+                evtSource.onmessage = function(event) {
+                    try {
+                        const state = JSON.parse(event.data);
+                        if (state.status === "running") {
+                            updateScanProgressUI(state);
+                        } else if (state.status === "completed" && state.summary) {
+                            if (!currentSummary || (state.summary.run_id && currentSummary.run_id !== state.summary.run_id)) {
+                                loadSummaryState(state.summary, state.message);
+                            }
+                        }
+                    } catch (e) {
+                        // Ignore JSON parse jitter
+                    }
+                };
+                evtSource.onerror = function() {
+                    // Browser automatically reconnects EventSource
+                };
+            } catch (e) {
+                console.warn("SSE initialization error:", e);
+            }
+        }
+
+        async function addCurrentFolderToWatcher() {
+            if (!currentBrowsedPath) {
+                showToast("No folder currently selected in browser.", "⚠️");
+                return;
+            }
+            try {
+                const res = await fetch('/api/watch/paths', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: currentBrowsedPath, recursive: true })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || data.message || "Failed to add watched path");
+                showToast(`Added ${currentBrowsedPath} to Autonomous Surveillance!`, "👁️");
+                closeDriveBrowserModal();
+                if (currentNav === 'WATCHER') {
+                    await renderWatcherSection();
+                }
+            } catch (e) {
+                alert("Error adding folder to watcher: " + e.message);
+            }
+        }
+
+        async function loadWatchedPaths() {
+            try {
+                const res = await fetch('/api/watch/paths');
+                if (!res.ok) throw new Error("Failed to load watched paths");
+                return await res.json();
+            } catch (e) {
+                console.error("loadWatchedPaths error:", e);
+                return [];
+            }
+        }
+
+        async function toggleWatchedPath(id) {
+            try {
+                const res = await fetch(`/api/watch/paths/${id}/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                if (!res.ok) throw new Error("Failed to toggle watched path");
+                const data = await res.json();
+                showToast(data.enabled ? "Surveillance enabled for path." : "Surveillance paused for path.", "👁️");
+                await renderWatcherSection();
+            } catch (e) {
+                alert("Error toggling path: " + e.message);
+            }
+        }
+
+        async function deleteWatchedPath(id, pathStr) {
+            if (!confirm(`Deregister "${pathStr || 'directory'}" from Autonomous Surveillance?`)) return;
+            try {
+                const res = await fetch(`/api/watch/paths/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error("Failed to deregister path");
+                showToast(`Deregistered ${pathStr || 'path'}`, "🗑️");
+                await renderWatcherSection();
+            } catch (e) {
+                alert("Error deregistering path: " + e.message);
+            }
+        }
+
+        async function toggleWatcherDaemon() {
+            try {
+                const res = await fetch('/api/watch/daemon/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'toggle' })
+                });
+                if (!res.ok) throw new Error("Failed to toggle watcher daemon");
+                const data = await res.json();
+                watcherDaemonPaused = !!data.paused;
+                updateWatcherDaemonBadgeAndButton(watcherDaemonPaused);
+                showToast(watcherDaemonPaused ? "Autonomous Watcher paused." : "Autonomous Watcher active & listening.", "👁️");
+            } catch (e) {
+                alert("Error toggling watcher daemon: " + e.message);
+            }
+        }
+
+        function updateWatcherDaemonBadgeAndButton(paused) {
+            const badge = document.getElementById('watcherStatusBadge');
+            const btn = document.getElementById('watcherDaemonToggleBtn');
+            if (badge) {
+                if (paused) {
+                    badge.innerHTML = `<span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#fdd663]/15 text-[#fdd663] border border-[#fdd663]/30 inline-flex items-center gap-1.5">⏸️ Paused (Daemon Dormant)</span>`;
+                } else {
+                    badge.innerHTML = `<span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#81c995]/15 text-[#81c995] border border-[#81c995]/30 inline-flex items-center gap-1.5">🟢 Active (Listening)</span>`;
+                }
+            }
+            if (btn) {
+                if (paused) {
+                    btn.innerHTML = `<span>▶️ Resume Daemon</span>`;
+                    btn.className = "m3-button-primary text-xs";
+                } else {
+                    btn.innerHTML = `<span>⏸️ Pause Daemon</span>`;
+                    btn.className = "m3-button-secondary text-xs";
+                }
+            }
+        }
+
+        async function renderWatcherSection() {
+            const gallery = document.getElementById('clustersGallery');
+            if (!gallery) return;
+
+            gallery.innerHTML = `
+                <div class="space-y-6">
+                    <!-- Header Card -->
+                    <div class="m3-card p-6 bg-[#1e1f20] border border-[#3c4043]">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-2xl bg-[#1a3860] border border-[#8ab4f8]/30 flex items-center justify-center text-xl">
+                                    👁️
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2.5 flex-wrap">
+                                        <h2 class="text-lg font-bold text-white tracking-tight">Autonomous Storage Surveillance</h2>
+                                        <span id="watcherStatusBadge"></span>
+                                    </div>
+                                    <p class="text-xs text-[#8e918f] mt-0.5">
+                                        Continuously monitoring storage directories, deduplicating on file changes, and maintaining zero-clobber SQLite manifests.
+                                    </p>
+                                </div>
+                            </div>
+                            <!-- Action Buttons -->
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <button onclick="toggleWatcherDaemon()" id="watcherDaemonToggleBtn" class="m3-button-secondary text-xs">
+                                    <span>⏸️ Pause Daemon</span>
+                                </button>
+                                <button onclick="openDriveBrowserModal()" class="m3-button-primary text-xs">
+                                    <span>➕ Add Watched Directory</span>
+                                </button>
+                                <button onclick="renderWatcherSection()" class="m3-button-secondary text-xs" title="Refresh surveillance targets">
+                                    <span>🔄 Refresh</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Watched Targets Card -->
+                    <div class="m3-card p-6 bg-[#1e1f20] border border-[#3c4043]">
+                        <div class="flex items-center justify-between pb-3 border-b border-[#28292a] mb-4">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-bold text-white">Configured Storage Targets</span>
+                                <span id="watchedPathsCountBadge" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">Loading...</span>
+                            </div>
+                            <span class="text-[11px] text-[#8e918f]">Real-time file modification detection</span>
+                        </div>
+                        <div id="watchedPathsContainer">
+                            <div class="py-8 text-center text-xs text-[#8e918f]">
+                                <span class="inline-block animate-spin mr-2">⏳</span> Loading watched directories...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            updateWatcherDaemonBadgeAndButton(watcherDaemonPaused);
+
+            try {
+                const paths = await loadWatchedPaths();
+                const countBadge = document.getElementById('watchedPathsCountBadge');
+                if (countBadge) countBadge.innerText = `${paths.length} target${paths.length === 1 ? '' : 's'}`;
+
+                const container = document.getElementById('watchedPathsContainer');
+                if (!container) return;
+
+                if (!paths || paths.length === 0) {
+                    container.innerHTML = `
+                        <div class="py-12 text-center space-y-3">
+                            <div class="w-12 h-12 rounded-full bg-[#1a3860]/50 text-2xl flex items-center justify-center mx-auto text-[#8ab4f8]">
+                                📂
+                            </div>
+                            <div class="text-sm font-bold text-white">No directories currently under surveillance</div>
+                            <p class="text-xs text-[#8e918f] max-w-md mx-auto">
+                                Add storage directories to have Clairvoy continuously monitor changes and deduplicate files in the background.
+                            </p>
+                            <button onclick="openDriveBrowserModal()" class="m3-button-primary text-xs mt-2">
+                                <span>➕ Add First Directory</span>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    let rowsHtml = '';
+                    for (const p of paths) {
+                        const escapedPath = (p.path || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        rowsHtml += `
+                            <tr class="hover:bg-[#28292a]/50 transition">
+                                <td class="py-3 px-3 font-mono text-white font-medium flex items-center gap-2">
+                                    <span class="text-base text-[#8ab4f8]">📁</span>
+                                    <span class="truncate max-w-md" title="${p.path}">${p.path}</span>
+                                </td>
+                                <td class="py-3 px-3 whitespace-nowrap">
+                                    ${p.recursive
+                                        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#1a3860] text-[#8ab4f8] border border-[#8ab4f8]/30">Recursive</span>`
+                                        : `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#28292a] text-[#8e918f] border border-white/10">Single-Level</span>`
+                                    }
+                                </td>
+                                <td class="py-3 px-3 whitespace-nowrap">
+                                    ${p.enabled
+                                        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#81c995]/15 text-[#81c995] border border-[#81c995]/30">● Active</span>`
+                                        : `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#fdd663]/15 text-[#fdd663] border border-[#fdd663]/30">⏸ Paused</span>`
+                                    }
+                                </td>
+                                <td class="py-3 px-3 whitespace-nowrap font-mono text-[11px] text-[#8e918f]">
+                                    ${p.last_scanned_at ? p.last_scanned_at : 'Never'}
+                                </td>
+                                <td class="py-3 px-3 whitespace-nowrap text-right space-x-2">
+                                    <button onclick="toggleWatchedPath(${p.id})" class="m3-button-secondary !py-1 !px-2.5 text-xs" title="${p.enabled ? 'Pause surveillance' : 'Resume surveillance'}">
+                                        ${p.enabled ? '⏸ Pause' : '▶ Resume'}
+                                    </button>
+                                    <button onclick="deleteWatchedPath(${p.id}, '${escapedPath}')" class="m3-button-danger !py-1 !px-2.5 text-xs" title="Remove from surveillance">
+                                        ✕ Deregister
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+
+                    container.innerHTML = `
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs text-[#c4c7c5]">
+                                <thead class="text-[11px] uppercase tracking-wider text-[#8e918f] border-b border-[#28292a]">
+                                    <tr>
+                                        <th class="py-3 px-3">Watched Directory</th>
+                                        <th class="py-3 px-3">Mode</th>
+                                        <th class="py-3 px-3">Status</th>
+                                        <th class="py-3 px-3">Last Scanned</th>
+                                        <th class="py-3 px-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-[#28292a]">
+                                    ${rowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                console.error("renderWatcherSection error:", e);
+                const container = document.getElementById('watchedPathsContainer');
+                if (container) {
+                    container.innerHTML = `<div class="p-4 text-center text-xs text-[#f28b82]">Failed to load watched paths: ${e.message}</div>`;
+                }
+            }
         }
 
         // Dialog Functions
