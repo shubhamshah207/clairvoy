@@ -545,3 +545,17 @@ async fn test_server_clean_progress_modal_elements() {
     assert!(html.contains("finishCleanProgressModal"));
 }
 
+#[tokio::test]
+async fn test_server_audits_section_elements() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("navBtn_AUDITS"));
+    assert!(html.contains("renderAuditsSection"));
+    assert!(html.contains("inspectHistoricalRun"));
+    assert!(!html.contains("runsDropdown"));
+}
+

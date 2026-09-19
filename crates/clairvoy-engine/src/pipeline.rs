@@ -2,7 +2,7 @@ use crate::keeper::CompositeKeeperStrategy;
 use clairvoy_core::errors::EngineError;
 use clairvoy_core::models::{ActionType, DuplicateRecord, FileEntry, MatchType, ScanSummary};
 use clairvoy_core::traits::{KeeperStrategy, MatcherPlugin};
-use clairvoy_scanner::scan_roots;
+use clairvoy_scanner::scan_roots_with_progress;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -37,9 +37,11 @@ impl DeduplicationPipeline {
         F: FnMut(&str, usize, usize),
     {
         let t_start = Instant::now();
-        progress_cb("Scanning filesystem", 0, self.target_paths.len());
+        progress_cb("Crawling filesystem", 0, self.target_paths.len());
 
-        let (all_files, media_count) = scan_roots(&self.target_paths)?;
+        let (all_files, media_count) = scan_roots_with_progress(&self.target_paths, |cur, _| {
+            progress_cb("Crawling filesystem", cur, 0);
+        })?;
         progress_cb("Filesystem indexed", all_files.len(), all_files.len());
 
         let mut matched_paths: HashSet<PathBuf> = HashSet::new();
@@ -59,7 +61,10 @@ impl DeduplicationPipeline {
                 .collect();
             let supported = matcher.filter_supported(&candidates);
             if supported.len() >= 2 {
-                let clusters = matcher.find_duplicates(&supported, &all_files)?;
+                let matcher_name = matcher.display_name();
+                let clusters = matcher.find_duplicates_with_progress(&supported, &all_files, &mut |cur, tot| {
+                    progress_cb(&format!("{}: hashing files", matcher_name), cur, tot);
+                })?;
                 for cluster in clusters {
                     for m in &cluster.members {
                         matched_paths.insert(m.path.clone());
@@ -69,16 +74,24 @@ impl DeduplicationPipeline {
             }
         }
 
+        let total_clusters = all_clusters.len();
         progress_cb(
-            "Processing duplicate clusters",
-            total_matchers,
-            total_matchers,
+            "Scoring duplicate clusters",
+            0,
+            total_clusters,
         );
         let mut records = Vec::new();
         let mut total_wasted_bytes = 0u64;
         let mut category_breakdown = HashMap::new();
 
         for (cluster_idx, cluster) in all_clusters.iter().enumerate() {
+            if (cluster_idx + 1) % 250 == 0 || cluster_idx + 1 == total_clusters {
+                progress_cb(
+                    "Scoring duplicate clusters",
+                    cluster_idx + 1,
+                    total_clusters,
+                );
+            }
             let group_id = cluster_idx + 1;
             let (keeper, dupes) = self.keeper_strategy.choose_keeper(&cluster.members);
 

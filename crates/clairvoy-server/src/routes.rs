@@ -373,11 +373,16 @@ pub async fn handle_scan(
                 s.elapsed_seconds = start_time.elapsed().as_secs_f64();
                 s.progress_pct = if tot > 0 {
                     ((cur as f64 / tot as f64) * 100.0).min(100.0) as u32
+                } else if cur > 0 {
+                    ((cur as f64).log10() * 18.0).min(85.0) as u32
                 } else {
                     0
                 };
                 if stage.contains("Crawling") || stage.contains("Filesystem") {
                     s.files_indexed = cur;
+                    s.message = format!("{}: {} files discovered", stage, cur);
+                } else {
+                    s.message = format!("{}: {} / {}", stage, cur, tot);
                 }
             }
         });

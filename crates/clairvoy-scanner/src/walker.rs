@@ -86,6 +86,16 @@ fn convert_dir_entry(entry: jwalk::DirEntry<((), ())>) -> Option<FileEntry> {
 }
 
 pub fn scan_roots(roots: &[PathBuf]) -> Result<(Vec<FileEntry>, usize), io::Error> {
+    scan_roots_with_progress(roots, |_, _| {})
+}
+
+pub fn scan_roots_with_progress<F>(
+    roots: &[PathBuf],
+    mut progress_cb: F,
+) -> Result<(Vec<FileEntry>, usize), io::Error>
+where
+    F: FnMut(usize, usize),
+{
     for root in roots {
         if !root.exists() {
             return Err(io::Error::new(
@@ -121,10 +131,14 @@ pub fn scan_roots(roots: &[PathBuf]) -> Result<(Vec<FileEntry>, usize), io::Erro
                     media_count += 1;
                 }
                 entries.push(file_entry);
+                if entries.len() % 250 == 0 {
+                    progress_cb(entries.len(), media_count);
+                }
             }
         }
     }
 
+    progress_cb(entries.len(), media_count);
     Ok((entries, media_count))
 }
 

@@ -1,3 +1,5 @@
+pub mod progress;
+
 use clap::{Parser, Subcommand};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -12,10 +14,34 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug, PartialEq, Eq)]
 pub enum Commands {
-    /// Scan one or more directories for duplicate files
+    /// Scan one or more directories for duplicate files with real-time terminal progress
     Scan {
         #[arg(required = true)]
         paths: Vec<PathBuf>,
+        /// Optional Clairvoy UI server URL to coordinate scan through active web server
+        #[arg(long)]
+        server: Option<String>,
+    },
+    /// Inspect status or follow live SSE progress stream from a running Clairvoy server
+    Status {
+        /// Clairvoy server base URL
+        #[arg(short, long, default_value = "http://127.0.0.1:8000")]
+        server: String,
+        /// Follow live SSE progress stream in real time with animated progress bar
+        #[arg(short, long)]
+        follow: bool,
+    },
+    /// Clean duplicate files with transparent, chunked terminal progress
+    Clean {
+        /// Clairvoy server base URL
+        #[arg(short, long, default_value = "http://127.0.0.1:8000")]
+        server: String,
+        /// Clean 100% byte-exact duplicates only (preserves all primary keeper files)
+        #[arg(long, default_value_t = true)]
+        exact: bool,
+        /// Deletion mode: trash, permanent, or hardlink
+        #[arg(long, default_value = "trash")]
+        mode: String,
     },
     /// Launch the web dashboard server
     Ui {
@@ -40,15 +66,170 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Scan { paths } => {
-            println!("[*] Initializing Clairvoy Pure Rust Engine across {} path(s)...", paths.len());
-            let mut pipeline = clairvoy_engine::DeduplicationPipeline::new(paths);
-            pipeline.register_matcher(Arc::new(clairvoy_plugins::ExactHashMatcherPlugin::new()));
-            let summary = pipeline.run(|stage, cur, tot| {
-                println!(" [>] {}: {} / {}", stage, cur, tot);
-            })?;
-            println!("\n[✓] Scan complete in {:.2}s. Discovered {} duplicate groups ({:.3} GB recoverable).",
-                summary.duration_seconds, summary.total_duplicate_groups, summary.wasted_gb);
+        Commands::Scan { paths, server } => {
+            if let Some(server_url) = server {
+                println!("[*] Coordinating scan across {} path(s) via Clairvoy Server ({}) ...", paths.len(), server_url);
+                let client = reqwest::Client::new();
+                let scan_ep = format!("{}/api/scan", server_url.trim_end_matches('/'));
+                let payload = serde_json::json!({
+                    "paths": paths.iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
+                    "enable_ml": true,
+                    "threshold": 0.9,
+                });
+                let res = client.post(&scan_ep).json(&payload).send().await?;
+                if !res.status().is_success() {
+                    let err_txt = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                    eprintln!("[✗] Server rejected scan request: {}", err_txt);
+                    return Ok(());
+                }
+                println!("[*] Scan triggered successfully on server. Streaming real-time progress...");
+                stream_server_progress(&server_url).await?;
+            } else {
+                println!("[*] Initializing Clairvoy Pure Rust Engine across {} path(s)...", paths.len());
+                let mut pipeline = clairvoy_engine::DeduplicationPipeline::new(paths);
+                pipeline.register_matcher(Arc::new(clairvoy_plugins::ExactHashMatcherPlugin::new()));
+
+                let mut pb = progress::TerminalProgressBar::new("Initializing filesystem scan", 0);
+                let summary = pipeline.run(|stage, cur, tot| {
+                    if tot > 0 {
+                        pb.set_total(tot);
+                    }
+                    pb.update(cur, stage);
+                })?;
+
+                pb.finish(&format!(
+                    "Scan complete: {} files analyzed in {:.2}s. Discovered {} duplicate groups ({:.3} GB / {:.1} MB recoverable).",
+                    summary.total_files_scanned, summary.duration_seconds, summary.total_duplicate_groups, summary.wasted_gb, summary.wasted_mb
+                ));
+            }
+        }
+        Commands::Status { server, follow } => {
+            if follow {
+                stream_server_progress(&server).await?;
+            } else {
+                let status_url = format!("{}/api/status", server.trim_end_matches('/'));
+                let client = reqwest::Client::new();
+                let res = client.get(&status_url).send().await?;
+                if !res.status().is_success() {
+                    eprintln!("[✗] Failed to fetch server status: HTTP {}", res.status());
+                    return Ok(());
+                }
+                let val: serde_json::Value = res.json().await?;
+                println!("+-------------------------------------------------------------+");
+                println!("|                 CLAIRVOY SERVER STATUS                      |");
+                println!("+-------------------------------------------------------------+");
+                println!("  Server URL:         {}", server);
+                println!("  Lifecycle Status:   {}", val.get("status").and_then(|v| v.as_str()).unwrap_or("unknown"));
+                println!("  Current Stage:      {}", val.get("stage").and_then(|v| v.as_str()).unwrap_or("-"));
+                println!("  Progress:           {}%", val.get("progress_pct").and_then(|v| v.as_u64()).unwrap_or(0));
+                println!("  Files Indexed:      {}", val.get("files_indexed").and_then(|v| v.as_u64()).unwrap_or(0));
+                println!("  Recoverable Space:  {:.2} GB ({:.1} MB)",
+                    val.get("wasted_gb").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    val.get("wasted_mb").and_then(|v| v.as_f64()).unwrap_or(0.0)
+                );
+                if let Some(run_id) = val.get("run_id").and_then(|v| v.as_str()) {
+                    println!("  Active Scan Run:    {}", run_id);
+                }
+                if let Some(msg) = val.get("message").and_then(|v| v.as_str()) {
+                    println!("  Message:            {}", msg);
+                }
+
+                // Check watched paths
+                let watch_url = format!("{}/api/watch/paths", server.trim_end_matches('/'));
+                if let Ok(watch_res) = client.get(&watch_url).send().await {
+                    if let Ok(watch_list) = watch_res.json::<Vec<serde_json::Value>>().await {
+                        println!("+-------------------------------------------------------------+");
+                        println!("|  SURVEILLANCE WATCHED DIRECTORIES                           |");
+                        println!("+-------------------------------------------------------------+");
+                        if watch_list.is_empty() {
+                            println!("  (No watched folders configured)");
+                        } else {
+                            for w in watch_list {
+                                let id = w.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                                let p = w.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                                let en = w.get("enabled").and_then(|v| v.as_i64()).unwrap_or(0) == 1;
+                                println!("  [{}] {} (Status: {})", id, p, if en { "ACTIVE" } else { "PAUSED" });
+                            }
+                        }
+                    }
+                }
+                println!("+-------------------------------------------------------------+");
+            }
+        }
+        Commands::Clean { server, exact, mode } => {
+            let status_url = format!("{}/api/status", server.trim_end_matches('/'));
+            let client = reqwest::Client::new();
+            let res = client.get(&status_url).send().await?;
+            if !res.status().is_success() {
+                eprintln!("[✗] Failed to fetch server status: HTTP {}", res.status());
+                return Ok(());
+            }
+            let val: serde_json::Value = res.json().await?;
+            let summary = val.get("summary");
+            let groups = summary.and_then(|s| s.get("groups")).and_then(|g| g.as_array());
+
+            let mut targets = Vec::new();
+            let mut total_bytes: u64 = 0;
+            if let Some(group_items) = groups {
+                for it in group_items {
+                    let action = it.get("action").and_then(|v| v.as_str()).unwrap_or("");
+                    let match_type = it.get("match_type").and_then(|v| v.as_str()).unwrap_or("");
+                    if action == "DUPLICATE" && (!exact || match_type == "ExactHash" || match_type == "EXACT_HASH") {
+                        if let Some(p) = it.get("path").and_then(|v| v.as_str()) {
+                            targets.push(p.to_string());
+                            let size_mb = it.get("size_mb").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                            total_bytes += (size_mb * 1024.0 * 1024.0) as u64;
+                        }
+                    }
+                }
+            }
+
+            if targets.is_empty() {
+                println!("[✓] No candidate duplicate files found to clean.");
+                return Ok(());
+            }
+
+            let total_gb = total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+            println!(
+                "[*] Found {} duplicate files ({:.2} GB). Cleaning in chunks of 150 (mode: {})...",
+                targets.len(), total_gb, mode
+            );
+
+            let chunk_size = 150;
+            let mut pb = progress::TerminalProgressBar::new(&format!("Batch {}", mode), targets.len());
+            let mut total_freed_files = 0;
+            let mut total_freed_bytes: u64 = 0;
+
+            let delete_ep = format!("{}/api/delete/execute", server.trim_end_matches('/'));
+            for (idx, chunk) in targets.chunks(chunk_size).enumerate() {
+                let current_processed = idx * chunk_size + chunk.len();
+                pb.update(
+                    current_processed,
+                    &format!("Cleaning batch {}/{} ({:.2} MB freed)", idx + 1, targets.len().div_ceil(chunk_size), total_freed_bytes as f64 / 1_048_576.0)
+                );
+
+                let payload = serde_json::json!({
+                    "paths": chunk,
+                    "mode": mode,
+                });
+
+                let del_res = client.post(&delete_ep).json(&payload).send().await?;
+                if del_res.status().is_success() {
+                    let res_body: serde_json::Value = del_res.json().await?;
+                    let freed = res_body.get("total_files_freed")
+                        .or_else(|| res_body.get("total_files_deleted"))
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(chunk.len() as u64) as usize;
+                    let bytes = res_body.get("total_bytes_freed").and_then(|v| v.as_u64()).unwrap_or(0);
+                    total_freed_files += freed;
+                    total_freed_bytes += bytes;
+                }
+            }
+
+            pb.finish(&format!(
+                "Batch clean complete: {} files processed in {} mode ({:.2} MB / {:.3} GB freed).",
+                total_freed_files, mode, total_freed_bytes as f64 / 1_048_576.0, total_freed_bytes as f64 / 1_073_741_824.0
+            ));
         }
         Commands::Ui {
             port,
@@ -87,6 +268,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             s.stage = stage.to_string();
                             s.progress_pct = if tot > 0 {
                                 ((cur as f64 / tot as f64) * 100.0).min(100.0) as u32
+                            } else if cur > 0 {
+                                ((cur as f64).log10() * 18.0).min(85.0) as u32
                             } else {
                                 0
                             };
@@ -116,6 +299,65 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+async fn stream_server_progress(server_url: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let stream_url = format!("{}/api/status/stream", server_url.trim_end_matches('/'));
+    println!("[*] Connecting to live SSE status stream at {}...", stream_url);
+
+    let client = reqwest::Client::new();
+    let mut res = client.get(&stream_url).send().await?;
+    if !res.status().is_success() {
+        return Err(format!("Failed to connect to status stream: HTTP {}", res.status()).into());
+    }
+
+    let mut pb = progress::TerminalProgressBar::new("Surveillance / Scan Progress", 0);
+    let mut buffer = String::new();
+
+    while let Some(chunk) = res.chunk().await? {
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+        while let Some(newline_pos) = buffer.find('\n') {
+            let line = buffer[..newline_pos].trim().to_string();
+            buffer = buffer[newline_pos + 1..].to_string();
+
+            if let Some(json_str) = line.strip_prefix("data:") {
+                let json_str = json_str.trim();
+                if json_str.is_empty() {
+                    continue;
+                }
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
+                    let status = val.get("status").and_then(|v| v.as_str()).unwrap_or("idle");
+                    let stage = val.get("stage").and_then(|v| v.as_str()).unwrap_or("");
+                    let message = val.get("message").and_then(|v| v.as_str()).unwrap_or("");
+                    let files_indexed = val.get("files_indexed").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                    let pct = val.get("progress_pct").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+
+                    if status == "running" {
+                        pb.set_total(100);
+                        let display_msg = if !message.is_empty() { message } else { stage };
+                        pb.update(pct, display_msg);
+                    } else if status == "completed" {
+                        let wasted_gb = val.get("wasted_gb").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        let wasted_mb = val.get("wasted_mb").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        pb.finish(&format!(
+                            "Scan completed: {} files indexed ({:.2} MB / {:.3} GB recoverable space)",
+                            files_indexed, wasted_mb, wasted_gb
+                        ));
+                        return Ok(());
+                    } else if status == "failed" {
+                        let err = val.get("error").and_then(|v| v.as_str()).unwrap_or(message);
+                        pb.fail(err);
+                        return Ok(());
+                    } else if status == "idle" {
+                        pb.render("Server is idle (surveillance monitoring active)");
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,12 +367,53 @@ mod tests {
         let args = vec!["clairvoy-rs", "scan", "/tmp/dir1", "/tmp/dir2"];
         let cli = Cli::try_parse_from(args).expect("Should parse scan command");
         match cli.command {
-            Commands::Scan { paths } => {
+            Commands::Scan { paths, server } => {
                 assert_eq!(paths.len(), 2);
                 assert_eq!(paths[0], PathBuf::from("/tmp/dir1"));
                 assert_eq!(paths[1], PathBuf::from("/tmp/dir2"));
+                assert!(server.is_none());
             }
             _ => panic!("Expected Commands::Scan"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_scan_with_server() {
+        let args = vec!["clairvoy-rs", "scan", "/tmp/dir1", "--server", "http://localhost:8000"];
+        let cli = Cli::try_parse_from(args).expect("Should parse scan command with server");
+        match cli.command {
+            Commands::Scan { paths, server } => {
+                assert_eq!(paths.len(), 1);
+                assert_eq!(server.as_deref(), Some("http://localhost:8000"));
+            }
+            _ => panic!("Expected Commands::Scan"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_status() {
+        let args = vec!["clairvoy-rs", "status", "--follow", "--server", "http://127.0.0.1:9000"];
+        let cli = Cli::try_parse_from(args).expect("Should parse status command");
+        match cli.command {
+            Commands::Status { server, follow } => {
+                assert_eq!(server, "http://127.0.0.1:9000");
+                assert!(follow);
+            }
+            _ => panic!("Expected Commands::Status"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_clean() {
+        let args = vec!["clairvoy-rs", "clean", "--exact", "--mode", "hardlink"];
+        let cli = Cli::try_parse_from(args).expect("Should parse clean command");
+        match cli.command {
+            Commands::Clean { server, exact, mode } => {
+                assert_eq!(server, "http://127.0.0.1:8000");
+                assert!(exact);
+                assert_eq!(mode, "hardlink");
+            }
+            _ => panic!("Expected Commands::Clean"),
         }
     }
 

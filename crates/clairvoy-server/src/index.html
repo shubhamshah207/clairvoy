@@ -350,23 +350,6 @@
                     <div id="sideScanStage" class="text-[10px] text-[#c4c7c5] truncate">Indexing files...</div>
                 </div>
 
-                <!-- Session Run Selector (Google Workspace Run Picker) -->
-                <div class="flex-shrink-0 w-full mb-2">
-                    <div class="p-2.5 rounded-2xl bg-[#28292a] border border-[#3c4043]/70 hover:border-[#8ab4f8]/40 transition shadow-inner">
-                        <div class="flex items-center justify-between text-[11px] font-semibold text-[#8e918f] mb-1 px-1">
-                            <span class="flex items-center gap-1.5">
-                                <span>📂</span>
-                                <span>Scan Run</span>
-                            </span>
-                            <span class="text-[10px] text-[#81c995] font-mono">Offline</span>
-                        </div>
-                        <select id="runsDropdown" onchange="onRunSelected(this.value)"
-                                class="w-full bg-[#1e1f20] border border-[#3c4043] text-xs text-[#e3e3e3] rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-[#8ab4f8] cursor-pointer truncate">
-                            <option value="">Loading runs...</option>
-                        </select>
-                    </div>
-                </div>
-
                 <!-- Section: Categories Header -->
                 <div class="hidden md:flex items-center justify-between px-3 pt-1 pb-1.5 text-[11px] font-bold text-[#8e918f] uppercase tracking-wider">
                     <span>Categories</span>
@@ -517,6 +500,11 @@
                         class="nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
                     <span class="text-base">👁️</span>
                     <span>Autonomous Watcher</span>
+                </button>
+                <button onclick="switchNavSection('AUDITS')" id="navBtn_AUDITS"
+                        class="nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                    <span class="text-base">📜</span>
+                    <span>Scan History & Audits</span>
                 </button>
             </div>
 
@@ -2776,7 +2764,7 @@
             if (sideClearBtn) sideClearBtn.classList.add('hidden');
 
             // Update tools buttons in sidebar
-            ['DRIVE', 'CLEANUP', 'TRASH', 'WATCHER'].forEach(s => {
+            ['DRIVE', 'CLEANUP', 'TRASH', 'WATCHER', 'AUDITS'].forEach(s => {
                 const btn = document.getElementById('navBtn_' + s);
                 if (btn) {
                     if (s === sec) {
@@ -2810,36 +2798,21 @@
                 if (smartHero) smartHero.classList.add('hidden');
                 if (gallery) gallery.classList.remove('hidden');
                 renderWatcherSection();
+            } else if (sec === 'AUDITS') {
+                if (hero) hero.classList.add('hidden');
+                if (smartHero) smartHero.classList.add('hidden');
+                if (gallery) gallery.classList.remove('hidden');
+                renderAuditsSection();
             }
         }
 
+        let pastRunsCache = [];
+
         async function loadPastRunsList(selectedRunId = null) {
-            const dropdown = document.getElementById('runsDropdown');
             try {
                 const res = await fetch('/api/runs?limit=30');
                 if (!res.ok) return;
-                const runs = await res.json();
-                dropdown.innerHTML = '';
-                if (runs.length === 0) {
-                    dropdown.innerHTML = '<option value="">No past runs found</option>';
-                } else {
-                    for (const r of runs) {
-                        const opt = document.createElement('option');
-                        opt.value = r.run_id;
-                        opt.className = "bg-[#1e1f20] text-[#e3e3e3]";
-                        const target = r.scanned_paths && r.scanned_paths.length > 0 ? r.scanned_paths[0] : "Scan";
-                        const shortTarget = target.length > 18 ? target.slice(0, 16) + ".." : target;
-                        opt.innerText = `${shortTarget} • ${r.wasted_gb.toFixed(2)} GB`;
-                        dropdown.appendChild(opt);
-                    }
-                }
-                const customOpt = document.createElement('option');
-                customOpt.value = "__custom__";
-                customOpt.className = "bg-[#1e1f20] text-[#8ab4f8] font-bold";
-                customOpt.innerText = "➕ Load report path...";
-                dropdown.appendChild(customOpt);
-
-                if (selectedRunId) dropdown.value = selectedRunId;
+                pastRunsCache = await res.json();
             } catch (e) {
                 console.error("Runs load error:", e);
             }
@@ -5399,6 +5372,185 @@
             }
         }
 
+        async function renderAuditsSection() {
+            const gallery = document.getElementById('clustersGallery');
+            if (!gallery) return;
+
+            gallery.innerHTML = `
+                <div class="space-y-6">
+                    <!-- Header Card -->
+                    <div class="m3-card p-6 bg-[#1e1f20] border border-[#3c4043]">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-2xl bg-[#1a3860] border border-[#8ab4f8]/30 flex items-center justify-center text-xl">
+                                    📜
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2.5 flex-wrap">
+                                        <h2 class="text-lg font-bold text-white tracking-tight">Scan Audits & Manifests</h2>
+                                        <span id="auditsTotalRunsBadge" class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">Loading...</span>
+                                    </div>
+                                    <p class="text-xs text-[#8e918f] mt-0.5">
+                                        Authoritative SQLite ledger of historical scan runs, duplicate cluster discoveries, and storage audits.
+                                    </p>
+                                </div>
+                            </div>
+                            <!-- Action Buttons -->
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <button onclick="promptLoadCustomReport()" class="m3-button-secondary text-xs">
+                                    <span>➕ Load External Report</span>
+                                </button>
+                                <button onclick="renderAuditsSection()" class="m3-button-secondary text-xs" title="Refresh scan audits">
+                                    <span>🔄 Refresh</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Audits Ledger Card -->
+                    <div class="m3-card p-6 bg-[#1e1f20] border border-[#3c4043]">
+                        <div class="flex items-center justify-between pb-3 border-b border-[#28292a] mb-4">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-bold text-white">Historical Scans Ledger</span>
+                                <span class="text-xs text-[#8e918f] font-mono">100% Local SQLite WAL</span>
+                            </div>
+                            <span class="text-[11px] text-[#8e918f]">Click "Inspect in Studio" to switch active workspace to any historical scan</span>
+                        </div>
+                        <div id="auditsLedgerContainer">
+                            <div class="py-8 text-center text-xs text-[#8e918f]">
+                                <span class="inline-block animate-spin mr-2">⏳</span> Loading scan audit manifests...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            try {
+                const res = await fetch('/api/runs?limit=50');
+                const container = document.getElementById('auditsLedgerContainer');
+                const badge = document.getElementById('auditsTotalRunsBadge');
+
+                if (!res.ok) throw new Error("Failed to load runs from server");
+                const runs = await res.json();
+
+                if (badge) badge.innerText = `${runs.length} Historical Run${runs.length === 1 ? '' : 's'}`;
+
+                if (!container) return;
+                if (runs.length === 0) {
+                    container.innerHTML = `
+                        <div class="py-12 text-center text-xs text-[#8e918f]">
+                            No previous scan runs recorded yet. Start a scan to begin audit logging.
+                        </div>
+                    `;
+                    return;
+                }
+
+                let rowsHtml = '';
+                for (const r of runs) {
+                    const isActive = currentRunId && r.run_id === currentRunId;
+                    const pathsStr = Array.isArray(r.scanned_paths) ? r.scanned_paths.join(', ') : (r.scanned_paths || r.scanned_dir || '-');
+                    const wastedGb = (r.wasted_gb || 0).toFixed(2);
+                    const wastedMb = (r.wasted_mb || 0).toFixed(1);
+                    const durationSec = (r.duration_seconds || 0).toFixed(1);
+                    const filesCount = (r.total_files || r.total_files_scanned || 0).toLocaleString();
+                    const clustersCount = (r.duplicate_groups || r.duplicate_clusters || 0).toLocaleString();
+
+                    rowsHtml += `
+                        <tr class="hover:bg-[#28292a]/50 transition ${isActive ? 'bg-[#1a3860]/20' : ''}">
+                            <td class="py-3 px-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-white font-bold">${r.run_id}</span>
+                                    ${isActive
+                                        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#81c995]/20 text-[#81c995] border border-[#81c995]/30">Active In Studio</span>`
+                                        : ''
+                                    }
+                                </div>
+                                <div class="text-[10px] text-[#8e918f] font-mono mt-0.5">${r.timestamp || 'Recorded'}</div>
+                            </td>
+                            <td class="py-3 px-3">
+                                <span class="font-mono text-xs text-[#8ab4f8] bg-[#1a3860]/40 px-2 py-0.5 rounded border border-[#8ab4f8]/20 truncate max-w-xs inline-block" title="${pathsStr}">
+                                    ${pathsStr}
+                                </span>
+                            </td>
+                            <td class="py-3 px-3 whitespace-nowrap font-mono text-xs text-white">
+                                ${filesCount}
+                            </td>
+                            <td class="py-3 px-3 whitespace-nowrap font-mono text-xs text-[#e3e3e3]">
+                                ${clustersCount}
+                            </td>
+                            <td class="py-3 px-3 whitespace-nowrap font-mono text-xs">
+                                <span class="text-[#f28b82] font-bold">${wastedGb} GB</span>
+                                <span class="text-[#8e918f] text-[10px] block">${wastedMb} MB</span>
+                            </td>
+                            <td class="py-3 px-3 whitespace-nowrap font-mono text-xs text-[#8e918f]">
+                                ${durationSec}s
+                            </td>
+                            <td class="py-3 px-3 whitespace-nowrap text-right space-x-2">
+                                <button onclick="inspectHistoricalRun('${r.run_id}')" class="m3-button-secondary !py-1 !px-3 text-xs text-[#8ab4f8] hover:bg-[#8ab4f8]/10" title="Load this scan run into current studio workspace">
+                                    👁️ Inspect in Studio
+                                </button>
+                                <a href="/api/reports/csv?run_id=${r.run_id}" download class="m3-button-secondary !py-1 !px-2.5 text-xs text-[#c4c7c5]" title="Export CSV for this run">
+                                    📄 CSV
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                }
+
+                container.innerHTML = `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-[#c4c7c5]">
+                            <thead class="text-[11px] uppercase tracking-wider text-[#8e918f] border-b border-[#28292a]">
+                                <tr>
+                                    <th class="py-3 px-3">Scan Run ID & Date</th>
+                                    <th class="py-3 px-3">Scanned Target</th>
+                                    <th class="py-3 px-3">Files Indexed</th>
+                                    <th class="py-3 px-3">Clusters</th>
+                                    <th class="py-3 px-3">Recoverable Space</th>
+                                    <th class="py-3 px-3">Duration</th>
+                                    <th class="py-3 px-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[#28292a]">
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) {
+                console.error("renderAuditsSection error:", e);
+                const container = document.getElementById('auditsLedgerContainer');
+                if (container) {
+                    container.innerHTML = `<div class="p-4 text-center text-xs text-[#f28b82]">Failed to load scan audits: ${e.message}</div>`;
+                }
+            }
+        }
+
+        async function inspectHistoricalRun(runId) {
+            try {
+                showToast(`Loading scan run ${runId}...`, "⏳");
+                await loadRunReport({ run_id: runId });
+                currentRunId = runId;
+                showToast(`Loaded scan run ${runId} into studio!`, "✓");
+                switchNavSection('DRIVE');
+            } catch (e) {
+                showToast("Failed to load run: " + e.message, "⚠️");
+            }
+        }
+
+        async function promptLoadCustomReport() {
+            const path = prompt("Enter absolute path to clairvoy_summary.json:");
+            if (!path) return;
+            try {
+                showToast(`Loading custom report...`, "⏳");
+                await loadRunReport({ path: path.trim() });
+                showToast(`Custom report loaded successfully!`, "✓");
+                switchNavSection('DRIVE');
+            } catch (e) {
+                showToast("Failed to load custom report: " + e.message, "⚠️");
+            }
+        }
+
         // Dialog Functions
         function openTrashDialog() {
             if (!currentSummary) return;
@@ -5470,44 +5622,69 @@
                 return;
             }
 
+            openCleanProgressModal("Converting to Hardlinks", `Replacing ${targetPaths.length.toLocaleString()} duplicates with zero-byte hardlinks...`, targetPaths.length);
+
+            const baseDir = currentSummary.scanned_paths
+                ? (Array.isArray(currentSummary.scanned_paths) ? currentSummary.scanned_paths[0] : currentSummary.scanned_paths)
+                : currentSummary.scanned_dir;
+
+            const chunkSize = 150;
+            let totalFreedCount = 0;
+            let totalFreedBytes = 0;
+            const processedSet = new Set();
+
             try {
-                showToast("Converting duplicates to hardlinks...", "🔗");
-                logActivityEvent('hardlink', `Converting ${targetPaths.length} duplicates to hardlinks`);
+                for (let i = 0; i < targetPaths.length; i += chunkSize) {
+                    const chunk = targetPaths.slice(i, i + chunkSize);
+                    updateCleanProgressModal(i, targetPaths.length, totalFreedBytes, chunk[0]);
 
-                const res = await fetch('/api/delete/execute', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        paths: targetPaths,
-                        mode: 'hardlink',
-                        base_dir: currentSummary.scanned_paths?.[0] || currentSummary.scanned_dir
-                    })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.message || data.detail || "Hardlink execution failed");
+                    const res = await fetch('/api/delete/execute', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            paths: chunk,
+                            mode: 'hardlink',
+                            base_dir: baseDir
+                        })
+                    });
 
-                const freedMb = ((data.total_bytes_freed || 0) / (1024 * 1024)).toFixed(2);
-                showToast(`Converted ${data.total_files_freed || targetPaths.length} duplicates to hardlinks (${freedMb} MB reclaimed)!`, "✓");
-                logActivityEvent('hardlink', `Replaced ${data.total_files_freed || targetPaths.length} duplicates with hardlinks (${freedMb} MB storage consolidated)`);
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.message || data.detail || "Hardlink execution failed");
 
-                for (const p of targetPaths) {
-                    selectedPaths.delete(p);
+                    const freedCount = data.total_files_freed || chunk.length;
+                    const freedBytes = data.total_bytes_freed || 0;
+                    totalFreedCount += freedCount;
+                    totalFreedBytes += freedBytes;
+
+                    for (const p of chunk) {
+                        processedSet.add(p);
+                        selectedPaths.delete(p);
+                    }
+
+                    updateCleanProgressModal(Math.min(i + chunkSize, targetPaths.length), targetPaths.length, totalFreedBytes, chunk[chunk.length - 1]);
                 }
+
+                await finishCleanProgressModal(totalFreedCount, totalFreedBytes);
+
+                const freedMb = (totalFreedBytes / (1024 * 1024)).toFixed(2);
+                showToast(`Converted ${totalFreedCount.toLocaleString()} duplicates to hardlinks (${freedMb} MB reclaimed)!`, "✓");
+                logActivityEvent('hardlink', `Replaced ${totalFreedCount.toLocaleString()} duplicates with hardlinks (${freedMb} MB storage consolidated)`);
 
                 // UI state reload
                 const statusRes = await fetch('/api/status');
                 if (statusRes.ok) {
                     const state = await statusRes.json();
                     if (state.summary) {
-                        loadSummaryState(state.summary, `Hardlinked ${targetPaths.length} duplicate files (${freedMb} MB freed).`);
+                        loadSummaryState(state.summary, `Hardlinked ${totalFreedCount} duplicate files (${freedMb} MB freed).`);
                     }
                 }
                 updateTopSelectionBar();
                 await refreshTelemetryData();
             } catch (e) {
+                console.error("executeHardlinkAction error:", e);
+                closeCleanProgressModal();
                 showToast("Hardlink error: " + e.message, "⚠️");
                 logActivityEvent('hardlink', `Hardlink conversion error: ${e.message}`);
-                console.error("executeHardlinkAction error:", e);
             }
         }
 
@@ -5597,6 +5774,8 @@
 
         async function executeConfirmedQuarantine() {
             closeQuarantineModal();
+            const dupeCount = (currentSummary?.groups || []).filter(g => g.action === 'DUPLICATE').length;
+            openCleanProgressModal("Quarantining Duplicates", `Moving duplicate copies to isolated quarantine directory...`, dupeCount || 1);
             try {
                 const res = await fetch('/api/quarantine/execute', {
                     method: 'POST',
@@ -5608,9 +5787,14 @@
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || "Quarantine failed");
-                alert(`[✓] Successfully quarantined ${data.total_files_moved} files (${(data.total_bytes_moved / (1024*1024)).toFixed(2)} MB).`);
+
+                await finishCleanProgressModal(data.total_files_moved, data.total_bytes_moved);
+                showToast(`Successfully quarantined ${data.total_files_moved.toLocaleString()} files (${(data.total_bytes_moved / (1024*1024)).toFixed(2)} MB).`, "🛡️");
+                logActivityEvent('quarantine', `Quarantined ${data.total_files_moved.toLocaleString()} files (${(data.total_bytes_moved / (1024*1024)).toFixed(2)} MB)`);
             } catch (e) {
-                alert("Quarantine error: " + e.message);
+                console.error("executeConfirmedQuarantine error:", e);
+                closeCleanProgressModal();
+                showToast("Quarantine error: " + e.message, "⚠️");
             }
         }
 

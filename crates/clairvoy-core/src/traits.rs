@@ -16,6 +16,14 @@ pub trait MatcherPlugin: Send + Sync {
         candidates: &[FileEntry],
         all_files: &[FileEntry],
     ) -> Result<Vec<DuplicateCluster>, EngineError>;
+    fn find_duplicates_with_progress(
+        &self,
+        candidates: &[FileEntry],
+        all_files: &[FileEntry],
+        _progress: &mut dyn FnMut(usize, usize),
+    ) -> Result<Vec<DuplicateCluster>, EngineError> {
+        self.find_duplicates(candidates, all_files)
+    }
 }
 
 pub trait KeeperStrategy: Send + Sync {

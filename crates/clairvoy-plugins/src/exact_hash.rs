@@ -61,7 +61,16 @@ impl MatcherPlugin for ExactHashMatcherPlugin {
     fn find_duplicates(
         &self,
         candidates: &[FileEntry],
+        all_files: &[FileEntry],
+    ) -> Result<Vec<DuplicateCluster>, EngineError> {
+        self.find_duplicates_with_progress(candidates, all_files, &mut |_, _| {})
+    }
+
+    fn find_duplicates_with_progress(
+        &self,
+        candidates: &[FileEntry],
         _all_files: &[FileEntry],
+        progress: &mut dyn FnMut(usize, usize),
     ) -> Result<Vec<DuplicateCluster>, EngineError> {
         // Step 1: Group by file size in bytes (O(1) pre-filter)
         // Defense-in-depth: ignore 0-byte files so they never form duplicate clusters
@@ -76,15 +85,21 @@ impl MatcherPlugin for ExactHashMatcherPlugin {
         let candidate_groups: Vec<Vec<&FileEntry>> =
             size_map.into_values().filter(|g| g.len() >= 2).collect();
 
+        let total_candidate_files: usize = candidate_groups.iter().map(|g| g.len()).sum();
+        let mut hashed_so_far = 0;
         let mut clusters = Vec::new();
         let mut next_id = 1;
 
         // Step 2: Compute full BLAKE3 digests in parallel
         for group in candidate_groups {
+            let group_len = group.len();
             let hashed: Vec<([u8; 32], &FileEntry)> = group
                 .par_iter()
                 .filter_map(|e| Self::compute_blake3_hash(&e.path).ok().map(|h| (h, *e)))
                 .collect();
+
+            hashed_so_far += group_len;
+            progress(hashed_so_far, total_candidate_files);
 
             let mut hash_map: HashMap<[u8; 32], Vec<FileEntry>> = HashMap::new();
             for (hash, entry) in hashed {
