@@ -508,3 +508,20 @@ async fn test_server_hardlink_execute() {
     let _ = std::fs::remove_dir_all(&tmp);
 }
 
+#[tokio::test]
+async fn test_server_drive_watcher_integration() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("browserModalTitle"));
+    assert!(html.contains("browserPrimaryActionBtn"));
+    assert!(html.contains("browserTopWatchBtn"));
+    assert!(html.contains("browserShortcutsList"));
+    assert!(html.contains("watcherQuickDrivesRow"));
+    assert!(html.contains("watcherQuickDrivesChips"));
+    assert!(html.contains("addCurrentFolderToWatcher"));
+}
+

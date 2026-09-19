@@ -986,7 +986,7 @@
                             <span class="text-base">🖥️</span>
                             <span id="nativePickerText">Browse Host (OS Dialog)</span>
                         </button>
-                        <button onclick="openDriveBrowserModal()"
+                        <button onclick="openDriveBrowserModal('', 'scan')"
                                 class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-[#1a3860] hover:bg-[#1f4375] border border-[#8ab4f8]/40 text-[#8ab4f8] text-xs font-medium transition cursor-pointer active:scale-[0.99]">
                             <span class="text-base">🗂️</span>
                             <span>In-App Drive Browser</span>
@@ -1065,12 +1065,12 @@
             <!-- Header -->
             <div class="flex items-center justify-between pb-3 border-b border-[#28292a] mb-4">
                 <div class="flex items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-xl bg-[#1a3860] border border-[#8ab4f8]/30 flex items-center justify-center text-lg">
+                    <div id="browserModalIcon" class="w-9 h-9 rounded-xl bg-[#1a3860] border border-[#8ab4f8]/30 flex items-center justify-center text-lg">
                         🗂️
                     </div>
                     <div>
-                        <h3 class="text-sm font-bold text-white tracking-tight">Select Directory to Scan</h3>
-                        <p class="text-[11px] text-[#8e918f]">Browse drives, partitions, and subdirectories</p>
+                        <h3 id="browserModalTitle" class="text-sm font-bold text-white tracking-tight">Select Directory to Scan</h3>
+                        <p id="browserModalSubtitle" class="text-[11px] text-[#8e918f]">Browse drives, partitions, and subdirectories</p>
                     </div>
                 </div>
                 <button onclick="closeDriveBrowserModal()" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-base text-[#8e918f] hover:text-white transition">✕</button>
@@ -1085,7 +1085,7 @@
                 <button onclick="refreshBrowserCurrent()" class="text-xs text-[#8e918f] hover:text-white px-2 py-1 cursor-pointer" title="Refresh">
                     🔄
                 </button>
-                <button onclick="addCurrentFolderToWatcher()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10" title="Add this folder to Autonomous Background Watcher">
+                <button id="browserTopWatchBtn" onclick="addCurrentFolderToWatcher()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10" title="Add this folder to Autonomous Background Watcher">
                     <span>👁️ Watch Folder</span>
                 </button>
             </div>
@@ -1093,8 +1093,8 @@
             <!-- Body: Left Shortcuts Rail & Right Directory Table -->
             <div class="flex-1 min-h-0 flex gap-3 overflow-hidden">
                 <!-- System Root Shortcuts -->
-                <div class="w-36 flex-shrink-0 bg-[#131314] rounded-xl border border-[#28292a] p-2 overflow-y-auto custom-scrollbar space-y-1">
-                    <div class="text-[10px] font-bold text-[#8e918f] uppercase px-1 pb-1">Shortcuts</div>
+                <div class="w-52 flex-shrink-0 bg-[#131314] rounded-xl border border-[#28292a] p-2 overflow-y-auto custom-scrollbar space-y-1">
+                    <div class="text-[10px] font-bold text-[#8e918f] uppercase px-1 pb-1">Drives & Locations</div>
                     <div id="browserShortcutsList" class="space-y-1">
                         <!-- Populated by JS -->
                     </div>
@@ -1119,7 +1119,7 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <button onclick="closeDriveBrowserModal()" class="m3-button-secondary text-xs">Cancel</button>
-                    <button onclick="selectCurrentBrowsedFolder()" class="m3-button-primary text-xs">
+                    <button id="browserPrimaryActionBtn" onclick="handleBrowserPrimaryAction()" class="m3-button-primary text-xs">
                         ✓ Select This Folder
                     </button>
                 </div>
@@ -1558,7 +1558,7 @@
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-xs font-bold text-white uppercase tracking-wider">Autonomous Surveillance Targets</span>
-                        <button onclick="toggleActivityDrawer(); openDriveBrowserModal();" class="text-[11px] text-[#8ab4f8] hover:underline">+ Add Target</button>
+                        <button onclick="toggleActivityDrawer(); openDriveBrowserModal('', 'watch');" class="text-[11px] text-[#8ab4f8] hover:underline">+ Add Target</button>
                     </div>
                     <div id="activityWatchedTargets" class="bg-[#131314] rounded-2xl p-3 border border-[#28292a] text-xs">
                         <div class="text-[#8e918f] py-2 text-center">Loading watched targets...</div>
@@ -1953,14 +1953,14 @@
                     showToast(`Selected: ${data.path}`, "📁");
                 } else if (data.status === 'unavailable') {
                     showToast("OS display unavailable. Opening In-App Drive Browser.", "ℹ️");
-                    openDriveBrowserModal();
+                    openDriveBrowserModal('', 'scan');
                 } else if (data.status === 'cancelled') {
                     // User closed dialog without selecting
                 }
             } catch (e) {
                 console.error("Folder picker error:", e);
                 showToast("OS dialog unavailable. Opening In-App Drive Browser.", "ℹ️");
-                openDriveBrowserModal();
+                openDriveBrowserModal('', 'scan');
             } finally {
                 if (textEl) textEl.innerText = origText;
                 if (btn) btn.disabled = false;
@@ -2111,13 +2111,59 @@
         }
 
         // --- In-App Google Drive & Directory Browser ---
-        function openDriveBrowserModal(targetPath = '') {
-            document.getElementById('driveBrowserModal').classList.remove('hidden');
+        let browserMode = 'scan'; // 'scan' | 'watch' | 'browse'
+
+        function openDriveBrowserModal(targetPath = '', mode = 'scan') {
+            browserMode = mode;
+            const modal = document.getElementById('driveBrowserModal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+
+            const titleEl = document.getElementById('browserModalTitle');
+            const subEl = document.getElementById('browserModalSubtitle');
+            const iconEl = document.getElementById('browserModalIcon');
+            const primaryBtn = document.getElementById('browserPrimaryActionBtn');
+            const topWatchBtn = document.getElementById('browserTopWatchBtn');
+
+            if (mode === 'watch') {
+                if (titleEl) titleEl.innerText = "Add Storage Directory to Autonomous Surveillance";
+                if (subEl) subEl.innerText = "Select a drive, volume, or folder to continuously monitor in the background";
+                if (iconEl) iconEl.innerText = "👁️";
+                if (primaryBtn) {
+                    primaryBtn.innerHTML = "<span>👁️ Add to Surveillance</span>";
+                    primaryBtn.className = "m3-button-primary text-xs !bg-[#8ab4f8] !text-[#041e49] hover:!bg-white shadow-md shadow-[#8ab4f8]/30 font-bold";
+                }
+                if (topWatchBtn) {
+                    topWatchBtn.classList.remove('hidden');
+                    topWatchBtn.className = "m3-button-primary text-xs !py-1.5 !px-3 !bg-[#8ab4f8] !text-[#041e49] hover:!bg-white font-bold";
+                }
+            } else {
+                if (titleEl) titleEl.innerText = "Select Directory to Scan";
+                if (subEl) subEl.innerText = "Browse drives, partitions, and subdirectories for on-the-fly deduplication";
+                if (iconEl) iconEl.innerText = "🗂️";
+                if (primaryBtn) {
+                    primaryBtn.innerHTML = "<span>✓ Select This Folder</span>";
+                    primaryBtn.className = "m3-button-primary text-xs";
+                }
+                if (topWatchBtn) {
+                    topWatchBtn.classList.remove('hidden');
+                    topWatchBtn.className = "m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10";
+                }
+            }
+
             loadBrowsePath(targetPath || currentBrowsedPath || '');
         }
 
         function closeDriveBrowserModal() {
             document.getElementById('driveBrowserModal').classList.add('hidden');
+        }
+
+        function handleBrowserPrimaryAction() {
+            if (browserMode === 'watch') {
+                addCurrentFolderToWatcher();
+            } else {
+                selectCurrentBrowsedFolder();
+            }
         }
 
         async function loadBrowsePath(targetPath) {
@@ -2152,16 +2198,63 @@
                 const selPath = document.getElementById('browserSelectedPathName');
                 if (selPath) selPath.innerText = currentBrowsedPath;
 
-                // Render shortcuts
+                // Update primary button label to reflect active target
+                const primaryBtn = document.getElementById('browserPrimaryActionBtn');
+                if (primaryBtn) {
+                    const shortName = currentBrowsedPath.length > 25 ? '...' + currentBrowsedPath.slice(-22) : currentBrowsedPath;
+                    if (browserMode === 'watch') {
+                        primaryBtn.innerHTML = `<span>👁️ Add '${shortName}' to Surveillance</span>`;
+                    } else {
+                        primaryBtn.innerHTML = `<span>✓ Select '${shortName}' for Scan</span>`;
+                    }
+                }
+
+                // Render shortcuts with dedicated 1-click action buttons
                 if (shortcutsList && data.shortcuts) {
                     shortcutsList.innerHTML = '';
                     for (const sc of data.shortcuts) {
-                        const btn = document.createElement('button');
-                        btn.className = `w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium transition truncate flex items-center gap-1.5 ${currentBrowsedPath === sc.path ? 'bg-[#1a3860] text-[#8ab4f8]' : 'text-[#c4c7c5] hover:bg-[#202124] hover:text-white'}`;
-                        btn.title = sc.path;
-                        btn.onclick = () => loadBrowsePath(sc.path);
-                        btn.innerHTML = `<span>${sc.icon || '📁'}</span> <span class="truncate">${sc.name}</span>`;
-                        shortcutsList.appendChild(btn);
+                        const isCurrent = currentBrowsedPath === sc.path;
+                        const row = document.createElement('div');
+                        row.className = `w-full rounded-xl transition flex items-center justify-between p-1 group ${
+                            isCurrent
+                                ? 'bg-[#1a3860] border border-[#8ab4f8]/40 text-[#8ab4f8]'
+                                : 'hover:bg-[#202124] text-[#c4c7c5] hover:text-white border border-transparent'
+                        }`;
+
+                        // Nav button: clicking navigates into this drive/shortcut
+                        const navBtn = document.createElement('button');
+                        navBtn.className = "flex items-center gap-1.5 truncate flex-1 text-left px-1.5 py-1 text-xs font-medium cursor-pointer";
+                        navBtn.title = `Browse ${sc.name} (${sc.path})`;
+                        navBtn.onclick = () => {
+                            loadBrowsePath(sc.path);
+                        };
+                        navBtn.innerHTML = `<span>${sc.icon || '📁'}</span> <span class="truncate">${sc.name}</span>`;
+
+                        // Quick 1-click action button directly on the shortcut row
+                        const actionBtn = document.createElement('button');
+                        if (browserMode === 'watch') {
+                            actionBtn.className = "text-[10px] font-bold px-2 py-0.5 rounded-lg bg-[#8ab4f8] text-[#041e49] hover:bg-white transition cursor-pointer shrink-0 ml-1 shadow-sm";
+                            actionBtn.title = `Add ${sc.name} directly to Autonomous Surveillance`;
+                            actionBtn.innerHTML = "👁️ Watch";
+                            actionBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                addCurrentFolderToWatcher(sc.path);
+                            };
+                        } else {
+                            actionBtn.className = "text-[10px] font-medium px-2 py-0.5 rounded-lg bg-[#28292a] hover:bg-[#303134] text-white transition cursor-pointer shrink-0 ml-1 border border-[#3c4043]";
+                            actionBtn.title = `Add ${sc.name} to scan targets`;
+                            actionBtn.innerHTML = "+ Add";
+                            actionBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                scanTargets.add(sc.path);
+                                renderScanTargets();
+                                showToast(`Added ${sc.name} (${sc.path}) to scan targets.`, "📁");
+                            };
+                        }
+
+                        row.appendChild(navBtn);
+                        row.appendChild(actionBtn);
+                        shortcutsList.appendChild(row);
                     }
                 }
 
@@ -2175,6 +2268,20 @@
                             const row = document.createElement('div');
                             row.className = "flex items-center justify-between p-2 rounded-xl hover:bg-[#202124] transition group cursor-pointer border border-transparent hover:border-[#3c4043]";
                             row.onclick = () => loadBrowsePath(dir.path);
+
+                            const escapedDirPath = dir.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                            const actionBtnHtml = (browserMode === 'watch')
+                                ? `<button onclick="event.stopPropagation(); addCurrentFolderToWatcher('${escapedDirPath}')"
+                                           class="opacity-0 group-hover:opacity-100 transition px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-[#8ab4f8] text-[#041e49] hover:bg-white shadow-sm cursor-pointer"
+                                           title="Add '${dir.name}' to Autonomous Surveillance">
+                                       👁️ Watch
+                                   </button>`
+                                : `<button onclick="event.stopPropagation(); addFolderDirectlyFromBrowser('${encodeURIComponent(dir.path)}', '${dir.name.replace(/'/g, "\\'")}')"
+                                           class="opacity-0 group-hover:opacity-100 transition m3-button-secondary text-[11px] !py-0.5 !px-2.5 hover:border-[#8ab4f8] cursor-pointer"
+                                           title="Add this folder directly to scan targets">
+                                       + Add
+                                   </button>`;
+
                             row.innerHTML = `
                                 <div class="flex items-center gap-2.5 min-w-0">
                                     <span class="text-base text-[#8ab4f8]">📁</span>
@@ -2182,11 +2289,7 @@
                                 </div>
                                 <div class="flex items-center gap-2 flex-shrink-0">
                                     ${dir.item_count !== undefined ? `<span class="text-[10px] text-[#8e918f] font-mono">${dir.item_count} items</span>` : ''}
-                                    <button onclick="event.stopPropagation(); addFolderDirectlyFromBrowser('${encodeURIComponent(dir.path)}', '${dir.name}')"
-                                            class="opacity-0 group-hover:opacity-100 transition m3-button-secondary text-[11px] !py-0.5 !px-2.5 hover:border-[#8ab4f8]"
-                                            title="Add this folder directly to scan targets">
-                                        + Add
-                                    </button>
+                                    ${actionBtnHtml}
                                 </div>
                             `;
                             list.appendChild(row);
@@ -3456,7 +3559,7 @@
             if (event) event.stopPropagation();
             const fullPath = decodeURIComponent(encodedPath);
             const parentDir = fullPath.substring(0, fullPath.lastIndexOf('/')) || '/';
-            openDriveBrowserModal(parentDir);
+            openDriveBrowserModal(parentDir, 'browse');
         }
 
         function stageItemForTrash(encodedPath, event) {
@@ -3535,7 +3638,7 @@
                 crumbs.push({
                     label: `📁 ${folderContext.name}`,
                     active: false,
-                    action: `openDriveBrowserModal('${folderContext.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')`
+                    action: `openDriveBrowserModal('${folderContext.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', 'browse')`
                 });
             }
 
@@ -4733,8 +4836,9 @@
             }
         }
 
-        async function addCurrentFolderToWatcher() {
-            if (!currentBrowsedPath) {
+        async function addCurrentFolderToWatcher(pathOverride = null) {
+            const pathToAdd = pathOverride || currentBrowsedPath;
+            if (!pathToAdd) {
                 showToast("No folder currently selected in browser.", "⚠️");
                 return;
             }
@@ -4742,14 +4846,20 @@
                 const res = await fetch('/api/watch/paths', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: currentBrowsedPath, recursive: true })
+                    body: JSON.stringify({ path: pathToAdd, recursive: true })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || data.message || "Failed to add watched path");
-                showToast(`Added ${currentBrowsedPath} to Autonomous Surveillance!`, "👁️");
+                showToast(`Added ${pathToAdd} to Autonomous Surveillance!`, "👁️");
                 closeDriveBrowserModal();
-                if (currentNav === 'WATCHER') {
+                if (currentNav === 'WATCHER' || document.getElementById('watchedPathsContainer')) {
                     await renderWatcherSection();
+                }
+                if (typeof refreshActivityDrawer === 'function') {
+                    refreshActivityDrawer();
+                }
+                if (typeof refreshTelemetryData === 'function') {
+                    refreshTelemetryData();
                 }
             } catch (e) {
                 alert("Error adding folder to watcher: " + e.message);
@@ -4863,13 +4973,18 @@
                                 <button onclick="toggleWatcherDaemon()" id="watcherDaemonToggleBtn" class="m3-button-secondary text-xs">
                                     <span>⏸️ Pause Daemon</span>
                                 </button>
-                                <button onclick="openDriveBrowserModal()" class="m3-button-primary text-xs">
+                                <button onclick="openDriveBrowserModal('', 'watch')" class="m3-button-primary text-xs !bg-[#8ab4f8] !text-[#041e49] hover:!bg-white font-bold shadow-md shadow-[#8ab4f8]/30">
                                     <span>➕ Add Watched Directory</span>
                                 </button>
                                 <button onclick="renderWatcherSection()" class="m3-button-secondary text-xs" title="Refresh surveillance targets">
                                     <span>🔄 Refresh</span>
                                 </button>
                             </div>
+                        </div>
+                        <!-- Quick Add Discovered Drives & Volumes Row -->
+                        <div id="watcherQuickDrivesRow" class="hidden mt-4 pt-3 border-t border-[#28292a] flex items-center gap-2 flex-wrap">
+                            <span class="text-[11px] font-semibold text-[#8e918f] uppercase tracking-wider">Quick Add Drives & Storage:</span>
+                            <div id="watcherQuickDrivesChips" class="flex items-center gap-2 flex-wrap"></div>
                         </div>
                     </div>
 
@@ -4898,6 +5013,47 @@
                 const countBadge = document.getElementById('watchedPathsCountBadge');
                 if (countBadge) countBadge.innerText = `${paths.length} target${paths.length === 1 ? '' : 's'}`;
 
+                // Populate Quick Add Drives chips from system shortcuts
+                try {
+                    const browseRes = await fetch('/api/system/browse-directories?path=/');
+                    if (browseRes.ok) {
+                        const bdata = await browseRes.json();
+                        if (bdata && bdata.shortcuts) {
+                            const quickChips = document.getElementById('watcherQuickDrivesChips');
+                            const quickRow = document.getElementById('watcherQuickDrivesRow');
+                            const watchedPathSet = new Set((paths || []).map(p => p.path));
+                            const driveShortcuts = bdata.shortcuts.filter(s => s.name.startsWith('Drive:') || s.name === 'Pictures' || s.name === 'Home Directory');
+                            if (quickChips && quickRow && driveShortcuts.length > 0) {
+                                quickChips.innerHTML = driveShortcuts.map(sc => {
+                                    const isAlreadyWatched = watchedPathSet.has(sc.path);
+                                    const escPath = sc.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                                    if (isAlreadyWatched) {
+                                        return `
+                                            <span class="px-2.5 py-1 rounded-xl bg-[#1a3860]/40 border border-[#8ab4f8]/30 text-xs text-[#8ab4f8] flex items-center gap-1.5 font-mono">
+                                                <span>${sc.icon || '💾'}</span>
+                                                <span class="font-medium">${sc.name}</span>
+                                                <span class="text-[10px] text-[#81c995] font-bold ml-0.5">● Watching</span>
+                                            </span>
+                                        `;
+                                    }
+                                    return `
+                                        <button onclick="addCurrentFolderToWatcher('${escPath}')" 
+                                                class="px-2.5 py-1 rounded-xl bg-[#131314] hover:bg-[#28292a] text-xs text-white border border-[#3c4043] hover:border-[#8ab4f8] flex items-center gap-1.5 transition group cursor-pointer" 
+                                                title="Add ${sc.name} (${sc.path}) to Autonomous Surveillance">
+                                            <span>${sc.icon || '💾'}</span>
+                                            <span class="font-medium">${sc.name}</span>
+                                            <span class="text-[10px] font-bold text-[#8ab4f8] group-hover:text-white bg-[#1a3860] px-1.5 py-0.5 rounded-full ml-0.5">+ Watch</span>
+                                        </button>
+                                    `;
+                                }).join('');
+                                quickRow.classList.remove('hidden');
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Failed to load quick drive chips for watcher:", err);
+                }
+
                 const container = document.getElementById('watchedPathsContainer');
                 if (!container) return;
 
@@ -4911,7 +5067,7 @@
                             <p class="text-xs text-[#8e918f] max-w-md mx-auto">
                                 Add storage directories to have Clairvoy continuously monitor changes and deduplicate files in the background.
                             </p>
-                            <button onclick="openDriveBrowserModal()" class="m3-button-primary text-xs mt-2">
+                            <button onclick="openDriveBrowserModal('', 'watch')" class="m3-button-primary text-xs mt-2">
                                 <span>➕ Add First Directory</span>
                             </button>
                         </div>
