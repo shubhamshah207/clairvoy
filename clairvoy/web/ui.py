@@ -238,25 +238,17 @@ def get_index_html() -> str:
                 </div>
             </div>
 
-            <!-- Runs Selector & Scan Trigger -->
-            <div class="flex items-center gap-2 flex-shrink-0">
-                <!-- Past Runs Dropdown -->
-                <div class="hidden sm:flex items-center bg-[#28292a] border border-[#3c4043] rounded-full px-3 py-1.5 text-xs text-[#c4c7c5]">
-                    <span class="mr-1.5">📂</span>
-                    <select id="runsDropdown" onchange="onRunSelected(this.value)" class="bg-transparent text-xs text-[#e3e3e3] focus:outline-none cursor-pointer max-w-[180px] truncate">
-                        <option value="">Loading runs...</option>
-                    </select>
+            <!-- Top Right Utilities: Shortcuts & Offline Status Indicator -->
+            <div class="flex items-center gap-2.5 flex-shrink-0">
+                <button onclick="toggleShortcutsModal()" class="flex items-center gap-1.5 bg-[#28292a] hover:bg-[#303134] text-[#c4c7c5] hover:text-white border border-[#3c4043] rounded-full px-3 py-1.5 text-xs transition cursor-pointer" title="Keyboard Shortcuts (?)">
+                    <span>⌨️</span> <span class="hidden sm:inline">Shortcuts</span>
+                    <kbd class="hidden md:inline px-1 py-0.2 bg-[#1e1f20] border border-white/10 rounded text-[10px] font-mono text-[#8e918f]">?</kbd>
+                </button>
+
+                <div class="flex items-center gap-2 bg-[#28292a] border border-[#3c4043] rounded-full px-2.5 py-1.5" title="100% Offline & Local Engine">
+                    <div class="w-2 h-2 rounded-full bg-[#81c995] animate-pulse"></div>
+                    <span class="hidden sm:inline text-[11px] font-mono text-[#81c995] font-semibold">Local</span>
                 </div>
-
-                <button onclick="toggleScanDrawer()" class="m3-button-secondary text-xs !py-1.5 !px-3">
-                    <span>⚡</span> <span>Scan</span>
-                </button>
-
-                <button onclick="toggleShortcutsModal()" class="hidden md:inline-flex m3-button-secondary text-xs !py-1.5 !px-3 text-[#c4c7c5] hover:text-white" title="Keyboard Shortcuts (?)">
-                    <span>⌨️</span> <span class="hidden lg:inline">Shortcuts</span>
-                </button>
-
-                <div class="w-2.5 h-2.5 rounded-full bg-[#81c995] animate-pulse" title="100% Offline & Local"></div>
             </div>
         </div>
 
@@ -341,6 +333,34 @@ def get_index_html() -> str:
 
             <!-- Left Navigation & Categories -->
             <div class="flex md:flex-col gap-1 w-full overflow-x-auto md:overflow-x-visible pb-1 md:pb-0">
+
+                <!-- Google Drive Primary Action: + New Scan -->
+                <div class="flex-shrink-0 w-full mb-1">
+                    <button onclick="toggleScanDrawer()"
+                            class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[#1a73e8] hover:bg-[#1b66c9] text-white font-semibold text-xs shadow-md hover:shadow-lg transition-all active:scale-[0.98] cursor-pointer">
+                        <svg class="w-4 h-4 text-white flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span>New Scan</span>
+                    </button>
+                </div>
+
+                <!-- Session Run Selector (Google Workspace Run Picker) -->
+                <div class="flex-shrink-0 w-full mb-2">
+                    <div class="p-2.5 rounded-2xl bg-[#28292a] border border-[#3c4043]/70 hover:border-[#8ab4f8]/40 transition shadow-inner">
+                        <div class="flex items-center justify-between text-[11px] font-semibold text-[#8e918f] mb-1 px-1">
+                            <span class="flex items-center gap-1.5">
+                                <span>📂</span>
+                                <span>Scan Run</span>
+                            </span>
+                            <span class="text-[10px] text-[#81c995] font-mono">Offline</span>
+                        </div>
+                        <select id="runsDropdown" onchange="onRunSelected(this.value)"
+                                class="w-full bg-[#1e1f20] border border-[#3c4043] text-xs text-[#e3e3e3] rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-[#8ab4f8] cursor-pointer truncate">
+                            <option value="">Loading runs...</option>
+                        </select>
+                    </div>
+                </div>
 
                 <!-- Section: Categories Header -->
                 <div class="hidden md:flex items-center justify-between px-3 pt-1 pb-1.5 text-[11px] font-bold text-[#8e918f] uppercase tracking-wider">
@@ -850,7 +870,7 @@ def get_index_html() -> str:
                 </div>
             </div>
             <p class="text-sm text-[#c4c7c5] leading-relaxed mb-5">
-                Selected duplicate files will be safely moved into <code class="text-xs bg-[#131314] px-2 py-0.5 rounded text-[#8ab4f8]">.clairvoy_trash/</code>.
+                <span id="trashModalCount" class="font-bold text-white">Selected duplicate files</span> will be safely moved into <code class="text-xs bg-[#131314] px-2 py-0.5 rounded text-[#8ab4f8]">.clairvoy_trash/</code>.
                 You can restore them back to their original locations at any time.
             </p>
             <div class="flex justify-end gap-3">
@@ -873,7 +893,7 @@ def get_index_html() -> str:
                 </div>
             </div>
             <p class="text-sm text-[#c4c7c5] leading-relaxed mb-4">
-                This action <strong class="text-white font-semibold">cannot be undone</strong>. All selected duplicate copies will be permanently unlinked from storage.
+                This action <strong class="text-white font-semibold">cannot be undone</strong>. <span id="permanentDeleteModalCount" class="font-bold text-white">All selected duplicate copies</span> will be permanently unlinked from storage.
             </p>
             <div class="bg-[#131314] rounded-xl p-3 border border-[#3c4043] text-xs font-mono text-[#8e918f] mb-5">
                 • Designated Keeper files are strictly protected and never touched.<br>
@@ -899,7 +919,7 @@ def get_index_html() -> str:
                 </div>
             </div>
             <p class="text-sm text-[#c4c7c5] leading-relaxed mb-5">
-                Duplicates will be moved into <code class="text-xs bg-[#131314] px-2 py-0.5 rounded text-[#fdd663]">_duplicate_quarantine/</code> preserving directory trees, with a complete rollback manifest.
+                <span id="quarantineModalCount" class="font-bold text-white">Selected duplicates</span> will be moved into <code class="text-xs bg-[#131314] px-2 py-0.5 rounded text-[#fdd663]">_duplicate_quarantine/</code> preserving directory trees, with a complete rollback manifest.
             </p>
             <div class="flex justify-end gap-3">
                 <button onclick="closeQuarantineModal()" class="m3-button-secondary text-xs">Cancel</button>
@@ -979,8 +999,8 @@ def get_index_html() -> str:
         let currentNav = 'ALL'; // 'ALL' | 'DRIVE' | 'CLEANUP' | 'TRASH'
         let pollTimer = null;
 
-        // Tracks excluded file paths from batch actions (set of paths)
-        let excludedPaths = new Set();
+        // Tracks selected duplicate file paths for batch actions (Set of paths)
+        let selectedPaths = new Set();
 
         // Lightbox state
         let lbCluster = null;
@@ -1054,7 +1074,7 @@ def get_index_html() -> str:
                             const cur = lbCluster.items[lbItemIndex];
                             if (cur.action !== 'KEEP') {{
                                 toggleItemSelection(encodeURIComponent(cur.path));
-                                showToast(excludedPaths.has(cur.path) ? "Item excluded from cleaning." : "Item marked for cleaning.", "🗑️");
+                                showToast(selectedPaths.has(cur.path) ? "Item marked for cleaning." : "Item removed from cleaning.", "🗑️");
                             }}
                         }}
                         e.preventDefault();
@@ -1103,18 +1123,24 @@ def get_index_html() -> str:
             if (!currentSummary || !allClusters || allClusters.length === 0) return;
 
             if (rule === 'ALL') {{
-                excludedPaths.clear();
-                showToast("All duplicate copies selected for removal.", "🗑️");
-            }} else if (rule === 'NONE') {{
+                selectedPaths.clear();
                 for (const c of allClusters) {{
                     for (const d of c.duplicates) {{
-                        excludedPaths.add(d.path);
+                        selectedPaths.add(d.path);
                     }}
                 }}
+                showToast("All duplicate copies selected for removal.", "🗑️");
+            }} else if (rule === 'NONE') {{
+                selectedPaths.clear();
                 showToast("All selections cleared.", "✕");
             }} else if (rule === 'AUTO') {{
-                excludedPaths.clear();
-                showToast("Reset to Best Copy recommendation.", "✨");
+                selectedPaths.clear();
+                for (const c of allClusters) {{
+                    for (const d of c.duplicates) {{
+                        selectedPaths.add(d.path);
+                    }}
+                }}
+                showToast("Selected duplicates per Best Copy recommendation.", "✨");
             }} else if (rule === 'OLDEST' || rule === 'NEWEST' || rule === 'SHORTEST_PATH') {{
                 for (const c of allClusters) {{
                     let best = c.items[0];
@@ -1131,7 +1157,12 @@ def get_index_html() -> str:
                     c.keeper = best;
                     c.duplicates = c.items.filter(it => it.path !== best.path);
                 }}
-                excludedPaths.clear();
+                selectedPaths.clear();
+                for (const c of allClusters) {{
+                    for (const d of c.duplicates) {{
+                        selectedPaths.add(d.path);
+                    }}
+                }}
                 const ruleName = rule === 'SHORTEST_PATH' ? 'Shortest Path' : (rule === 'OLDEST' ? 'Oldest Copy' : 'Newest Copy');
                 showToast(`Auto-Rule applied: Keep ${{ruleName}}.`, "⚡");
             }}
@@ -1288,7 +1319,7 @@ def get_index_html() -> str:
 
         function loadSummaryState(summary, msg) {{
             currentSummary = summary;
-            excludedPaths.clear();
+            selectedPaths.clear();
 
             // Enrich records with video categorization if marked as generic file
             for (const item of (summary.groups || [])) {{
@@ -1647,7 +1678,7 @@ def get_index_html() -> str:
             card.className = "m3-card p-4 sm:p-5 border border-[#28292a] hover:border-[#3c4043] transition-all duration-200 bg-[#1e1f20]/90 shadow-md";
 
             const wastedMb = (cluster.totalWastedBytes / (1024 * 1024)).toFixed(2);
-            const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
+            const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => selectedPaths.has(d.path));
             const representative = cluster.keeper || cluster.items[0];
             const primaryName = representative.path.split('/').pop();
             const parentDir = representative.path.substring(0, representative.path.lastIndexOf('/'));
@@ -1707,8 +1738,7 @@ def get_index_html() -> str:
 
         function createPhotoTileHtml(groupId, item, idx) {{
             const isKeeper = (item.action === 'KEEP');
-            const isExcluded = excludedPaths.has(item.path);
-            const isChecked = !isKeeper && !isExcluded;
+            const isChecked = !isKeeper && selectedPaths.has(item.path);
             const isVideo = isVideoFile(item.path);
             const isMedia = isMediaFile(item.path);
 
@@ -1935,7 +1965,7 @@ def get_index_html() -> str:
             card.className = "m3-card p-4 sm:p-5 shadow-lg border border-[#28292a] hover:border-[#3c4043] transition-all bg-[#1e1f20]/90";
 
             const wastedMb = (cluster.totalWastedBytes / (1024 * 1024)).toFixed(2);
-            const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
+            const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => selectedPaths.has(d.path));
             const representative = cluster.keeper || cluster.items[0];
             const primaryName = representative.path.split('/').pop();
             const parentDir = representative.path.substring(0, representative.path.lastIndexOf('/'));
@@ -1997,8 +2027,7 @@ def get_index_html() -> str:
 
         function createDriveRowHtml(groupId, item) {{
             const isKeeper = (item.action === 'KEEP');
-            const isExcluded = excludedPaths.has(item.path);
-            const isChecked = !isKeeper && !isExcluded;
+            const isChecked = !isKeeper && selectedPaths.has(item.path);
             const isMedia = isMediaFile(item.path);
             const fname = item.path.split('/').pop();
             const padClass = (thumbnailSize === 'small') ? 'py-1 px-2 text-[11px]' : 'py-2 px-2';
@@ -2045,10 +2074,10 @@ def get_index_html() -> str:
         function toggleItemSelection(encodedPath, event) {{
             if (event) event.stopPropagation();
             const path = decodeURIComponent(encodedPath);
-            if (excludedPaths.has(path)) {{
-                excludedPaths.delete(path);
+            if (selectedPaths.has(path)) {{
+                selectedPaths.delete(path);
             }} else {{
-                excludedPaths.add(path);
+                selectedPaths.add(path);
             }}
             renderCurrentPage();
             updateTopSelectionBar();
@@ -2059,14 +2088,14 @@ def get_index_html() -> str:
             const cluster = allClusters.find(c => c.group_id === groupId);
             if (!cluster) return;
 
-            const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => !excludedPaths.has(d.path));
+            const allDupesSelected = cluster.duplicates.length > 0 && cluster.duplicates.every(d => selectedPaths.has(d.path));
             if (allDupesSelected) {{
                 for (const d of cluster.duplicates) {{
-                    excludedPaths.add(d.path);
+                    selectedPaths.delete(d.path);
                 }}
             }} else {{
                 for (const d of cluster.duplicates) {{
-                    excludedPaths.delete(d.path);
+                    selectedPaths.add(d.path);
                 }}
             }}
             renderCurrentPage();
@@ -2084,6 +2113,9 @@ def get_index_html() -> str:
                 }});
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || "Override failed");
+
+                // Keeper file must never remain selected for deletion
+                selectedPaths.delete(path);
 
                 for (const item of currentSummary.groups) {{
                     if (item.group_id === groupId) {{
@@ -2109,12 +2141,13 @@ def get_index_html() -> str:
         function applySelectionRule(rule) {{
             if (!currentSummary) return;
             if (rule === 'NONE') {{
-                for (const item of currentSummary.groups) {{
-                    if (item.action === 'DUPLICATE') excludedPaths.add(item.path);
-                }}
+                selectedPaths.clear();
                 showToast("Cleared duplicate selection.", "✕");
             }} else if (rule === 'ALL') {{
-                excludedPaths.clear();
+                selectedPaths.clear();
+                for (const item of currentSummary.groups) {{
+                    if (item.action === 'DUPLICATE') selectedPaths.add(item.path);
+                }}
                 showToast("Selected all duplicate candidates.", "✓");
             }}
             renderCurrentPage();
@@ -2128,7 +2161,7 @@ def get_index_html() -> str:
             let stagedCount = 0;
 
             for (const item of currentSummary.groups) {{
-                if (item.action === 'DUPLICATE' && !excludedPaths.has(item.path)) {{
+                if (item.action === 'DUPLICATE' && selectedPaths.has(item.path)) {{
                     stagedCount++;
                     stagedBytes += Math.round((item.size_mb || 0) * 1024 * 1024);
                 }}
@@ -2347,6 +2380,12 @@ def get_index_html() -> str:
 
         // Dialog Functions
         function openTrashDialog() {{
+            if (!currentSummary) return;
+            if (selectedPaths.size === 0) {{
+                applySelectionPreset('AUTO');
+            }}
+            const countEl = document.getElementById('trashModalCount');
+            if (countEl) countEl.innerText = `${{selectedPaths.size.toLocaleString()}} selected duplicate file${{selectedPaths.size === 1 ? '' : 's'}}`;
             document.getElementById('trashDialog').classList.remove('hidden');
         }}
         function closeTrashDialog() {{
@@ -2354,6 +2393,12 @@ def get_index_html() -> str:
         }}
 
         function openPermanentDeleteDialog() {{
+            if (!currentSummary) return;
+            if (selectedPaths.size === 0) {{
+                applySelectionPreset('AUTO');
+            }}
+            const countEl = document.getElementById('permanentDeleteModalCount');
+            if (countEl) countEl.innerText = `${{selectedPaths.size.toLocaleString()}} selected duplicate file${{selectedPaths.size === 1 ? '' : 's'}}`;
             document.getElementById('permanentDeleteDialog').classList.remove('hidden');
         }}
         function closePermanentDeleteDialog() {{
@@ -2361,6 +2406,12 @@ def get_index_html() -> str:
         }}
 
         function openQuarantineModal() {{
+            if (!currentSummary) return;
+            if (selectedPaths.size === 0) {{
+                applySelectionPreset('AUTO');
+            }}
+            const countEl = document.getElementById('quarantineModalCount');
+            if (countEl) countEl.innerText = `${{selectedPaths.size.toLocaleString()}} selected duplicate file${{selectedPaths.size === 1 ? '' : 's'}}`;
             document.getElementById('quarantineModal').classList.remove('hidden');
         }}
         function closeQuarantineModal() {{
@@ -2371,14 +2422,14 @@ def get_index_html() -> str:
             if (mode === 'trash') closeTrashDialog();
             else closePermanentDeleteDialog();
 
-            const selectedPaths = [];
+            const targetPaths = [];
             for (const item of currentSummary.groups) {{
-                if (item.action === 'DUPLICATE' && !excludedPaths.has(item.path)) {{
-                    selectedPaths.push(item.path);
+                if (item.action === 'DUPLICATE' && selectedPaths.has(item.path)) {{
+                    targetPaths.push(item.path);
                 }}
             }}
 
-            if (selectedPaths.length === 0) {{
+            if (targetPaths.length === 0) {{
                 alert("No duplicate files are currently selected.");
                 return;
             }}
@@ -2388,7 +2439,7 @@ def get_index_html() -> str:
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify({{
-                        paths: selectedPaths,
+                        paths: targetPaths,
                         mode: mode,
                         base_dir: currentSummary.scanned_paths || currentSummary.scanned_dir
                     }})
@@ -2400,6 +2451,9 @@ def get_index_html() -> str:
                 alert(`[✓] Successfully processed ${{data.total_files_deleted}} files in ${{mode.toUpperCase()}} mode (${{freedMb}} MB freed).`);
 
                 const deletedSet = new Set(data.items.map(it => it.original_path));
+                for (const p of deletedSet) {{
+                    selectedPaths.delete(p);
+                }}
                 currentSummary.groups = currentSummary.groups.filter(g => !deletedSet.has(g.path));
                 currentSummary.wasted_bytes = Math.max(0, (currentSummary.wasted_bytes || 0) - data.total_bytes_freed);
                 currentSummary.wasted_gb = currentSummary.wasted_bytes / (1024 * 1024 * 1024);

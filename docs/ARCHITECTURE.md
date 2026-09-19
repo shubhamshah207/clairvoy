@@ -348,18 +348,22 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
 |                                      CLAIRVOY GOOGLE PHOTOS STUDIO                                      |
 +---------------------------------------------------------------------------------------------------------+
 |                                                                                                         |
-|  [Default Header]   [Pinwheel] Clairvoy Photos   |   [ 🔍 Search duplicate photos... ]   |  [📂 Runs ▼] |
-|  [Selection Mode]   [✕] 14 selected (248.5 MB)   |   [Select All] [Clear] [🗑️ Trash] [⚠️ Delete] [📦 Quaran]|
+|  [Default Header]   [Pinwheel] Clairvoy Studio   |  [ 🔍 Search duplicate photos, videos, docs... ]   |  [⌨️ ?] [🟢 Local]|
+|  [Selection Mode]   [✕] 14 selected (248.5 MB)   |  [Select All] [Clear] [🗑️ Trash] [⚠️ Delete] [📦 Quaran]  |
 |                                                                                                         |
 |  +-------------------------+  +-----------------------------------------------------------------------+ |
-|  | GOOGLE NAV RAIL         |  | 🖼️ Photos (6,678 sets) [✕ Clear]   Sort: [Size ▼]   Size: [ S | M | L ]| |
-|  | CATEGORIES:             |  +-----------------------------------------------------------------------+ |
-|  | [🖼️ Photos   6.6k  ✕]  |  | SECTION: Duplicate Set #1 • Visual AI (98.4%) • 24.5 MB  [🔍 Compare] | |
-|  | [🎥 Videos   2.5k  ✕]  |  | +-------------------------------------------------------------------+ | |
-|  | [📸 Screens   786   ✕]  |  | | [✓] [IMG]    [✓] [▶ VIDEO]   [✓] [IMG]    [✓] [▶ VIDEO]   [✓] [IMG] | | |
-|  | [📄 Docs      355   ✕]  |  | |  ★ Keeper     98.4% Match     98.4% Match  100% Match    98.4% Match | |
-|  | [📦 Files     136   ✕]  |  | +-------------------------------------------------------------------+ | |
-|  | [🌐 All     10.4k    ]  |  +-----------------------------------------------------------------------+ |
+|  | GOOGLE NAV RAIL         |  | 🌐 All Duplicates (10,463 sets)    Sort: [Size ▼]   Size: [ S | M | L ]| |
+|  |                         |  +-----------------------------------------------------------------------+ |
+|  | [+ New Scan] (Primary)  |  | SECTION: Duplicate Set #1 • Visual AI (98.4%) • 24.5 MB  [🔍 Compare] | |
+|  | [📂 Scan Run: Run 1 ▼]  |  | +-------------------------------------------------------------------+ | |
+|  |                         |  | | [★] [IMG]    [ ] [▶ VIDEO]   [ ] [IMG]    [ ] [▶ VIDEO]   [ ] [IMG] | | |
+|  | CATEGORIES:             |  | |  ★ Keeper     98.4% Match     98.4% Match  100% Match    98.4% Match | | |
+|  | [🖼️ Photos   6.6k  ✕]  |  | +-------------------------------------------------------------------+ | |
+|  | [🎥 Videos   2.5k  ✕]  |  +-----------------------------------------------------------------------+ |
+|  | [📸 Screens   786   ✕]  |                                                                            |
+|  | [📄 Docs      355   ✕]  |                                                                            |
+|  | [📦 Files     136   ✕]  |                                                                            |
+|  | [🌐 All     10.4k    ]  |                                                                            |
 |  | TOOLS:                  |                                                                            |
 |  | [📁 Drive List]         |                                                                            |
 |  | [🧹 Clean up]           |                                                                            |
@@ -416,6 +420,12 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
   - Categories (Photos, Videos, Screenshots, Documents, Other Files, All Duplicates) are organized in the left navigation rail alongside dynamic count badges.
   - When a category is active, it highlights with Google Blue and reveals an instant `✕` (cross) button to clear the filter back to "All Duplicates".
   - The gallery header is decluttered from horizontal chips, showing only the active category breadcrumb and an interactive `[✕ Clear Filter]` chip.
+- **Zero Auto-Selection on Load / Refresh**:
+  - Employs an explicit opt-in selection architecture (`selectedPaths = new Set()`) rather than inverted negative exclusions.
+  - On initial page load or browser refresh, `selectedPaths` initializes empty (0 items selected). Checkboxes remain unselected, and the standard Google floating search header remains tranquil and prominent until items are deliberately chosen or preset rules are triggered.
+- **Google Drive Left Navigation Rail Primary Actions**:
+  - The `+ New Scan` primary action button and the `Scan Run` session switcher (`#runsDropdown`) are positioned at the very top of the left sidebar rail, replicating Google Drive's iconic `+ New` button and folder switcher layout.
+  - This declutters the top-right header, keeping it clean with only subtle Keyboard Shortcuts and Local Offline status pills.
 - **Left-Bottom Persistent Storage Widget**:
   - Storage consumption and recoverable gigabytes pinned strictly to the bottom-left sidebar navigation drawer (mirroring Google Drive and Google Photos storage indicator), keeping the gallery clean and focused on media.
 - **Dynamic Thumbnail & Icon Size Controls**:
