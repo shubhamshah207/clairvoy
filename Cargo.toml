@@ -9,3 +9,16 @@ version = "0.2.0"
 edition = "2021"
 authors = ["Clairvoy Team"]
 license = "MIT"
+
+[profile.dev]
+incremental = true
+opt-level = 0
+debug = 1
+codegen-units = 256
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true

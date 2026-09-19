@@ -49,4 +49,10 @@ fn test_file_entry_and_summary_serialization() {
     let json = serde_json::to_string(&summary).expect("Failed to serialize");
     assert!(json.contains("scanned_paths"));
     assert!(json.contains("/tmp/photo.jpg"));
+    assert!(json.contains("\"csv_report\":\"\""));
+    assert!(json.contains("\"summary_json\":\"\""));
+    assert!(json.contains("\"quarantine_script\":\"\""));
+
+    let deserialized: ScanSummary = serde_json::from_str(&json).expect("Failed to deserialize");
+    assert_eq!(summary, deserialized);
 }

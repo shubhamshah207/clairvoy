@@ -2,6 +2,31 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+pub mod opt_empty_str {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(s) => serializer.serialize_str(s),
+            None => serializer.serialize_str(""),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let opt = Option::<String>::deserialize(deserializer)?;
+        match opt {
+            Some(s) if s.is_empty() => Ok(None),
+            other => Ok(other),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum ImageCategory {
@@ -40,7 +65,7 @@ pub struct FileEntry {
     pub category: ImageCategory,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DuplicateRecord {
     pub group_id: usize,
     pub match_type: MatchType,
@@ -54,7 +79,7 @@ pub struct DuplicateRecord {
     pub dimensions: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DuplicateCluster {
     pub cluster_id: usize,
     pub match_type: MatchType,
@@ -63,7 +88,7 @@ pub struct DuplicateCluster {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ScanSummary {
     pub scanned_paths: Vec<String>,
     pub scanned_dir: String,
@@ -77,11 +102,11 @@ pub struct ScanSummary {
     pub wasted_mb: f64,
     pub wasted_gb: f64,
     pub duration_seconds: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "opt_empty_str")]
     pub csv_report: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "opt_empty_str")]
     pub summary_json: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "opt_empty_str")]
     pub quarantine_script: Option<String>,
     pub groups: Vec<DuplicateRecord>,
     #[serde(default)]

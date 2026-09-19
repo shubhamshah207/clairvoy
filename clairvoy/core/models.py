@@ -16,6 +16,7 @@ class MatchType(str, Enum):
 
 class ImageCategory(str, Enum):
     PHOTO = "PHOTO"
+    VIDEO = "VIDEO"
     SCREENSHOT = "SCREENSHOT"
     DOCUMENT = "DOCUMENT"
     GRAPHIC = "GRAPHIC"
