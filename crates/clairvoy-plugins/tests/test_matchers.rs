@@ -61,6 +61,78 @@ fn test_exact_hash_matcher() {
 }
 
 #[test]
+fn test_exact_hash_matcher_same_size_different_content() {
+    let dir = tempdir().unwrap();
+    let file1 = dir.path().join("same1.bin");
+    let file2 = dir.path().join("same2.bin");
+
+    // Both files have exactly 16 bytes, but different contents
+    File::create(&file1)
+        .unwrap()
+        .write_all(b"12345678abcdefgh")
+        .unwrap();
+    File::create(&file2)
+        .unwrap()
+        .write_all(b"87654321hgfedcba")
+        .unwrap();
+
+    let files = vec![
+        FileEntry {
+            path: file1,
+            size_bytes: 16,
+            modified_epoch: 100,
+            is_media: false,
+            category: ImageCategory::File,
+        },
+        FileEntry {
+            path: file2,
+            size_bytes: 16,
+            modified_epoch: 200,
+            is_media: false,
+            category: ImageCategory::File,
+        },
+    ];
+
+    let matcher = ExactHashMatcherPlugin::new();
+    let clusters = matcher.find_duplicates(&files, &files).unwrap();
+
+    // Despite same size, distinct contents mean 0 duplicate clusters
+    assert!(clusters.is_empty());
+}
+
+#[test]
+fn test_exact_hash_matcher_zero_byte_direct() {
+    let dir = tempdir().unwrap();
+    let file1 = dir.path().join("zero1.bin");
+    let file2 = dir.path().join("zero2.bin");
+
+    File::create(&file1).unwrap().write_all(b"").unwrap();
+    File::create(&file2).unwrap().write_all(b"").unwrap();
+
+    let files = vec![
+        FileEntry {
+            path: file1,
+            size_bytes: 0,
+            modified_epoch: 100,
+            is_media: false,
+            category: ImageCategory::File,
+        },
+        FileEntry {
+            path: file2,
+            size_bytes: 0,
+            modified_epoch: 200,
+            is_media: false,
+            category: ImageCategory::File,
+        },
+    ];
+
+    let matcher = ExactHashMatcherPlugin::new();
+    let clusters = matcher.find_duplicates(&files, &files).unwrap();
+    // 0-byte files should never form duplicate clusters
+    assert!(clusters.is_empty());
+}
+
+#[test]
 fn test_exact_hash_matcher_metadata_and_filter() {
     let matcher = ExactHashMatcherPlugin::default();
     assert_eq!(matcher.plugin_id(), "exact_hash");

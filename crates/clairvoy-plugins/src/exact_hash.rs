@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
-use std::sync::Mutex;
 
 pub struct ExactHashMatcherPlugin {
     priority: u32,
@@ -65,16 +64,19 @@ impl MatcherPlugin for ExactHashMatcherPlugin {
         _all_files: &[FileEntry],
     ) -> Result<Vec<DuplicateCluster>, EngineError> {
         // Step 1: Group by file size in bytes (O(1) pre-filter)
+        // Defense-in-depth: ignore 0-byte files so they never form duplicate clusters
         let mut size_map: HashMap<u64, Vec<&FileEntry>> = HashMap::new();
         for entry in candidates {
-            size_map.entry(entry.size_bytes).or_default().push(entry);
+            if entry.size_bytes > 0 {
+                size_map.entry(entry.size_bytes).or_default().push(entry);
+            }
         }
 
         // Keep only size groups with >= 2 files
         let candidate_groups: Vec<Vec<&FileEntry>> =
             size_map.into_values().filter(|g| g.len() >= 2).collect();
 
-        let clusters = Mutex::new(Vec::new());
+        let mut clusters = Vec::new();
         let mut next_id = 1;
 
         // Step 2: Compute full BLAKE3 digests in parallel
@@ -92,7 +94,7 @@ impl MatcherPlugin for ExactHashMatcherPlugin {
             for (_, members) in hash_map {
                 if members.len() >= 2 {
                     let len = members.len();
-                    clusters.lock().unwrap().push(DuplicateCluster {
+                    clusters.push(DuplicateCluster {
                         cluster_id: next_id,
                         match_type: MatchType::ExactHash,
                         members,
@@ -104,6 +106,6 @@ impl MatcherPlugin for ExactHashMatcherPlugin {
             }
         }
 
-        Ok(clusters.into_inner().unwrap())
+        Ok(clusters)
     }
 }
