@@ -42,7 +42,7 @@
   - Traits: `MatcherPlugin`, `ModelBackend`, `KeeperStrategy`, `ActionHandler`.
   - `enum EngineError`: `IoError`, `ModelError`, `SecurityError`, `ConfigError`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 // crates/clairvoy-core/tests/test_models.rs
@@ -98,12 +98,12 @@ fn test_file_entry_and_summary_serialization() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p clairvoy-core`
 Expected: FAIL (crates/clairvoy-core does not exist yet)
 
-- [ ] **Step 3: Implement root Cargo.toml and `clairvoy-core` crate**
+- [x] **Step 3: Implement root Cargo.toml and `clairvoy-core` crate**
 
 Create root `Cargo.toml`:
 ```toml
@@ -296,12 +296,12 @@ pub trait ActionHandler: Send + Sync {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p clairvoy-core`
 Expected: PASS (1 test passing)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Cargo.toml crates/clairvoy-core
