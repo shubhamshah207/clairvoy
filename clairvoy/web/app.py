@@ -4,10 +4,14 @@ Production-grade FastAPI server with multi-path concurrent scanning,
 hardened thumbnail streaming, in-memory caching, and 1-click safe quarantine/restore.
 """
 
+import asyncio
 import csv
 import io
+import logging
+import os
 import shutil
 import subprocess
+import sys
 import threading
 from functools import lru_cache
 from pathlib import Path
@@ -30,6 +34,8 @@ from clairvoy.engines.delete_engine import DeleteEngine
 from clairvoy.engines.quarantine import QuarantineEngine
 from clairvoy.engines.storage_engine import StorageEngine
 from clairvoy.engines.vision_engine import VisionEngine
+
+logger = logging.getLogger("clairvoy.web")
 
 app = FastAPI(
     title="Clairvoy Web",
@@ -333,6 +339,115 @@ async def get_scan_status():
     """Returns the live state and summary of the background scan."""
     with SCAN_LOCK:
         return SCAN_STATE
+
+
+def _run_native_folder_picker() -> str | None:
+    """Invokes the host OS native folder selection dialog if a display environment is available."""
+    has_display = bool(
+        os.environ.get("DISPLAY")
+        or os.environ.get("WAYLAND_DISPLAY")
+        or sys.platform in ("darwin", "win32")
+    )
+    if not has_display:
+        return None
+
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        selected = filedialog.askdirectory(
+            title="Select Folder to Scan - Clairvoy", initialdir=str(Path.home())
+        )
+        root.destroy()
+        return selected if selected else None
+    except Exception as e:
+        logger.warning(f"Native folder picker invocation failed: {e}")
+        return None
+
+
+@app.post("/api/system/pick-folder")
+async def pick_native_folder():
+    """Launches the host OS native folder selection dialog in a worker thread."""
+    selected = await asyncio.to_thread(_run_native_folder_picker)
+    if selected:
+        return {"status": "selected", "path": selected}
+    return {"status": "cancelled", "path": None}
+
+
+@app.get("/api/system/browse-directories")
+async def browse_directories(path: str | None = None):
+    """Lists local filesystem directories and system shortcuts for interactive folder selection."""
+    home = Path.home()
+    shortcuts = [
+        {"name": "Home Directory", "path": str(home), "icon": "🏠"},
+    ]
+    for label, icon, sub in [
+        ("Pictures", "📸", home / "Pictures"),
+        ("Videos", "🎬", home / "Videos"),
+        ("Downloads", "📥", home / "Downloads"),
+        ("Documents", "📄", home / "Documents"),
+    ]:
+        if sub.exists() and sub.is_dir():
+            shortcuts.append({"name": label, "path": str(sub), "icon": icon})
+
+    shortcuts.append({"name": "Current Workspace", "path": str(Path.cwd()), "icon": "💻"})
+
+    for mount_root in ["/mnt", "/media", "/Volumes"]:
+        mp = Path(mount_root)
+        if mp.exists() and mp.is_dir():
+            try:
+                for child in mp.iterdir():
+                    if child.is_dir() and not child.name.startswith("."):
+                        shortcuts.append({"name": f"Drive: {child.name}", "path": str(child), "icon": "💾"})
+            except Exception:
+                pass
+
+    shortcuts.append({"name": "Filesystem Root (/)", "path": "/", "icon": "🗄️"})
+
+    target_path = Path(path).resolve() if path else home
+    if not target_path.exists() or not target_path.is_dir():
+        target_path = home
+
+    subdirs = []
+    try:
+        with os.scandir(target_path) as it:
+            for entry in it:
+                try:
+                    if entry.is_dir(follow_symlinks=False) and not entry.name.startswith("."):
+                        has_children = False
+                        try:
+                            with os.scandir(entry.path) as sub_it:
+                                for s in sub_it:
+                                    if s.is_dir(follow_symlinks=False) and not s.name.startswith("."):
+                                        has_children = True
+                                        break
+                        except Exception:
+                            pass
+                        subdirs.append({
+                            "name": entry.name,
+                            "path": entry.path,
+                            "has_children": has_children,
+                        })
+                except Exception:
+                    continue
+        subdirs.sort(key=lambda x: x["name"].lower())
+        subdirs = subdirs[:300]
+    except PermissionError:
+        pass
+    except Exception as e:
+        logger.warning(f"Error scanning directory {target_path}: {e}")
+
+    parent_path = str(target_path.parent) if target_path != target_path.parent else None
+
+    return {
+        "current_path": str(target_path),
+        "parent_path": parent_path,
+        "shortcuts": shortcuts,
+        "directories": subdirs,
+    }
 
 
 @app.post("/api/quarantine/execute")

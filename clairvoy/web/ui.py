@@ -336,7 +336,7 @@ def get_index_html() -> str:
 
                 <!-- Google Drive Primary Action: + New Scan -->
                 <div class="flex-shrink-0 w-full mb-1">
-                    <button onclick="toggleScanDrawer()"
+                    <button onclick="openNewScanModal()"
                             class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[#1a73e8] hover:bg-[#1b66c9] text-white font-semibold text-xs shadow-md hover:shadow-lg transition-all active:scale-[0.98] cursor-pointer">
                         <svg class="w-4 h-4 text-white flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
@@ -449,6 +449,39 @@ def get_index_html() -> str:
                     </div>
                     <div class="flex items-center gap-1.5 flex-shrink-0">
                         <span id="tabCount_ALL" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/40 text-[#c4c7c5]">0</span>
+                    </div>
+                </button>
+
+                <!-- Section: Match Confidence Header -->
+                <div class="hidden md:flex items-center justify-between px-3 pt-3 pb-1 text-[11px] font-bold text-[#8e918f] uppercase tracking-wider">
+                    <span>Confidence</span>
+                </div>
+
+                <!-- Match Type 1: 100% Exact Clones -->
+                <button onclick="setMatchTypeFilter('EXACT')" id="matchBtn_EXACT"
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="text-base text-[#81c995]">⚡</span>
+                        <span class="truncate">100% Exact</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span id="matchCount_EXACT" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/40 text-[#81c995]">0</span>
+                        <span id="matchCross_EXACT" onclick="event.stopPropagation(); setMatchTypeFilter('ALL');"
+                              class="hidden text-xs font-bold text-[#8ab4f8] hover:text-white px-1 hover:bg-white/20 rounded-full" title="Clear filter">✕</span>
+                    </div>
+                </button>
+
+                <!-- Match Type 2: Similar Media (Review) -->
+                <button onclick="setMatchTypeFilter('SIMILAR')" id="matchBtn_SIMILAR"
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="text-base text-[#8ab4f8]">🔍</span>
+                        <span class="truncate">Similar (Review)</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span id="matchCount_SIMILAR" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/40 text-[#8ab4f8]">0</span>
+                        <span id="matchCross_SIMILAR" onclick="event.stopPropagation(); setMatchTypeFilter('ALL');"
+                              class="hidden text-xs font-bold text-[#8ab4f8] hover:text-white px-1 hover:bg-white/20 rounded-full" title="Clear filter">✕</span>
                     </div>
                 </button>
 
@@ -579,29 +612,17 @@ def get_index_html() -> str:
                 </div>
             </section>
 
-            <!-- Smart Clean Recommendation Hero Banner (CleanMyMac / Gemini 2 Parity) -->
-            <section id="smartCleanHero" class="hidden m3-card p-5 mb-5 bg-gradient-to-r from-[#1a3860]/40 via-[#1e1f20] to-[#1e1f20] border border-[#8ab4f8]/30 relative overflow-hidden shadow-xl">
-                <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                    <div class="flex items-start gap-3.5">
-                        <div class="w-11 h-11 rounded-2xl bg-[#1a3860] border border-[#8ab4f8]/30 flex items-center justify-center text-2xl flex-shrink-0 shadow-md">
-                            ✨
-                        </div>
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs font-bold uppercase tracking-wider text-[#8ab4f8]">Smart Clean Recommendation</span>
-                                <span id="smartCleanBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#81c995]/20 text-[#81c995] font-bold">100% Safe</span>
-                            </div>
-                            <h3 class="text-lg md:text-xl font-bold text-white mt-0.5 flex items-baseline gap-2">
-                                Reclaim <span id="smartCleanGb" class="text-[#8ab4f8]">0.00</span> GB of storage
-                            </h3>
-                            <p class="text-xs text-[#c4c7c5] mt-0.5 max-w-2xl leading-relaxed">
-                                Best copy in each duplicate set is automatically kept. Safely clean redundant copies or customize selection rules.
-                            </p>
-                        </div>
+            <!-- Dual Cleaning Recommendation Panels (100% Exact Clones vs Similarity Review) -->
+            <section id="smartCleanHero" class="hidden mb-6 space-y-3">
+                <!-- Section Header -->
+                <div class="flex items-center justify-between px-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">✨</span>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-[#8ab4f8]">Smart Cleaning Recommendations</h3>
                     </div>
-
-                    <div class="flex flex-wrap items-center gap-2 flex-shrink-0 w-full lg:w-auto justify-end">
-                        <select id="selectionRuleSelect" onchange="applySelectionPreset(this.value)" class="bg-[#202124] border border-[#3c4043] rounded-full px-3 py-1.5 text-xs text-[#c4c7c5] focus:outline-none cursor-pointer">
+                    <div class="flex items-center gap-2 text-xs">
+                        <select id="selectionRuleSelect" onchange="applySelectionPreset(this.value)"
+                                class="bg-[#202124] border border-[#3c4043] rounded-full px-3 py-1 text-xs text-[#c4c7c5] focus:outline-none cursor-pointer">
                             <option value="AUTO">Rule: Keep Best Copy (Auto)</option>
                             <option value="OLDEST">Rule: Keep Oldest File</option>
                             <option value="NEWEST">Rule: Keep Newest File</option>
@@ -609,14 +630,100 @@ def get_index_html() -> str:
                             <option value="ALL">Select All Duplicates</option>
                             <option value="NONE">Clear All Selections</option>
                         </select>
+                        <span id="smartCleanGb" class="hidden">0.00</span>
+                    </div>
+                </div>
 
-                        <button onclick="openTrashDialog()" class="m3-button-primary !py-1.5 !px-3.5 text-xs font-semibold shadow-md shadow-[#8ab4f8]/20 flex items-center gap-1.5">
-                            <span>🗑️ Move to Trash</span>
-                        </button>
+                <!-- Dual Panels Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Panel 1: 100% Byte-Exact Clones (Direct 1-Click Clean) -->
+                    <div class="m3-card p-5 bg-gradient-to-br from-[#12281e]/90 via-[#1e1f20] to-[#1e1f20] border border-[#81c995]/40 shadow-lg relative overflow-hidden flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-start gap-3 mb-3">
+                                <div class="w-10 h-10 rounded-2xl bg-[#81c995]/20 border border-[#81c995]/40 flex items-center justify-center text-xl flex-shrink-0">
+                                    ⚡
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="text-sm font-bold text-white tracking-tight">100% Byte-Exact Clones</h4>
+                                        <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#81c995]/20 text-[#81c995] font-bold">Direct Clean Safe</span>
+                                    </div>
+                                    <p class="text-xs text-[#c4c7c5] mt-1 leading-relaxed">
+                                        Bit-for-bit identical hashes. These redundant copies can be safely cleaned immediately without manual review.
+                                    </p>
+                                </div>
+                            </div>
 
-                        <button onclick="openQuarantineModal()" class="m3-button-secondary !py-1.5 !px-3 text-xs text-[#fdd663] border-[#fdd663]/40 hover:bg-[#fdd663]/10">
-                            <span>📦 Quarantine</span>
-                        </button>
+                            <!-- Exact Stats Banner -->
+                            <div class="bg-[#131314]/80 rounded-xl p-3 border border-[#81c995]/20 my-2 flex items-baseline justify-between">
+                                <div>
+                                    <div class="text-[11px] text-[#8e918f] uppercase font-semibold">Recoverable Storage</div>
+                                    <div class="text-xl font-bold text-[#81c995] font-mono mt-0.5"><span id="heroExactGb">0.00</span> GB</div>
+                                </div>
+                                <div class="text-right text-xs font-mono text-[#c4c7c5]">
+                                    <div><strong id="heroExactCount" class="text-white">0</strong> redundant copies</div>
+                                    <div class="text-[11px] text-[#8e918f]"><span id="heroExactSets">0</span> duplicate sets</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Direct Clean Actions -->
+                        <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-[#28292a] justify-end mt-2">
+                            <button onclick="filterByExactAndSelect()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#81c995] border-[#81c995]/40 hover:bg-[#81c995]/10" title="Filter gallery to 100% exact clones and mark for removal">
+                                <span>⚡ Select Exact</span>
+                            </button>
+                            <button onclick="cleanExactDirect('quarantine')" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#fdd663] border-[#fdd663]/40 hover:bg-[#fdd663]/10" title="Quarantine all 100% exact duplicate copies">
+                                <span>📦 Quarantine</span>
+                            </button>
+                            <button onclick="cleanExactDirect('trash')" class="m3-button-primary text-xs !py-1.5 !px-3.5 !bg-[#81c995] !text-[#131314] font-bold shadow-md shadow-[#81c995]/20" title="Directly move 100% exact duplicates to Trash">
+                                <span>🗑️ 1-Click Clean Exact</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Panel 2: Similar & Near-Duplicates (Side-by-Side Review Required) -->
+                    <div class="m3-card p-5 bg-gradient-to-br from-[#1a3860]/50 via-[#1e1f20] to-[#1e1f20] border border-[#8ab4f8]/40 shadow-lg relative overflow-hidden flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-start gap-3 mb-3">
+                                <div class="w-10 h-10 rounded-2xl bg-[#1a3860] border border-[#8ab4f8]/40 flex items-center justify-center text-xl flex-shrink-0">
+                                    🔍
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="text-sm font-bold text-white tracking-tight">Similar & Near-Duplicates</h4>
+                                        <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#8ab4f8]/20 text-[#8ab4f8] font-bold">Review Required</span>
+                                    </div>
+                                    <p class="text-xs text-[#c4c7c5] mt-1 leading-relaxed">
+                                        Visual similarity, resized photos, or document revisions. Review side-by-side diffs before deciding which to keep.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Similar Stats Banner -->
+                            <div class="bg-[#131314]/80 rounded-xl p-3 border border-[#8ab4f8]/20 my-2 flex items-baseline justify-between">
+                                <div>
+                                    <div class="text-[11px] text-[#8e918f] uppercase font-semibold">Potential Storage</div>
+                                    <div class="text-xl font-bold text-[#8ab4f8] font-mono mt-0.5"><span id="heroSimilarGb">0.00</span> GB</div>
+                                </div>
+                                <div class="text-right text-xs font-mono text-[#c4c7c5]">
+                                    <div><strong id="heroSimilarCount" class="text-white">0</strong> candidates to inspect</div>
+                                    <div class="text-[11px] text-[#8e918f]"><span id="heroSimilarSets">0</span> clusters to review</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Review Actions -->
+                        <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-[#28292a] justify-end mt-2">
+                            <button onclick="filterBySimilarAndSelect()" class="m3-button-secondary text-xs !py-1.5 !px-3 text-[#8ab4f8] border-[#8ab4f8]/40 hover:bg-[#8ab4f8]/10" title="Filter gallery to similar items and select candidates">
+                                <span>Select Similar</span>
+                            </button>
+                            <button onclick="filterAndReviewSimilar()" class="m3-button-secondary text-xs !py-1.5 !px-3" title="Show only similar clusters in gallery">
+                                <span>🔍 Filter Similar</span>
+                            </button>
+                            <button onclick="openFirstSimilarDiff()" class="m3-button-primary text-xs !py-1.5 !px-3.5 shadow-md shadow-[#8ab4f8]/20 flex items-center gap-1.5" title="Open first similar cluster in side-by-side diff comparison">
+                                <span>⇄ Review Diff</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -640,8 +747,24 @@ def get_index_html() -> str:
                     </button>
                 </div>
 
-                <!-- Right View Controls: Sort, Thumbnail/Icon Size, Mode Toggle -->
+                <!-- Right View Controls: Match Type, Sort, Thumbnail/Icon Size, Mode Toggle -->
                 <div class="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                    <!-- Match Confidence Segmented Toggle -->
+                    <div class="flex items-center bg-[#202124] border border-[#3c4043] rounded-full p-0.5" title="Filter by Match Confidence">
+                        <button onclick="setMatchTypeFilter('ALL')" id="matchSeg_ALL"
+                                class="px-2.5 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8]">
+                            All
+                        </button>
+                        <button onclick="setMatchTypeFilter('EXACT')" id="matchSeg_EXACT"
+                                class="px-2.5 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white flex items-center gap-1">
+                            <span>⚡</span><span>Exact</span>
+                        </button>
+                        <button onclick="setMatchTypeFilter('SIMILAR')" id="matchSeg_SIMILAR"
+                                class="px-2.5 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white flex items-center gap-1">
+                            <span>🔍</span><span>Similar</span>
+                        </button>
+                    </div>
+
                     <!-- Sort Dropdown -->
                     <select onchange="onSortOrderChange(this.value)"
                             class="bg-[#202124] border border-[#3c4043] rounded-full px-3 py-1.5 text-xs text-[#c4c7c5] focus:outline-none cursor-pointer">
@@ -713,6 +836,172 @@ def get_index_html() -> str:
                 </button>
             </div>
         </main>
+    </div>
+
+    <!-- Google Workspace Storage Scan Modal -->
+    <div id="newScanModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#1e1f20] border border-[#3c4043] rounded-3xl max-w-xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
+            <!-- Header -->
+            <div class="flex items-center justify-between pb-4 border-b border-[#28292a] mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-[#1a73e8]/20 border border-[#1a73e8]/40 flex items-center justify-center text-xl">
+                        📁
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white tracking-tight">Start Storage Scan</h3>
+                        <p class="text-xs text-[#8e918f]">Select folders or drives to analyze for redundant duplicates</p>
+                    </div>
+                </div>
+                <button onclick="closeNewScanModal()" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-base text-[#8e918f] hover:text-white transition">✕</button>
+            </div>
+
+            <!-- Content -->
+            <div class="space-y-4 overflow-y-auto custom-scrollbar pr-1 flex-1">
+                <!-- Native Picker & In-App Browser Action Buttons -->
+                <div>
+                    <label class="block text-xs font-semibold text-[#c4c7c5] mb-2">Add Scan Locations:</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <button onclick="triggerNativeFolderPicker()" id="nativePickerBtn"
+                                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-[#28292a] hover:bg-[#303134] border border-[#3c4043] text-white text-xs font-medium transition cursor-pointer active:scale-[0.99]">
+                            <span class="text-base">🖥️</span>
+                            <span id="nativePickerText">Browse Host (OS Dialog)</span>
+                        </button>
+                        <button onclick="openDriveBrowserModal()"
+                                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-[#1a3860] hover:bg-[#1f4375] border border-[#8ab4f8]/40 text-[#8ab4f8] text-xs font-medium transition cursor-pointer active:scale-[0.99]">
+                            <span class="text-base">🗂️</span>
+                            <span>In-App Drive Browser</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Fast Shortcuts -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-[#8e918f] uppercase tracking-wider mb-1.5">Quick Shortcuts:</label>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button onclick="addShortcutTarget('~/Pictures')" class="px-2.5 py-1 rounded-full bg-[#131314] hover:bg-[#28292a] border border-[#3c4043] text-xs text-[#c4c7c5] hover:text-white transition cursor-pointer">🖼️ Pictures</button>
+                        <button onclick="addShortcutTarget('~/Videos')" class="px-2.5 py-1 rounded-full bg-[#131314] hover:bg-[#28292a] border border-[#3c4043] text-xs text-[#c4c7c5] hover:text-white transition cursor-pointer">🎥 Videos</button>
+                        <button onclick="addShortcutTarget('~/Downloads')" class="px-2.5 py-1 rounded-full bg-[#131314] hover:bg-[#28292a] border border-[#3c4043] text-xs text-[#c4c7c5] hover:text-white transition cursor-pointer">📥 Downloads</button>
+                        <button onclick="addShortcutTarget('~/Documents')" class="px-2.5 py-1 rounded-full bg-[#131314] hover:bg-[#28292a] border border-[#3c4043] text-xs text-[#c4c7c5] hover:text-white transition cursor-pointer">📄 Documents</button>
+                        <button onclick="addShortcutTarget('~')" class="px-2.5 py-1 rounded-full bg-[#131314] hover:bg-[#28292a] border border-[#3c4043] text-xs text-[#c4c7c5] hover:text-white transition cursor-pointer">🏠 Home</button>
+                        <button onclick="addShortcutTarget('/mnt')" class="px-2.5 py-1 rounded-full bg-[#131314] hover:bg-[#28292a] border border-[#3c4043] text-xs text-[#c4c7c5] hover:text-white transition cursor-pointer">💾 /mnt</button>
+                    </div>
+                </div>
+
+                <!-- Manual Path Input Bar -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-[#8e918f] uppercase tracking-wider mb-1.5">Or Type Custom Path:</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="manualPathInput" placeholder="/path/to/directory"
+                               onkeydown="if(event.key==='Enter') addManualPathTarget();"
+                               class="flex-1 bg-[#131314] border border-[#3c4043] rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#8ab4f8]">
+                        <button onclick="addManualPathTarget()" class="m3-button-secondary !py-1.5 !px-3 text-xs">
+                            + Add
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Selected Scan Targets Chips -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-semibold text-[#c4c7c5]">Selected Scan Targets:</label>
+                        <span id="scanTargetsCount" class="text-[11px] font-mono text-[#8ab4f8]">0 folders</span>
+                    </div>
+                    <div id="scanTargetsList" class="min-h-[64px] max-h-36 overflow-y-auto custom-scrollbar p-2.5 rounded-xl bg-[#131314] border border-[#3c4043] flex flex-wrap gap-2 items-start content-start">
+                        <span id="noTargetsHint" class="text-xs text-[#8e918f] italic">No folders selected yet. Pick from above.</span>
+                    </div>
+                </div>
+
+                <!-- Scan Parameters -->
+                <div class="pt-2 border-t border-[#28292a]">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-semibold text-[#c4c7c5]">Similarity Threshold (Near-Duplicates):</label>
+                        <span class="text-xs font-mono text-[#8ab4f8]"><span id="modalThresholdVal">95</span>%</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="range" id="modalThresholdSlider" min="70" max="99" value="95"
+                               oninput="document.getElementById('modalThresholdVal').innerText=this.value"
+                               class="flex-1 accent-[#8ab4f8]">
+                    </div>
+                    <div class="text-[10px] text-[#8e918f] mt-1">
+                        100% exact clones are always matched by byte hashes. The slider tunes AI visual & document similarity tolerance.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Buttons -->
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-[#28292a] mt-4">
+                <button onclick="closeNewScanModal()" class="m3-button-secondary text-xs">Cancel</button>
+                <button onclick="startScanFromModal()" id="modalScanBtn"
+                        class="m3-button-primary text-xs shadow-md shadow-[#1a73e8]/30">
+                    ▶ Start Scan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- In-App Google Drive / Folder Browser Modal -->
+    <div id="driveBrowserModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#1e1f20] border border-[#3c4043] rounded-3xl max-w-2xl w-full p-6 shadow-2xl flex flex-col h-[80vh]">
+            <!-- Header -->
+            <div class="flex items-center justify-between pb-3 border-b border-[#28292a] mb-4">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-[#1a3860] border border-[#8ab4f8]/30 flex items-center justify-center text-lg">
+                        🗂️
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white tracking-tight">Select Directory to Scan</h3>
+                        <p class="text-[11px] text-[#8e918f]">Browse drives, partitions, and subdirectories</p>
+                    </div>
+                </div>
+                <button onclick="closeDriveBrowserModal()" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-base text-[#8e918f] hover:text-white transition">✕</button>
+            </div>
+
+            <!-- Current Path Bar & Quick Up -->
+            <div class="flex items-center gap-2 mb-3 bg-[#131314] p-2 rounded-xl border border-[#3c4043]">
+                <button onclick="navigateBrowserUp()" id="browserUpBtn" class="m3-button-secondary !py-1 !px-2.5 text-xs text-[#8ab4f8]" title="Go to parent directory">
+                    ⬆ Up
+                </button>
+                <div class="flex-1 font-mono text-xs text-white truncate px-1" id="browserCurrentPathText">/</div>
+                <button onclick="refreshBrowserCurrent()" class="text-xs text-[#8e918f] hover:text-white px-2 py-1 cursor-pointer" title="Refresh">
+                    🔄
+                </button>
+            </div>
+
+            <!-- Body: Left Shortcuts Rail & Right Directory Table -->
+            <div class="flex-1 min-h-0 flex gap-3 overflow-hidden">
+                <!-- System Root Shortcuts -->
+                <div class="w-36 flex-shrink-0 bg-[#131314] rounded-xl border border-[#28292a] p-2 overflow-y-auto custom-scrollbar space-y-1">
+                    <div class="text-[10px] font-bold text-[#8e918f] uppercase px-1 pb-1">Shortcuts</div>
+                    <div id="browserShortcutsList" class="space-y-1">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Subdirectories Listing -->
+                <div class="flex-1 bg-[#131314] rounded-xl border border-[#28292a] overflow-y-auto custom-scrollbar p-2 flex flex-col">
+                    <div id="browserLoadingSpinner" class="hidden py-12 text-center text-xs text-[#8e918f]">
+                        <span class="inline-block animate-spin mr-2">⏳</span> Loading directories...
+                    </div>
+                    <div id="browserErrorMsg" class="hidden p-4 text-center text-xs text-[#f28b82]"></div>
+                    <div id="browserDirectoryList" class="space-y-1 flex-1 overflow-y-auto custom-scrollbar">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Selection Bar -->
+            <div class="flex items-center justify-between pt-3 border-t border-[#28292a] mt-3">
+                <div class="text-xs text-[#8e918f] font-mono truncate max-w-sm" id="browserSelectionHint">
+                    Current: <span class="text-white font-semibold" id="browserSelectedPathName">/</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="closeDriveBrowserModal()" class="m3-button-secondary text-xs">Cancel</button>
+                    <button onclick="selectCurrentBrowsedFolder()" class="m3-button-primary text-xs">
+                        ✓ Select This Folder
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Google Photos Full-Screen Lightbox Viewer (Single Photo + Side-by-Side Diff) -->
@@ -1002,6 +1291,11 @@ def get_index_html() -> str:
         // Tracks selected duplicate file paths for batch actions (Set of paths)
         let selectedPaths = new Set();
 
+        // Scan Configuration & Locations (Set of directories)
+        let scanTargets = new Set();
+        let activeMatchType = 'ALL'; // 'ALL' | 'EXACT' | 'SIMILAR'
+        let currentBrowsedPath = '';
+
         // Lightbox state
         let lbCluster = null;
         let lbItemIndex = 0;
@@ -1087,6 +1381,8 @@ def get_index_html() -> str:
                         closeTrashDialog();
                         closePermanentDeleteDialog();
                         closeQuarantineModal();
+                        closeNewScanModal();
+                        closeDriveBrowserModal();
                         const scModal = document.getElementById('shortcutsModal');
                         if (scModal && !scModal.classList.contains('hidden')) toggleShortcutsModal();
                         const scDrawer = document.getElementById('scanDrawer');
@@ -1173,6 +1469,348 @@ def get_index_html() -> str:
 
         function toggleScanDrawer() {{
             document.getElementById('scanDrawer').classList.toggle('hidden');
+        }}
+
+        // --- Google Workspace New Scan Modal & Target Management ---
+        function openNewScanModal() {{
+            renderScanTargets();
+            document.getElementById('newScanModal').classList.remove('hidden');
+        }}
+
+        function closeNewScanModal() {{
+            document.getElementById('newScanModal').classList.add('hidden');
+        }}
+
+        function renderScanTargets() {{
+            const container = document.getElementById('scanTargetsList');
+            const countEl = document.getElementById('scanTargetsCount');
+            if (!container) return;
+
+            if (scanTargets.size === 0) {{
+                container.innerHTML = `<span id="noTargetsHint" class="text-xs text-[#8e918f] italic">No folders selected yet. Pick from above.</span>`;
+                if (countEl) countEl.innerText = "0 folders";
+                return;
+            }}
+
+            if (countEl) countEl.innerText = `${{scanTargets.size}} folder${{scanTargets.size === 1 ? '' : 's'}}`;
+            container.innerHTML = '';
+            for (const path of scanTargets) {{
+                const chip = document.createElement('div');
+                chip.className = "flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#202124] border border-[#3c4043] text-xs font-mono text-white shadow-sm";
+                chip.innerHTML = `
+                    <span class="text-xs">📁</span>
+                    <span class="truncate max-w-[280px]" title="${{path}}">${{path}}</span>
+                    <button onclick="removeScanTarget('${{encodeURIComponent(path)}}')" class="text-[#8e918f] hover:text-white ml-1 font-bold">✕</button>
+                `;
+                container.appendChild(chip);
+            }}
+        }}
+
+        function addShortcutTarget(path) {{
+            scanTargets.add(path);
+            renderScanTargets();
+            showToast(`Added ${{path}} to scan targets.`, "📁");
+        }}
+
+        function addManualPathTarget() {{
+            const input = document.getElementById('manualPathInput');
+            if (!input) return;
+            const path = input.value.trim();
+            if (!path) return;
+            scanTargets.add(path);
+            input.value = '';
+            renderScanTargets();
+            showToast(`Added ${{path}} to scan targets.`, "📁");
+        }}
+
+        function removeScanTarget(encodedPath) {{
+            const path = decodeURIComponent(encodedPath);
+            scanTargets.delete(path);
+            renderScanTargets();
+        }}
+
+        async function triggerNativeFolderPicker() {{
+            const btn = document.getElementById('nativePickerBtn');
+            const textEl = document.getElementById('nativePickerText');
+            const origText = textEl ? textEl.innerText : 'Browse Host (OS Dialog)';
+            if (textEl) textEl.innerText = 'Waiting for OS picker...';
+            if (btn) btn.disabled = true;
+
+            try {{
+                const res = await fetch('/api/system/pick-folder', {{ method: 'POST' }});
+                const data = await res.json();
+                if (data.status === 'ok' && data.path) {{
+                    scanTargets.add(data.path);
+                    renderScanTargets();
+                    showToast(`Selected: ${{data.path}}`, "📁");
+                }} else if (data.status === 'unavailable') {{
+                    showToast("OS display unavailable. Opening In-App Drive Browser.", "ℹ️");
+                    openDriveBrowserModal();
+                }} else if (data.status === 'cancelled') {{
+                    // User closed dialog without selecting
+                }}
+            }} catch (e) {{
+                console.error("Folder picker error:", e);
+                showToast("OS dialog unavailable. Opening In-App Drive Browser.", "ℹ️");
+                openDriveBrowserModal();
+            }} finally {{
+                if (textEl) textEl.innerText = origText;
+                if (btn) btn.disabled = false;
+            }}
+        }}
+
+        async function startScanFromModal() {{
+            if (scanTargets.size === 0) {{
+                alert("Please add at least one directory to scan.");
+                return;
+            }}
+
+            const threshold = parseFloat(document.getElementById('modalThresholdSlider').value) / 100.0;
+            const btn = document.getElementById('modalScanBtn');
+            if (btn) btn.disabled = true;
+
+            closeNewScanModal();
+
+            try {{
+                const res = await fetch('/api/scan', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ paths: Array.from(scanTargets), enable_ml: true, threshold: threshold }})
+                }});
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Scan failed");
+
+                showToast("Storage scan started...", "▶");
+                if (pollTimer) clearInterval(pollTimer);
+                pollTimer = setInterval(pollScanStatus, 1000);
+            }} catch (e) {{
+                alert("Scan Error: " + e.message);
+            }} finally {{
+                if (btn) btn.disabled = false;
+            }}
+        }}
+
+        // --- In-App Google Drive & Directory Browser ---
+        function openDriveBrowserModal(targetPath = '') {{
+            document.getElementById('driveBrowserModal').classList.remove('hidden');
+            loadBrowsePath(targetPath || currentBrowsedPath || '');
+        }}
+
+        function closeDriveBrowserModal() {{
+            document.getElementById('driveBrowserModal').classList.add('hidden');
+        }}
+
+        async function loadBrowsePath(targetPath) {{
+            const spinner = document.getElementById('browserLoadingSpinner');
+            const errorMsg = document.getElementById('browserErrorMsg');
+            const list = document.getElementById('browserDirectoryList');
+            const shortcutsList = document.getElementById('browserShortcutsList');
+
+            if (spinner) spinner.classList.remove('hidden');
+            if (errorMsg) errorMsg.classList.add('hidden');
+            if (list) list.innerHTML = '';
+
+            try {{
+                const res = await fetch(`/api/system/browse-directories?path=${{encodeURIComponent(targetPath)}}`);
+                const data = await res.json();
+                if (spinner) spinner.classList.add('hidden');
+
+                if (!res.ok || data.status === 'error') {{
+                    if (errorMsg) {{
+                        errorMsg.innerText = data.detail || data.message || "Failed to load directory";
+                        errorMsg.classList.remove('hidden');
+                    }}
+                    return;
+                }}
+
+                currentBrowsedPath = data.current_path;
+                const pathText = document.getElementById('browserCurrentPathText');
+                if (pathText) pathText.innerText = currentBrowsedPath;
+                const selPath = document.getElementById('browserSelectedPathName');
+                if (selPath) selPath.innerText = currentBrowsedPath;
+
+                // Render shortcuts
+                if (shortcutsList && data.shortcuts) {{
+                    shortcutsList.innerHTML = '';
+                    for (const sc of data.shortcuts) {{
+                        const btn = document.createElement('button');
+                        btn.className = `w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium transition truncate flex items-center gap-1.5 ${{currentBrowsedPath === sc.path ? 'bg-[#1a3860] text-[#8ab4f8]' : 'text-[#c4c7c5] hover:bg-[#202124] hover:text-white'}}`;
+                        btn.title = sc.path;
+                        btn.onclick = () => loadBrowsePath(sc.path);
+                        btn.innerHTML = `<span>${{sc.icon || '📁'}}</span> <span class="truncate">${{sc.name}}</span>`;
+                        shortcutsList.appendChild(btn);
+                    }}
+                }}
+
+                // Render subdirectories
+                if (list) {{
+                    if (!data.directories || data.directories.length === 0) {{
+                        list.innerHTML = `<div class="p-6 text-center text-xs text-[#8e918f] italic">No subdirectories found in this folder.</div>`;
+                    }} else {{
+                        list.innerHTML = '';
+                        for (const dir of data.directories) {{
+                            const row = document.createElement('div');
+                            row.className = "flex items-center justify-between p-2 rounded-xl hover:bg-[#202124] transition group cursor-pointer border border-transparent hover:border-[#3c4043]";
+                            row.onclick = () => loadBrowsePath(dir.path);
+                            row.innerHTML = `
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <span class="text-base text-[#8ab4f8]">📁</span>
+                                    <span class="text-xs font-semibold text-white truncate max-w-sm group-hover:text-[#8ab4f8] transition">${{dir.name}}</span>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    ${{dir.item_count !== undefined ? `<span class="text-[10px] text-[#8e918f] font-mono">${{dir.item_count}} items</span>` : ''}}
+                                    <button onclick="event.stopPropagation(); addFolderDirectlyFromBrowser('${{encodeURIComponent(dir.path)}}', '${{dir.name}}')"
+                                            class="opacity-0 group-hover:opacity-100 transition m3-button-secondary text-[11px] !py-0.5 !px-2.5 hover:border-[#8ab4f8]"
+                                            title="Add this folder directly to scan targets">
+                                        + Add
+                                    </button>
+                                </div>
+                            `;
+                            list.appendChild(row);
+                        }}
+                    }}
+                }}
+            }} catch (e) {{
+                if (spinner) spinner.classList.add('hidden');
+                if (errorMsg) {{
+                    errorMsg.innerText = "Error browsing directory: " + e.message;
+                    errorMsg.classList.remove('hidden');
+                }}
+            }}
+        }}
+
+        function navigateBrowserUp() {{
+            if (!currentBrowsedPath || currentBrowsedPath === '/') return;
+            const parent = currentBrowsedPath.substring(0, currentBrowsedPath.lastIndexOf('/')) || '/';
+            loadBrowsePath(parent);
+        }}
+
+        function refreshBrowserCurrent() {{
+            loadBrowsePath(currentBrowsedPath);
+        }}
+
+        function selectCurrentBrowsedFolder() {{
+            if (!currentBrowsedPath) return;
+            scanTargets.add(currentBrowsedPath);
+            renderScanTargets();
+            closeDriveBrowserModal();
+            showToast(`Added ${{currentBrowsedPath}} to scan targets.`, "📁");
+        }}
+
+        function addFolderDirectlyFromBrowser(encodedPath, name) {{
+            const path = decodeURIComponent(encodedPath);
+            scanTargets.add(path);
+            renderScanTargets();
+            showToast(`Added ${{name}} to scan targets.`, "📁");
+        }}
+
+        // --- Separate Exact vs Similar Cleaning & Match Confidence Logic ---
+        function setMatchTypeFilter(type) {{
+            activeMatchType = type;
+            // Update segmented buttons
+            ['ALL', 'EXACT', 'SIMILAR'].forEach(t => {{
+                const segBtn = document.getElementById('matchSeg_' + t);
+                if (segBtn) {{
+                    if (t === type) {{
+                        segBtn.className = "px-2.5 py-1 rounded-full text-xs font-medium transition bg-[#1a3860] text-[#8ab4f8] flex items-center gap-1";
+                    }} else {{
+                        segBtn.className = "px-2.5 py-1 rounded-full text-xs font-medium transition text-[#8e918f] hover:text-white flex items-center gap-1";
+                    }}
+                }}
+            }});
+
+            // Update sidebar buttons and cross icons
+            ['EXACT', 'SIMILAR'].forEach(t => {{
+                const btn = document.getElementById('matchBtn_' + t);
+                const cross = document.getElementById('matchCross_' + t);
+                if (btn) {{
+                    if (t === type) {{
+                        btn.className = "nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8] group";
+                    }} else {{
+                        btn.className = "nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group";
+                    }}
+                }}
+                if (cross) {{
+                    if (t === type) cross.classList.remove('hidden');
+                    else cross.classList.add('hidden');
+                }}
+            }});
+
+            currentPage = 1;
+            applyFiltersAndSort();
+        }}
+
+        function cleanExactDirect(mode) {{
+            if (!currentSummary || allClusters.length === 0) return;
+            const exactClusters = allClusters.filter(c => c.match_type === 'EXACT_HASH');
+            if (exactClusters.length === 0) {{
+                alert("No 100% exact duplicate copies found.");
+                return;
+            }}
+
+            selectedPaths.clear();
+            for (const c of exactClusters) {{
+                for (const d of c.duplicates) {{
+                    selectedPaths.add(d.path);
+                }}
+            }}
+
+            renderCurrentPage();
+            updateTopSelectionBar();
+
+            if (mode === 'trash') {{
+                openTrashDialog();
+            }} else if (mode === 'quarantine') {{
+                openQuarantineModal();
+            }}
+        }}
+
+        function filterByExactAndSelect() {{
+            setMatchTypeFilter('EXACT');
+            selectedPaths.clear();
+            for (const c of allClusters) {{
+                if (c.match_type === 'EXACT_HASH') {{
+                    for (const d of c.duplicates) {{
+                        selectedPaths.add(d.path);
+                    }}
+                }}
+            }}
+            renderCurrentPage();
+            updateTopSelectionBar();
+            showToast("Filtered to 100% exact clones. Duplicates selected for cleaning.", "⚡");
+        }}
+
+        function filterBySimilarAndSelect() {{
+            setMatchTypeFilter('SIMILAR');
+            selectedPaths.clear();
+            for (const c of allClusters) {{
+                if (c.match_type !== 'EXACT_HASH') {{
+                    for (const d of c.duplicates) {{
+                        selectedPaths.add(d.path);
+                    }}
+                }}
+            }}
+            renderCurrentPage();
+            updateTopSelectionBar();
+            showToast("Filtered to similar items. Candidates selected for review.", "🔍");
+        }}
+
+        function filterAndReviewSimilar() {{
+            setMatchTypeFilter('SIMILAR');
+            showToast("Showing similar & near-duplicate clusters for review.", "🔍");
+        }}
+
+        function openFirstSimilarDiff() {{
+            const firstSimilar = allClusters.find(c => c.match_type !== 'EXACT_HASH');
+            if (!firstSimilar || firstSimilar.items.length === 0) {{
+                showToast("No similar clusters found (all duplicates are 100% exact).", "✓");
+                return;
+            }}
+            const dupeItem = firstSimilar.duplicates[0] || firstSimilar.items[1] || firstSimilar.items[0];
+            openPhotoLightbox(firstSimilar.group_id, encodeURIComponent(dupeItem.path));
+            if (!lbIsDiff) {{
+                toggleLightboxDiff();
+            }}
         }}
 
         function setViewMode(mode) {{
@@ -1390,13 +2028,47 @@ def get_index_html() -> str:
             const sideClusters = document.getElementById('sideClusterCount');
             if (sideClusters) sideClusters.innerText = clusterCountStr;
 
-            // Update Smart Clean Recommendation Banner
+            // Update Smart Clean Recommendation Banner & Dual Recommendation Panels
             const smartHero = document.getElementById('smartCleanHero');
             if (smartHero) {{
                 if ((summary.wasted_gb || 0) > 0 && currentNav !== 'TRASH') {{
                     smartHero.classList.remove('hidden');
                     const scGb = document.getElementById('smartCleanGb');
                     if (scGb) scGb.innerText = (summary.wasted_gb || 0).toFixed(2);
+
+                    // Compute Exact vs Similar separation
+                    let exactBytes = 0;
+                    let exactDupes = 0;
+                    let exactSets = 0;
+                    let similarBytes = 0;
+                    let similarDupes = 0;
+                    let similarSets = 0;
+
+                    for (const c of allClusters) {{
+                        if (c.match_type === 'EXACT_HASH') {{
+                            exactSets++;
+                            exactBytes += (c.totalWastedBytes || 0);
+                            exactDupes += (c.duplicates ? c.duplicates.length : 0);
+                        }} else {{
+                            similarSets++;
+                            similarBytes += (c.totalWastedBytes || 0);
+                            similarDupes += (c.duplicates ? c.duplicates.length : 0);
+                        }}
+                    }}
+
+                    const exGb = document.getElementById('heroExactGb');
+                    if (exGb) exGb.innerText = (exactBytes / (1024 * 1024 * 1024)).toFixed(2);
+                    const exCount = document.getElementById('heroExactCount');
+                    if (exCount) exCount.innerText = exactDupes.toLocaleString();
+                    const exSets = document.getElementById('heroExactSets');
+                    if (exSets) exSets.innerText = exactSets.toLocaleString();
+
+                    const simGb = document.getElementById('heroSimilarGb');
+                    if (simGb) simGb.innerText = (similarBytes / (1024 * 1024 * 1024)).toFixed(2);
+                    const simCount = document.getElementById('heroSimilarCount');
+                    if (simCount) simCount.innerText = similarDupes.toLocaleString();
+                    const simSets = document.getElementById('heroSimilarSets');
+                    if (simSets) simSets.innerText = similarSets.toLocaleString();
                 }} else {{
                     smartHero.classList.add('hidden');
                 }}
@@ -1472,12 +2144,25 @@ def get_index_html() -> str:
                 if (!hasPhoto && !hasVideo && !hasScreen && !hasDoc) fileCount++;
             }}
 
+            // Count Exact vs Similar
+            let exactClustersCount = 0;
+            let similarClustersCount = 0;
+            for (const c of allClusters) {{
+                if (c.match_type === 'EXACT_HASH') exactClustersCount++;
+                else similarClustersCount++;
+            }}
+
             document.getElementById('tabCount_ALL').innerText = total.toLocaleString();
             document.getElementById('tabCount_PHOTO').innerText = photoCount.toLocaleString();
             document.getElementById('tabCount_VIDEO').innerText = videoCount.toLocaleString();
             document.getElementById('tabCount_SCREENSHOT').innerText = screenCount.toLocaleString();
             document.getElementById('tabCount_DOCUMENT').innerText = docCount.toLocaleString();
             document.getElementById('tabCount_FILE').innerText = fileCount.toLocaleString();
+
+            const matchEx = document.getElementById('matchCount_EXACT');
+            if (matchEx) matchEx.innerText = exactClustersCount.toLocaleString();
+            const matchSim = document.getElementById('matchCount_SIMILAR');
+            if (matchSim) matchSim.innerText = similarClustersCount.toLocaleString();
         }}
 
         function setModalityCategory(cat) {{
@@ -1589,6 +2274,7 @@ def get_index_html() -> str:
 
         function applyFiltersAndSort() {{
             filteredClusters = allClusters.filter(c => {{
+                // Modality filter
                 if (activeModality === 'PHOTO') {{
                     const matches = c.items.some(i => i.category === 'PHOTO' || isImageFile(i.path));
                     if (!matches) return false;
@@ -1600,6 +2286,14 @@ def get_index_html() -> str:
                     if (!matchesCategory) return false;
                 }}
 
+                // Match Confidence filter
+                if (activeMatchType === 'EXACT') {{
+                    if (c.match_type !== 'EXACT_HASH') return false;
+                }} else if (activeMatchType === 'SIMILAR') {{
+                    if (c.match_type === 'EXACT_HASH') return false;
+                }}
+
+                // Search query filter
                 if (searchQuery) {{
                     const matches = c.items.some(i => i.path.toLowerCase().includes(searchQuery));
                     if (!matches) return false;
@@ -1682,6 +2376,7 @@ def get_index_html() -> str:
             const representative = cluster.keeper || cluster.items[0];
             const primaryName = representative.path.split('/').pop();
             const parentDir = representative.path.substring(0, representative.path.lastIndexOf('/'));
+            const isExact = (cluster.match_type === 'EXACT_HASH');
 
             // Determine Grid Column classes based on thumbnailSize
             let gridColsClass = "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3";
@@ -1705,7 +2400,9 @@ def get_index_html() -> str:
                         <div class="min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-sm font-bold text-white truncate max-w-sm sm:max-w-md" title="${{primaryName}}">${{primaryName}}</span>
-                                <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">${{cluster.match_type}}</span>
+                                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${{isExact ? 'bg-[#81c995]/20 text-[#81c995] border border-[#81c995]/30' : 'bg-[#1a3860] text-[#8ab4f8] border border-[#8ab4f8]/30'}}">
+                                    ${{isExact ? '⚡ 100% EXACT CLONE' : '🔍 ' + cluster.match_type}}
+                                </span>
                                 <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#81c995]/15 text-[#81c995]">${{wastedMb}} MB wasted</span>
                             </div>
                             <div class="text-[11px] text-[#8e918f] font-mono truncate mt-0.5" title="${{parentDir}}">
@@ -1719,7 +2416,7 @@ def get_index_html() -> str:
                         <button onclick="toggleClusterSelection(${{cluster.group_id}}, event)"
                                 class="m3-button-secondary text-xs !py-1 !px-3 ${{allDupesSelected ? 'text-[#8ab4f8] border-[#8ab4f8]/40' : ''}}"
                                 title="${{allDupesSelected ? 'Deselect duplicates' : 'Keep designated best copy and mark duplicates for removal'}}">
-                            <span>${{allDupesSelected ? '✓ Clean Ready' : '★ Keep Best & Clean Rest'}}</span>
+                            <span>${{allDupesSelected ? '✓ Clean Ready' : (isExact ? '⚡ Keep Original & Clean Copy' : '★ Keep Best & Clean Rest')}}</span>
                         </button>
                         <button onclick="openPhotoLightbox(${{cluster.group_id}}, '${{encodeURIComponent(cluster.items[0].path)}}')"
                                 class="m3-button-secondary text-xs !py-1 !px-3 hover:text-[#8ab4f8]">
@@ -1969,6 +2666,7 @@ def get_index_html() -> str:
             const representative = cluster.keeper || cluster.items[0];
             const primaryName = representative.path.split('/').pop();
             const parentDir = representative.path.substring(0, representative.path.lastIndexOf('/'));
+            const isExact = (cluster.match_type === 'EXACT_HASH');
 
             card.innerHTML = `
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-3 border-b border-[#28292a]">
@@ -1983,7 +2681,9 @@ def get_index_html() -> str:
                         <div class="min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="font-bold text-white text-xs truncate max-w-sm" title="${{primaryName}}">${{primaryName}}</span>
-                                <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a3860] text-[#8ab4f8]">${{cluster.match_type}}</span>
+                                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${{isExact ? 'bg-[#81c995]/20 text-[#81c995] border border-[#81c995]/30' : 'bg-[#1a3860] text-[#8ab4f8] border border-[#8ab4f8]/30'}}">
+                                    ${{isExact ? '⚡ 100% EXACT CLONE' : '🔍 ' + cluster.match_type}}
+                                </span>
                                 <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#81c995]/15 text-[#81c995]">${{wastedMb}} MB wasted</span>
                             </div>
                             <div class="text-[11px] text-[#8e918f] font-mono truncate mt-0.5" title="${{parentDir}}">
@@ -1995,7 +2695,7 @@ def get_index_html() -> str:
                         <button onclick="toggleClusterSelection(${{cluster.group_id}}, event)"
                                 class="m3-button-secondary text-xs !py-1 !px-3 ${{allDupesSelected ? 'text-[#8ab4f8] border-[#8ab4f8]/40' : ''}}"
                                 title="${{allDupesSelected ? 'Deselect duplicates' : 'Keep designated best copy and mark duplicates for removal'}}">
-                            <span>${{allDupesSelected ? '✓ Clean Ready' : '★ Keep Best & Clean Rest'}}</span>
+                            <span>${{allDupesSelected ? '✓ Clean Ready' : (isExact ? '⚡ Keep Original & Clean Copy' : '★ Keep Best & Clean Rest')}}</span>
                         </button>
                         <button onclick="openPhotoLightbox(${{cluster.group_id}}, '${{encodeURIComponent(cluster.items[0].path)}}')" class="m3-button-secondary text-xs !py-1 !px-3 hover:text-[#8ab4f8]">
                             <span>⇄ Compare Diff</span>

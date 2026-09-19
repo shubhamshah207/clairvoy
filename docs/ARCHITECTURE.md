@@ -444,3 +444,14 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
   - **Mode A: Soft Delete (Move to Trash)**: Isolates files to `.clairvoy_trash/` with a rollback manifest for 1-click restoration via `POST /api/delete/restore`.
   - **Mode B: Permanent Deletion**: Unlinks duplicate files permanently while enforcing hard assertions that `KEEP` files can never be deleted, producing an immutable audit log.
   - **Shell Script Generation (`GET /api/reports/delete-script`)**: Generates an audit-ready `delete_duplicates.sh` script with posix quoting and `rm -f --` safety.
+- **Google Workspace Storage Scan Modal & Host Drive Browser**:
+  - Replaces rudimentary drawer with `#newScanModal`.
+  - **Native Host OS Dialog (`POST /api/system/pick-folder`)**: Uses native Tkinter OS file manager dialog when display/desktop is attached (`DISPLAY` / `WAYLAND_DISPLAY`), allowing seamless host directory selection.
+  - **In-App Google Drive Directory Browser (`GET /api/system/browse-directories` & `#driveBrowserModal`)**: For headless servers or in-browser navigation, provides an authentic file explorer with instant shortcuts (`Pictures`, `Videos`, `Home`, `Drives`, `/mnt`), path breadcrumb navigation, and subfolder picking.
+  - Quick target chips (`#scanTargetsList`) with instant add/remove badges and multi-directory batch scanning.
+- **Dual Cleaning Recommendation Tracks (100% Exact Clones vs Similarity Review)**:
+  - Splits deduplication cleanup into two separate operational tracks:
+    - **⚡ Track 1: 100% Byte-Exact Clones (`#heroExactGb`)**: Zero risk, bit-for-bit identical hashes (`EXACT_HASH`). Can be directly batch-cleaned into Trash or Quarantine with 1 click without requiring manual verification. Cards feature vibrant emerald `⚡ 100% EXACT CLONE` badges and `⚡ Keep Original & Clean Copy` buttons.
+    - **🔍 Track 2: Similar & Near-Duplicates (`#heroSimilarGb`)**: Visual resemblance, resized photos, or document drafts (`CONTENT_NEAR_DUPLICATE`, `VISUAL_SIMILARITY`). Explicitly tagged as `Review Required`, with instant 1-click side-by-side diff comparison (`[⇄ Review Diff]`) and candidate inspection.
+- **Match Confidence Filtering**:
+  - Segmented toggle in gallery controls (`All`, `⚡ Exact`, `🔍 Similar`) and Left Sidebar rail (`⚡ 100% Exact`, `🔍 Similar (Review)`) with dynamic duplicate set counts.

@@ -57,6 +57,19 @@ def test_index_page(client):
     # Toast notification and shortcuts modal
     assert "toastNotification" in response.text
     assert "shortcutsModal" in response.text
+    # Google Workspace New Scan modal and In-App Drive Browser modal
+    assert "newScanModal" in response.text
+    assert "driveBrowserModal" in response.text
+    assert "nativePickerBtn" in response.text
+    # Dual Cleaning Recommendation Panels (100% Exact vs Similarity Review)
+    assert "heroExactGb" in response.text
+    assert "heroSimilarGb" in response.text
+    # Match Confidence filters in Gallery Header & Left Rail
+    assert "matchSeg_ALL" in response.text
+    assert "matchSeg_EXACT" in response.text
+    assert "matchSeg_SIMILAR" in response.text
+    assert "matchBtn_EXACT" in response.text
+    assert "matchBtn_SIMILAR" in response.text
 
 
 def test_status_endpoint(client):
@@ -343,5 +356,42 @@ def test_delete_endpoints(client, tmp_path):
     assert restore_res.status_code == 200
     assert restore_res.json()["restored_files_count"] == 1
     assert dupe.exists()
+
+
+def test_browse_directories_endpoint(client, tmp_path):
+    sub_a = tmp_path / "Photos"
+    sub_a.mkdir()
+    sub_b = tmp_path / "Documents"
+    sub_b.mkdir()
+
+    res = client.get(f"/api/system/browse-directories?path={tmp_path}")
+    assert res.status_code == 200
+    data = res.json()
+    assert "current_path" in data
+    assert "shortcuts" in data
+    assert len(data["shortcuts"]) > 0
+    dir_names = [d["name"] for d in data["directories"]]
+    assert "Photos" in dir_names
+    assert "Documents" in dir_names
+
+
+def test_pick_native_folder_endpoint(client, monkeypatch):
+    import sys
+    app_module = sys.modules["clairvoy.web.app"]
+
+    # Mock picker to return a test path
+    monkeypatch.setattr(app_module, "_run_native_folder_picker", lambda: "/tmp/test_selected_folder")
+    res = client.post("/api/system/pick-folder")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "selected"
+    assert data["path"] == "/tmp/test_selected_folder"
+
+    # Mock cancellation
+    monkeypatch.setattr(app_module, "_run_native_folder_picker", lambda: None)
+    res_cancel = client.post("/api/system/pick-folder")
+    assert res_cancel.status_code == 200
+    assert res_cancel.json()["status"] == "cancelled"
+
 
 
