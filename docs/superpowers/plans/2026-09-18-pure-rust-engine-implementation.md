@@ -958,7 +958,7 @@ git commit -m "feat(rust): implement exact hash matcher plugin with SIMD BLAKE3"
   - `CompositeKeeperStrategy`: Scores files favoring original filenames, folder seniority, and resolution.
   - `DeduplicationPipeline`: Chained multi-tier matcher runner with short-circuit candidate pruning.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```rust
 // crates/clairvoy-engine/tests/test_pipeline.rs
@@ -993,12 +993,12 @@ fn test_deduplication_pipeline_runs_and_scores_keeper() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p clairvoy-engine`
 Expected: FAIL (crate not implemented)
 
-- [ ] **Step 3: Implement `clairvoy-engine` crate**
+- [x] **Step 3: Implement `clairvoy-engine` crate**
 
 Create `crates/clairvoy-engine/Cargo.toml`:
 ```toml
@@ -1210,12 +1210,12 @@ pub use keeper::CompositeKeeperStrategy;
 pub use pipeline::DeduplicationPipeline;
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p clairvoy-engine`
 Expected: PASS (1 test passing)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/clairvoy-engine
