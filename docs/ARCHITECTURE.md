@@ -455,3 +455,89 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
     - **🔍 Track 2: Similar & Near-Duplicates (`#heroSimilarGb`)**: Visual resemblance, resized photos, or document drafts (`CONTENT_NEAR_DUPLICATE`, `VISUAL_SIMILARITY`). Explicitly tagged as `Review Required`, with instant 1-click side-by-side diff comparison (`[⇄ Review Diff]`) and candidate inspection.
 - **Match Confidence Filtering**:
   - Segmented toggle in gallery controls (`All`, `⚡ Exact`, `🔍 Similar`) and Left Sidebar rail (`⚡ 100% Exact`, `🔍 Similar (Review)`) with dynamic duplicate set counts.
+
+---
+
+## 7. Dual Pure Rust Architecture (`crates/*`)
+
+Clairvoy features a dual-engine architecture where an ultra-high-performance pure Rust engine (`crates/*`) coexists seamlessly with the Python engine, adhering to strict manifest compatibility (`ScanSummary`) and memory ceiling invariants.
+
+```
++---------------------------------------------------------------------------------------------------------+
+|                                    PURE RUST ENGINE WORKSPACE (crates/*)                                |
++---------------------------------------------------------------------------------------------------------+
+|                                                                                                         |
+|  +--------------------+        +---------------------+                                                  |
+|  | clairvoy-cli       |        | clairvoy-server     |                                                  |
+|  | (clairvoy-rs CLI)  |        | (High-Throughput)   |                                                  |
+|  +---------+----------+        +----------+----------+                                                  |
+|            |                              |                                                             |
+|            +---------------+--------------+                                                             |
+|                            |                                                                            |
+|                            v                                                                            |
+|                 +--------------------+                                                                  |
+|                 | clairvoy-engine    |                                                                  |
+|                 | DeduplicationPipe..|                                                                  |
+|                 | CompositeKeeper... |                                                                  |
+|                 +----+----------+----+                                                                  |
+|                      |          |                                                                       |
+|         +------------+          +------------+                                                          |
+|         v                                    v                                                          |
+|  +--------------------+               +--------------------+                                            |
+|  | clairvoy-plugins   |               | clairvoy-scanner   |                                            |
+|  | ExactHashMatcher   |               | jwalk parallel     |                                            |
+|  | PhotoVisionMatcher |               | flume bounded queue|                                            |
+|  +---------+----------+               | SIMD XXH3 4KB      |                                            |
+|            |                          +----------+---------+                                            |
+|            v                                     |                                                      |
+|  +--------------------+                          |                                                      |
+|  | clairvoy-model     |                          |                                                      |
+|  | ModelBackend trait |                          |                                                      |
+|  | PerceptualHash (p) |                          |                                                      |
+|  +---------+----------+                          |                                                      |
+|            |                                     |                                                      |
+|            +------------------+------------------+                                                      |
+|                               |                                                                         |
+|                               v                                                                         |
+|                 +--------------------+                                                                  |
+|                 | clairvoy-core      |                                                                  |
+|                 | FileEntry, Record, |                                                                  |
+|                 | ScanSummary, Error |                                                                  |
+|                 +--------------------+                                                                  |
++---------------------------------------------------------------------------------------------------------+
+```
+
+### 7.1. Crate Breakdown & Responsibilities
+
+1. **[`crates/clairvoy-core`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core)**:
+   - Canonical domain models: `FileEntry`, `DuplicateRecord`, `DuplicateCluster`, `ScanSummary`, `ImageCategory`, and `ScanStats`.
+   - Plugin & strategy traits: `MatcherPlugin`, `KeeperStrategy`, `ActionHandler`.
+   - Typed error hierarchies with `thiserror`: `EngineError`.
+   - Pydantic v2 compatibility: Implements custom serialization ensuring `None` fields serialize to `""` where required by Python schemas.
+
+2. **[`crates/clairvoy-scanner`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-scanner)**:
+   - High-speed directory traversal using `jwalk` multi-threaded worker pools.
+   - SIMD XXH3 4KB quick-hashing (>10 GB/s) for immediate candidate discrimination.
+   - Bounded backpressure streaming using `flume::bounded(2048)` guaranteeing $\le 50\text{MB}$ RAM across multi-million file workloads.
+   - Resilient file error handling: gracefully skips unreadable or inaccessible files without scan aborts.
+
+3. **[`crates/clairvoy-model`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-model)**:
+   - Pluggable AI model runtime abstraction: `ModelBackend` trait with dynamic dispatch (`Arc<dyn ModelBackend>`).
+   - Built-in zero-weight `PerceptualHashBackend` (64-bit blockhash/pHash).
+   - Dynamic model registry: `models.toml` schema parsing with `ModelRegistry` supporting onnx, tch, and perceptual backends.
+
+4. **[`crates/clairvoy-plugins`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-plugins)**:
+   - Tier 1: `ExactHashMatcherPlugin` using parallel Rayon BLAKE3 SIMD hashing with 0-byte guards.
+   - Tier 2: `PhotoVisionMatcherPlugin` visual AI candidate integration holding `Arc<dyn ModelBackend>`.
+
+5. **[`crates/clairvoy-engine`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-engine)**:
+   - `DeduplicationPipeline`: Multi-tier matcher execution pipeline with live progress reporting, short-circuit pruning, and sequential global `group_id` re-indexing.
+   - `CompositeKeeperStrategy`: Deterministic scoring rule engine evaluating folder seniority, copy/duplicate naming patterns, and cross-platform path normalization.
+
+6. **[`crates/clairvoy-server`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-server)**:
+   - High-throughput async Axum web server exposing `/`, `/api/status`, `/api/scan`, and `/api/runs`.
+   - Shared atomic telemetry state (`SharedScanState`) managing scan phases, file indexing counters, and duration metrics.
+
+7. **[`crates/clairvoy-cli`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-cli)**:
+   - Native binary executable `clairvoy-rs` built with Clap derive parsing.
+   - Commands: `clairvoy-rs scan <paths...>` and `clairvoy-rs ui [--port <port>] [--host <host>]`.

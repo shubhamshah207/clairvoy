@@ -1401,7 +1401,7 @@ git commit -m "feat(rust): implement axum web server with live scan status endpo
 **Interfaces:**
 - Produces: Executable binary `clairvoy-rs`.
 
-- [ ] **Step 1: Implement `clairvoy-cli` crate**
+- [x] **Step 1: Implement `clairvoy-cli` crate**
 
 Create `crates/clairvoy-cli/Cargo.toml`:
 ```toml
@@ -1482,21 +1482,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-- [ ] **Step 2: Run full workspace test suite**
+- [x] **Step 2: Run full workspace test suite**
 
 Run: `cargo test --workspace`
 Expected: PASS across all crates
 
-- [ ] **Step 3: Run Clippy lint checks**
+- [x] **Step 3: Run Clippy lint checks**
 
 Run: `cargo clippy --workspace --all-targets -- -D warnings`
 Expected: 0 errors, 0 warnings
 
-- [ ] **Step 4: Update `AGENTS.md`**
+- [x] **Step 4: Update `AGENTS.md`**
 
 Update `AGENTS.md` with the new Rust workspace structure, build instructions (`cargo test --workspace`), and coexistence guidelines.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/clairvoy-cli AGENTS.md
