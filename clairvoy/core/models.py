@@ -96,3 +96,22 @@ class QuarantineManifest(BaseModel):
     total_files_moved: int
     total_bytes_moved: int
     items: list[QuarantineItem] = Field(default_factory=list)
+
+
+class DeletionItem(BaseModel):
+    original_path: str
+    size_bytes: int
+    group_id: int
+    mode: str = "trash"  # "trash" | "permanent"
+    trash_path: str | None = None
+
+
+class DeletionManifest(BaseModel):
+    timestamp: str
+    mode: str  # "trash" | "permanent"
+    base_dirs: list[str] = Field(default_factory=list)
+    total_files_deleted: int
+    total_bytes_freed: int
+    items: list[DeletionItem] = Field(default_factory=list)
+    audit_file: str | None = None
+

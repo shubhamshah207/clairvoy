@@ -7,6 +7,7 @@ import pytest
 
 from clairvoy.core.security import (
     SecurityError,
+    generate_hardened_deletion_script,
     generate_hardened_quarantine_script,
     resolve_safe_path,
     resolve_safe_paths,
@@ -96,4 +97,27 @@ def test_resolve_safe_paths_prunes_nested_descendants(temp_workspace):
     paths = resolve_safe_paths([parent, child])
     assert len(paths) == 1
     assert paths[0] == parent.resolve()
+
+
+def test_generate_hardened_deletion_script():
+    deletions = ["/path/to/dupe 1.jpg", "/path/to/dupe 2.jpg"]
+    script_trash = generate_hardened_deletion_script(
+        deletions=deletions,
+        base_dir="/path/to",
+        mode="trash",
+        trash_dir="/path/to/.clairvoy_trash",
+    )
+    assert "set -euo pipefail" in script_trash
+    assert "TRASH mode" in script_trash
+    assert "mv -n --" in script_trash
+
+    script_perm = generate_hardened_deletion_script(
+        deletions=deletions,
+        base_dir="/path/to",
+        mode="permanent",
+    )
+    assert "set -euo pipefail" in script_perm
+    assert "PERMANENT mode" in script_perm
+    assert "rm -f --" in script_perm
+
 

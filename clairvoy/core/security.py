@@ -187,3 +187,60 @@ def generate_hardened_quarantine_script(
     lines.append('echo "[✓] Successfully quarantined $MOVED_COUNT duplicate files."')
     lines.append("")
     return "\n".join(lines)
+
+
+def generate_hardened_deletion_script(
+    deletions: list[str],
+    base_dir: str | list[str],
+    mode: str = "trash",
+    trash_dir: str | None = None,
+) -> str:
+    """
+    Generates a secure, idempotent bash script to safely delete or trash duplicate files.
+    Guarantees:
+      - Uses `set -euo pipefail` to abort immediately on error.
+      - Posix shlex quoting on all paths (no injection possible).
+      - In 'trash' mode: safely moves files to trash directory using `mv -n --`.
+      - In 'permanent' mode: removes files safely using `rm -f --`.
+    """
+    base_dirs = [base_dir] if isinstance(base_dir, str) else base_dir
+    base_dirs_str = ", ".join(safe_sh_quote(b) for b in base_dirs)
+
+    lines = [
+        "#!/usr/bin/env bash",
+        "# Generated automatically by Clairvoy Local Storage Engine",
+        f"# Safe Deletion Execution Script (Mode: {mode.upper()})",
+        "set -euo pipefail",
+        "",
+        f'echo "[*] Initiating Clairvoy Safe Deletion ({mode.upper()} mode)..."',
+        f'echo "[*] Base Directories: {base_dirs_str}"',
+    ]
+
+    if mode == "trash" and trash_dir:
+        lines.append(f'echo "[*] Trash Target: {safe_sh_quote(trash_dir)}"')
+        lines.append(f"mkdir -p -- {safe_sh_quote(trash_dir)}")
+
+    lines.extend([
+        "",
+        "ACTION_COUNT=0",
+        "",
+    ])
+
+    for path in deletions:
+        quoted_path = safe_sh_quote(path)
+        lines.append(f"if [ -f {quoted_path} ]; then")
+        if mode == "trash" and trash_dir:
+            p_obj = Path(path)
+            dst = str(Path(trash_dir) / p_obj.name)
+            quoted_dst = safe_sh_quote(dst)
+            lines.append(f"    mv -n -- {quoted_path} {quoted_dst}")
+        else:
+            lines.append(f"    rm -f -- {quoted_path}")
+        lines.append("    ACTION_COUNT=$((ACTION_COUNT + 1))")
+        lines.append("fi")
+
+    lines.append("")
+    lines.append(f'echo "[✓] Successfully processed $ACTION_COUNT files ({mode} mode)."')
+    lines.append("")
+    return "\n".join(lines)
+
