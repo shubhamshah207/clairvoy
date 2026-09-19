@@ -351,20 +351,23 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
 |  [Default Header]   [Pinwheel] Clairvoy Photos   |   [ 🔍 Search duplicate photos... ]   |  [📂 Runs ▼] |
 |  [Selection Mode]   [✕] 14 selected (248.5 MB)   |   [Select All] [Clear] [🗑️ Trash] [⚠️ Delete] [📦 Quaran]|
 |                                                                                                         |
-|  +--------------------+  +---------------------------------------------------------------------------+  |
-|  | GOOGLE NAV RAIL    |  | TOOLBAR: [Photos View] [Drive List] [Trash Audit]    Size: [ S | M | L ]  |  |
-|  |                    |  +---------------------------------------------------------------------------+  |
-|  | [🖼️ Photos]       |  | SECTION: Duplicate Set #1 • Visual AI (98.4%) • 24.5 MB      [🔍 Compare]  |  |
-|  | [📁 Drive List]    |  | +-----------------------------------------------------------------------+ |  |
-|  | [🧹 Clean up]      |  | | [✓] [IMG]    [✓] [▶ VIDEO]   [✓] [IMG]    [✓] [▶ VIDEO]   [✓] [IMG]   | |  |
-|  | [🗑️ Trash / Audit] |  | |  ★ Keeper     98.4% Match     98.4% Match  100% Match      98.4% Match | |  |
-|  |                    |  | +-----------------------------------------------------------------------+ |  |
-|  |                    |  +---------------------------------------------------------------------------+  |
-|  |--------------------|                                                                                 |
-|  | STORAGE USAGE      |                                                                                 |
-|  | [68.22 GB Wasted]  |                                                                                 |
-|  | [==== 68.22 GB ====]                                                                                 |
-|  +--------------------+                                                                                 |
+|  +-------------------------+  +-----------------------------------------------------------------------+ |
+|  | GOOGLE NAV RAIL         |  | 🖼️ Photos (6,678 sets) [✕ Clear]   Sort: [Size ▼]   Size: [ S | M | L ]| |
+|  | CATEGORIES:             |  +-----------------------------------------------------------------------+ |
+|  | [🖼️ Photos   6.6k  ✕]  |  | SECTION: Duplicate Set #1 • Visual AI (98.4%) • 24.5 MB  [🔍 Compare] | |
+|  | [🎥 Videos   2.5k  ✕]  |  | +-------------------------------------------------------------------+ | |
+|  | [📸 Screens   786   ✕]  |  | | [✓] [IMG]    [✓] [▶ VIDEO]   [✓] [IMG]    [✓] [▶ VIDEO]   [✓] [IMG] | | |
+|  | [📄 Docs      355   ✕]  |  | |  ★ Keeper     98.4% Match     98.4% Match  100% Match    98.4% Match | |
+|  | [📦 Files     136   ✕]  |  | +-------------------------------------------------------------------+ | |
+|  | [🌐 All     10.4k    ]  |  +-----------------------------------------------------------------------+ |
+|  | TOOLS:                  |                                                                            |
+|  | [📁 Drive List]         |                                                                            |
+|  | [🧹 Clean up]           |                                                                            |
+|  | [🗑️ Trash & Audit]     |                                                                            |
+|  |-------------------------|                                                                            |
+|  | ☁️ STORAGE [68.22 GB]   |                                                                            |
+|  | [===== 68.22 GB ======] |                                                                            |
+|  +-------------------------+                                                                            |
 +---------------------------------------------------------------------------------------------------------+
                                         |
                  +----------------------+----------------------+
@@ -381,6 +384,10 @@ Clairvoy features an authentic, 100% offline Google Photos product interface mod
 - **Google Photos Top Selection Bar (Zero Floating Windows)**:
   - Eliminates obstructing bottom floating docks or modal pill bars.
   - When 1 or more photos/files are selected, the Top App Bar smoothly morphs into the Google Photos Selection Bar (`[✕]` Deselect, `{count} selected ({size})`, `[Select All]`, `[🗑️ Move to Trash]`, `[⚠️ Delete Permanently]`, `[📦 Quarantine]`, `[📄 CSV]`).
+- **Left Sidebar Category Navigation with Filter Clear Crosses (`✕`)**:
+  - Categories (Photos, Videos, Screenshots, Documents, Other Files, All Duplicates) are organized in the left navigation rail alongside dynamic count badges.
+  - When a category is active, it highlights with Google Blue and reveals an instant `✕` (cross) button to clear the filter back to "All Duplicates".
+  - The gallery header is decluttered from horizontal chips, showing only the active category breadcrumb and an interactive `[✕ Clear Filter]` chip.
 - **Left-Bottom Persistent Storage Widget**:
   - Storage consumption and recoverable gigabytes pinned strictly to the bottom-left sidebar navigation drawer (mirroring Google Drive and Google Photos storage indicator), keeping the gallery clean and focused on media.
 - **Dynamic Thumbnail & Icon Size Controls**:

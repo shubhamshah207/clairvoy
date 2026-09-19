@@ -333,27 +333,121 @@ def get_index_html() -> str:
     <div class="max-w-7xl mx-auto px-4 lg:px-8 pt-6 pb-12 flex flex-col md:flex-row gap-6">
 
         <!-- Google Navigation Rail (Left Sidebar with Bottom Storage Card) -->
-        <aside class="w-full md:w-60 flex-shrink-0 flex md:flex-col justify-between gap-6 pb-2 md:pb-0 md:sticky md:top-16 md:h-[calc(100vh-5.5rem)]">
+        <aside class="w-full md:w-64 flex-shrink-0 flex md:flex-col justify-between gap-5 pb-2 md:pb-0 md:sticky md:top-16 md:h-[calc(100vh-5.5rem)] overflow-y-auto pr-1">
 
-            <!-- Top Navigation Links -->
-            <div class="flex md:flex-col gap-1.5 w-full overflow-x-auto md:overflow-x-visible pb-1 md:pb-0">
-                <button onclick="switchNavSection('PHOTOS')" id="navBtn_PHOTOS"
-                        class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8]">
-                    <span class="text-base">🖼️</span>
-                    <span>Photos</span>
+            <!-- Left Navigation & Categories -->
+            <div class="flex md:flex-col gap-1 w-full overflow-x-auto md:overflow-x-visible pb-1 md:pb-0">
+
+                <!-- Section: Categories Header -->
+                <div class="hidden md:flex items-center justify-between px-3 pt-1 pb-1.5 text-[11px] font-bold text-[#8e918f] uppercase tracking-wider">
+                    <span>Categories</span>
+                    <button id="sidebarClearAllBtn" onclick="setModalityCategory('ALL')" class="hidden text-[10px] text-[#8ab4f8] hover:underline font-mono" title="Clear category filter">
+                        Clear ✕
+                    </button>
+                </div>
+
+                <!-- Category 1: Photos -->
+                <button onclick="setModalityCategory('PHOTO')" id="catBtn_PHOTO"
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8] group">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="text-base">🖼️</span>
+                        <span class="truncate">Photos</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span id="tabCount_PHOTO" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/40 text-[#c4c7c5]">0</span>
+                        <span id="catCross_PHOTO" onclick="event.stopPropagation(); setModalityCategory('ALL');"
+                              class="hidden text-xs font-bold text-[#8ab4f8] hover:text-white px-1 hover:bg-white/20 rounded-full" title="Clear filter">✕</span>
+                    </div>
                 </button>
+
+                <!-- Category 2: Videos -->
+                <button onclick="setModalityCategory('VIDEO')" id="catBtn_VIDEO"
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="text-base">🎥</span>
+                        <span class="truncate">Videos</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span id="tabCount_VIDEO" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/40 text-[#c4c7c5]">0</span>
+                        <span id="catCross_VIDEO" onclick="event.stopPropagation(); setModalityCategory('ALL');"
+                              class="hidden text-xs font-bold text-[#8ab4f8] hover:text-white px-1 hover:bg-white/20 rounded-full" title="Clear filter">✕</span>
+                    </div>
+                </button>
+
+                <!-- Category 3: Screenshots -->
+                <button onclick="setModalityCategory('SCREENSHOT')" id="catBtn_SCREENSHOT"
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="text-base">📸</span>
+                        <span class="truncate">Screenshots</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span id="tabCount_SCREENSHOT" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/40 text-[#c4c7c5]">0</span>
+                        <span id="catCross_SCREENSHOT" onclick="event.stopPropagation(); setModalityCategory('ALL');"
+                              class="hidden text-xs font-bold text-[#8ab4f8] hover:text-white px-1 hover:bg-white/20 rounded-full" title="Clear filter">✕</span>
+                    </div>
+                </button>
+
+                <!-- Category 4: Documents -->
+                <button onclick="setModalityCategory('DOCUMENT')" id="catBtn_DOCUMENT"
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="text-base">📄</span>
+                        <span class="truncate">Documents</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span id="tabCount_DOCUMENT" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/40 text-[#c4c7c5]">0</span>
+                        <span id="catCross_DOCUMENT" onclick="event.stopPropagation(); setModalityCategory('ALL');"
+                              class="hidden text-xs font-bold text-[#8ab4f8] hover:text-white px-1 hover:bg-white/20 rounded-full" title="Clear filter">✕</span>
+                    </div>
+                </button>
+
+                <!-- Category 5: Other Files -->
+                <button onclick="setModalityCategory('FILE')" id="catBtn_FILE"
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="text-base">📦</span>
+                        <span class="truncate">Other Files</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span id="tabCount_FILE" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/40 text-[#c4c7c5]">0</span>
+                        <span id="catCross_FILE" onclick="event.stopPropagation(); setModalityCategory('ALL');"
+                              class="hidden text-xs font-bold text-[#8ab4f8] hover:text-white px-1 hover:bg-white/20 rounded-full" title="Clear filter">✕</span>
+                    </div>
+                </button>
+
+                <!-- Category 6: All Duplicates -->
+                <button onclick="setModalityCategory('ALL')" id="catBtn_ALL"
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="text-base">🌐</span>
+                        <span class="truncate">All Duplicates</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span id="tabCount_ALL" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/40 text-[#c4c7c5]">0</span>
+                    </div>
+                </button>
+
+                <!-- Divider -->
+                <div class="hidden md:block my-2 border-t border-[#28292a]"></div>
+
+                <!-- Section: Tools & Views -->
+                <div class="hidden md:block px-3 pt-1 pb-1 text-[11px] font-bold text-[#8e918f] uppercase tracking-wider">
+                    Tools & Views
+                </div>
+
                 <button onclick="switchNavSection('DRIVE')" id="navBtn_DRIVE"
-                        class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                        class="nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
                     <span class="text-base">📁</span>
                     <span>Drive List</span>
                 </button>
                 <button onclick="switchNavSection('CLEANUP')" id="navBtn_CLEANUP"
-                        class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                        class="nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
                     <span class="text-base">🧹</span>
-                    <span>Clean up</span>
+                    <span>Clean up space</span>
                 </button>
                 <button onclick="switchNavSection('TRASH')" id="navBtn_TRASH"
-                        class="nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                        class="nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
                     <span class="text-base">🗑️</span>
                     <span>Trash & Audit</span>
                 </button>
@@ -461,27 +555,22 @@ def get_index_html() -> str:
                 </div>
             </section>
 
-            <!-- Filter Chips Toolbar & View Controls -->
-            <section class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-1">
-                <!-- Modality Filter Chips (Google Style) -->
-                <div class="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-                    <button onclick="setModalityTab('PHOTO')" id="tab_PHOTO" class="m3-chip active" title="Photos and Image Duplicates">
-                        🖼️ Photos <span id="tabCount_PHOTO" class="text-[11px] font-mono opacity-80">0</span>
-                    </button>
-                    <button onclick="setModalityTab('VIDEO')" id="tab_VIDEO" class="m3-chip" title="Video Duplicates">
-                        🎥 Videos <span id="tabCount_VIDEO" class="text-[11px] font-mono opacity-80">0</span>
-                    </button>
-                    <button onclick="setModalityTab('ALL')" id="tab_ALL" class="m3-chip">
-                        All <span id="tabCount_ALL" class="text-[11px] font-mono opacity-80">0</span>
-                    </button>
-                    <button onclick="setModalityTab('SCREENSHOT')" id="tab_SCREENSHOT" class="m3-chip">
-                        Screenshots <span id="tabCount_SCREENSHOT" class="text-[11px] font-mono opacity-80">0</span>
-                    </button>
-                    <button onclick="setModalityTab('DOCUMENT')" id="tab_DOCUMENT" class="m3-chip">
-                        Docs <span id="tabCount_DOCUMENT" class="text-[11px] font-mono opacity-80">0</span>
-                    </button>
-                    <button onclick="setModalityTab('FILE')" id="tab_FILE" class="m3-chip">
-                        Files <span id="tabCount_FILE" class="text-[11px] font-mono opacity-80">0</span>
+            <!-- Active Category Header & Gallery Controls -->
+            <section class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5 pb-1">
+                <!-- Left: Active Category Breadcrumb & Filter Reset Cross Chip -->
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <span id="activeCategoryIcon" class="text-xl">🖼️</span>
+                        <h2 id="activeCategoryTitle" class="text-base md:text-lg font-bold text-white tracking-tight">Photos</h2>
+                        <span id="activeCategoryCount" class="text-xs text-[#8e918f] font-mono">(0 sets)</span>
+                    </div>
+
+                    <!-- Clear Filter Cross Chip (Shown when filtered to a specific category) -->
+                    <button id="clearCategoryFilterChip" onclick="setModalityCategory('ALL')"
+                            class="hidden items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#1a3860] text-[#8ab4f8] border border-[#8ab4f8]/30 hover:bg-[#8ab4f8]/20 transition cursor-pointer"
+                            title="Reset filter to All Duplicates">
+                        <span>Clear Filter</span>
+                        <span class="font-bold text-xs leading-none">✕</span>
                     </button>
                 </div>
 
@@ -880,27 +969,50 @@ def get_index_html() -> str:
 
         function switchNavSection(sec) {{
             currentNav = sec;
-            document.querySelectorAll('.nav-rail-btn').forEach(btn => {{
-                btn.className = "nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]";
-            }});
-            const active = document.getElementById('navBtn_' + sec);
-            if (active) {{
-                active.className = "nav-rail-btn w-full flex items-center gap-3 px-4 py-3 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8]";
-            }}
-
             const hero = document.getElementById('cleanupHeroCard');
+            const gallery = document.getElementById('clustersGallery');
+
+            // Unhighlight all category buttons and hide their crosses
+            const categories = ['PHOTO', 'VIDEO', 'SCREENSHOT', 'DOCUMENT', 'FILE', 'ALL'];
+            categories.forEach(c => {{
+                const btn = document.getElementById('catBtn_' + c);
+                const cross = document.getElementById('catCross_' + c);
+                if (btn) btn.className = "nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group";
+                if (cross) cross.classList.add('hidden');
+            }});
+
+            const chipCross = document.getElementById('clearCategoryFilterChip');
+            if (chipCross) {{
+                chipCross.classList.add('hidden');
+                chipCross.classList.remove('flex');
+            }}
+            const sideClearBtn = document.getElementById('sidebarClearAllBtn');
+            if (sideClearBtn) sideClearBtn.classList.add('hidden');
+
+            // Update tools buttons in sidebar
+            ['DRIVE', 'CLEANUP', 'TRASH'].forEach(s => {{
+                const btn = document.getElementById('navBtn_' + s);
+                if (btn) {{
+                    if (s === sec) {{
+                        btn.className = "nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8]";
+                    }} else {{
+                        btn.className = "nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]";
+                    }}
+                }}
+            }});
+
             if (sec === 'CLEANUP') {{
-                hero.classList.remove('hidden');
-                setModalityTab('ALL');
-            }} else if (sec === 'PHOTOS') {{
-                hero.classList.add('hidden');
-                setModalityTab('PHOTO');
-                setViewMode('grid');
+                if (hero) hero.classList.remove('hidden');
+                if (gallery) gallery.classList.remove('hidden');
+                activeModality = 'ALL';
+                currentPage = 1;
+                applyFiltersAndSort();
             }} else if (sec === 'DRIVE') {{
-                hero.classList.add('hidden');
+                if (hero) hero.classList.add('hidden');
+                if (gallery) gallery.classList.remove('hidden');
                 setViewMode('list');
             }} else if (sec === 'TRASH') {{
-                hero.classList.add('hidden');
+                if (hero) hero.classList.add('hidden');
                 renderTrashSection();
             }}
         }}
@@ -1119,13 +1231,87 @@ def get_index_html() -> str:
             document.getElementById('tabCount_FILE').innerText = fileCount.toLocaleString();
         }}
 
-        function setModalityTab(tab) {{
-            activeModality = tab;
-            document.querySelectorAll('.m3-chip').forEach(el => el.classList.remove('active'));
-            const btn = document.getElementById('tab_' + tab);
-            if (btn) btn.classList.add('active');
+        function setModalityCategory(cat) {{
+            activeModality = cat;
+            currentNav = 'PHOTOS';
+
+            // Reset and update category buttons in left sidebar
+            const categories = ['PHOTO', 'VIDEO', 'SCREENSHOT', 'DOCUMENT', 'FILE', 'ALL'];
+            categories.forEach(c => {{
+                const btn = document.getElementById('catBtn_' + c);
+                const cross = document.getElementById('catCross_' + c);
+                if (btn) {{
+                    if (c === cat) {{
+                        btn.className = "nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition bg-[#1a3860] text-[#8ab4f8] group";
+                    }} else {{
+                        btn.className = "nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5] group";
+                    }}
+                }}
+                if (cross) {{
+                    // Show cross ✕ on active category if not 'ALL'
+                    if (c === cat && cat !== 'ALL') {{
+                        cross.classList.remove('hidden');
+                    }} else {{
+                        cross.classList.add('hidden');
+                    }}
+                }}
+            }});
+
+            // Reset tools buttons in sidebar
+            ['DRIVE', 'CLEANUP', 'TRASH'].forEach(s => {{
+                const b = document.getElementById('navBtn_' + s);
+                if (b) b.className = "nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]";
+            }});
+
+            // Update top bar breadcrumb & filter cross chip
+            const catMeta = {{
+                'PHOTO': {{ icon: '🖼️', title: 'Photos' }},
+                'VIDEO': {{ icon: '🎥', title: 'Videos' }},
+                'SCREENSHOT': {{ icon: '📸', title: 'Screenshots' }},
+                'DOCUMENT': {{ icon: '📄', title: 'Documents' }},
+                'FILE': {{ icon: '📦', title: 'Other Files' }},
+                'ALL': {{ icon: '🌐', title: 'All Duplicates' }}
+            }};
+
+            const meta = catMeta[cat] || catMeta['ALL'];
+            const iconEl = document.getElementById('activeCategoryIcon');
+            if (iconEl) iconEl.innerText = meta.icon;
+            const titleEl = document.getElementById('activeCategoryTitle');
+            if (titleEl) titleEl.innerText = meta.title;
+
+            const chipCross = document.getElementById('clearCategoryFilterChip');
+            if (chipCross) {{
+                if (cat !== 'ALL') {{
+                    chipCross.classList.remove('hidden');
+                    chipCross.classList.add('flex');
+                }} else {{
+                    chipCross.classList.add('hidden');
+                    chipCross.classList.remove('flex');
+                }}
+            }}
+
+            const sideClearBtn = document.getElementById('sidebarClearAllBtn');
+            if (sideClearBtn) {{
+                if (cat !== 'ALL') {{
+                    sideClearBtn.classList.remove('hidden');
+                }} else {{
+                    sideClearBtn.classList.add('hidden');
+                }}
+            }}
+
+            // Restore gallery view if coming from cleanup or trash
+            const hero = document.getElementById('cleanupHeroCard');
+            if (hero) hero.classList.add('hidden');
+            const gallery = document.getElementById('clustersGallery');
+            if (gallery) gallery.classList.remove('hidden');
+
             currentPage = 1;
             applyFiltersAndSort();
+        }}
+
+        // Backward compatibility
+        function setModalityTab(tab) {{
+            setModalityCategory(tab);
         }}
 
         function onSortOrderChange(val) {{
@@ -1183,6 +1369,11 @@ def get_index_html() -> str:
                     return simB - simA;
                 }}
             }});
+
+            const countEl = document.getElementById('activeCategoryCount');
+            if (countEl) {{
+                countEl.innerText = `(${{filteredClusters.length.toLocaleString()}} sets)`;
+            }}
 
             renderCurrentPage();
         }}

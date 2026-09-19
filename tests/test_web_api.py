@@ -45,6 +45,11 @@ def test_index_page(client):
     assert "sizeBtn_small" in response.text
     assert "sizeBtn_medium" in response.text
     assert "sizeBtn_large" in response.text
+    # Left sidebar category navigation and clear filter cross
+    assert "catBtn_PHOTO" in response.text
+    assert "catBtn_VIDEO" in response.text
+    assert "clearCategoryFilterChip" in response.text
+    assert "sidebarClearAllBtn" in response.text
 
 
 def test_status_endpoint(client):
