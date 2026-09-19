@@ -232,3 +232,87 @@ fn test_db_get_scan_summary() {
     assert_eq!(loaded_summary.category_breakdown.get("PHOTO"), Some(&1));
 }
 
+#[test]
+fn test_db_remove_duplicate_items() {
+    let tmp = NamedTempFile::new().unwrap();
+    let db = Database::open(Some(tmp.path())).expect("Should open db");
+
+    let summary = ScanSummary {
+        scanned_paths: vec!["/tmp/test".to_string()],
+        scanned_dir: "/tmp/test".to_string(),
+        total_files_scanned: 10,
+        total_duplicate_groups: 2,
+        wasted_bytes: 3 * 1048576,
+        wasted_mb: 3.0,
+        wasted_gb: 0.0,
+        duration_seconds: 1.0,
+        groups: vec![
+            // Group 1: ExactHash (1 dupe)
+            DuplicateRecord {
+                group_id: 1,
+                match_type: MatchType::ExactHash,
+                action: ActionType::Keep,
+                category: ImageCategory::Photo,
+                similarity: "100%".to_string(),
+                similarity_score: 1.0,
+                size_mb: 1.0,
+                path: "/tmp/test/img1.jpg".to_string(),
+                dimensions: None,
+            },
+            DuplicateRecord {
+                group_id: 1,
+                match_type: MatchType::ExactHash,
+                action: ActionType::Duplicate,
+                category: ImageCategory::Photo,
+                similarity: "100%".to_string(),
+                similarity_score: 1.0,
+                size_mb: 1.0,
+                path: "/tmp/test/img1_copy.jpg".to_string(),
+                dimensions: None,
+            },
+            // Group 2: VisualAI (1 dupe)
+            DuplicateRecord {
+                group_id: 2,
+                match_type: MatchType::VisualAiNearDuplicate,
+                action: ActionType::Keep,
+                category: ImageCategory::Photo,
+                similarity: "98%".to_string(),
+                similarity_score: 0.98,
+                size_mb: 2.0,
+                path: "/tmp/test/img2.jpg".to_string(),
+                dimensions: None,
+            },
+            DuplicateRecord {
+                group_id: 2,
+                match_type: MatchType::VisualAiNearDuplicate,
+                action: ActionType::Duplicate,
+                category: ImageCategory::Photo,
+                similarity: "98%".to_string(),
+                similarity_score: 0.98,
+                size_mb: 2.0,
+                path: "/tmp/test/img2_edited.jpg".to_string(),
+                dimensions: None,
+            },
+        ],
+        ..Default::default()
+    };
+
+    db.save_scan_run("run_delete_test", &summary).expect("Save scan run");
+
+    // Remove the exact duplicate item
+    let (removed_count, freed_bytes) = db.remove_duplicate_items(&["/tmp/test/img1_copy.jpg".to_string()]).expect("Remove duplicate item");
+    assert_eq!(removed_count, 1);
+    assert_eq!(freed_bytes, 1048576);
+
+    // Group 1 should now be completely pruned because it has 0 duplicates left
+    let updated_summary = db.get_scan_summary("run_delete_test").unwrap().unwrap();
+    assert_eq!(updated_summary.exact_duplicate_groups, 0);
+    assert_eq!(updated_summary.visual_ai_groups, 1);
+    assert_eq!(updated_summary.total_duplicate_groups, 1);
+    assert_eq!(updated_summary.wasted_bytes, 2097152);
+    assert_eq!(updated_summary.groups.len(), 2);
+    assert_eq!(updated_summary.groups[0].path, "/tmp/test/img2.jpg");
+    assert_eq!(updated_summary.groups[1].path, "/tmp/test/img2_edited.jpg");
+}
+
+

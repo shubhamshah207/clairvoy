@@ -1504,8 +1504,8 @@
         </button>
     </div>
 
-    <!-- Google Cloud Ambient Telemetry Dock -->
-    <div id="bottomTelemetryDock" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2 bg-[#1e1f20]/95 backdrop-blur-md border border-white/10 rounded-full shadow-2xl text-xs text-[#c4c7c5] transition-all max-w-[95vw] overflow-x-auto whitespace-nowrap">
+    <!-- Google Cloud Ambient Telemetry Dock (Hidden as requested: autonomous monitoring runs silently in background) -->
+    <div id="bottomTelemetryDock" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-40 items-center gap-3 px-4 py-2 bg-[#1e1f20]/95 backdrop-blur-md border border-white/10 rounded-full shadow-2xl text-xs text-[#c4c7c5] transition-all max-w-[95vw] overflow-x-auto whitespace-nowrap">
         <!-- Watcher Badge -->
         <div id="telemetryWatcherBadge" class="flex items-center gap-1.5 font-medium">
             <span id="telemetryWatcherDot" class="w-2 h-2 rounded-full bg-[#81c995] animate-pulse"></span>
@@ -2621,20 +2621,17 @@
                 currentSummary.wasted_bytes = Math.max(0, (currentSummary.wasted_bytes || 0) - totalFreedBytes);
                 currentSummary.wasted_mb = currentSummary.wasted_bytes / (1024 * 1024);
                 currentSummary.wasted_gb = currentSummary.wasted_bytes / (1024 * 1024 * 1024);
-                loadSummaryState(currentSummary, `Cleaned ${totalFreedCount} exact duplicates.`);
 
-                // Refreshes UI state
-                try {
-                    const statusRes = await fetch('/api/status');
-                    if (statusRes.ok) {
-                        const statusData = await statusRes.json();
-                        if (statusData && statusData.summary) {
-                            loadSummaryState(statusData.summary, statusData.message || `Cleaned ${totalFreedCount} exact duplicates.`);
-                        }
-                    }
-                } catch (statusErr) {
-                    console.warn("Status refresh error:", statusErr);
+                for (const c of allClusters) {
+                    c.items = (c.items || []).filter(i => !deletedSet.has(i.path));
+                    c.duplicates = (c.duplicates || []).filter(d => !deletedSet.has(d.path));
+                    c.totalWastedBytes = c.duplicates.reduce((acc, d) => acc + Math.round((d.size_mb || 0) * 1024 * 1024), 0);
                 }
+                allClusters = allClusters.filter(c => c.duplicates.length > 0);
+
+                loadSummaryState(currentSummary, `Cleaned ${totalFreedCount} exact duplicates.`);
+                updateTopSelectionBar();
+                await refreshTelemetryData();
             } catch (err) {
                 console.error("executeExactBatchClean error:", err);
                 closeCleanProgressModal();
@@ -2907,7 +2904,7 @@
                     clusterMap[gid].category = r.category;
                 }
             }
-            return Object.values(clusterMap);
+            return Object.values(clusterMap).filter(c => c.duplicates && c.duplicates.length > 0);
         }
 
         function formatStorageDual(bytes) {
@@ -2942,13 +2939,36 @@
         }
 
         function renderHeroStorageMeter(summary) {
-            const wastedBytes = summary.wasted_bytes || Math.round((summary.wasted_mb || 0) * 1024 * 1024) || Math.round((summary.wasted_gb || 0) * 1024 * 1024 * 1024);
-            const wastedDual = formatStorageDual(wastedBytes);
-            const wastedGbStr = (summary.wasted_gb || (wastedBytes / (1024 * 1024 * 1024))).toFixed(3);
-            const wastedMbVal = summary.wasted_mb || (wastedBytes / (1024 * 1024));
+            // Compute dynamic sums directly from remaining active clusters
+            let exactBytes = 0;
+            let exactDupes = 0;
+            let exactSets = 0;
+            let similarBytes = 0;
+            let similarDupes = 0;
+            let similarSets = 0;
+
+            for (const c of (allClusters || [])) {
+                const dupeCount = c.duplicates ? c.duplicates.length : 0;
+                if (dupeCount === 0) continue;
+                if (c.match_type === 'EXACT_HASH') {
+                    exactSets++;
+                    exactBytes += (c.totalWastedBytes || 0);
+                    exactDupes += dupeCount;
+                } else {
+                    similarSets++;
+                    similarBytes += (c.totalWastedBytes || 0);
+                    similarDupes += dupeCount;
+                }
+            }
+
+            const totalWastedBytes = exactBytes + similarBytes;
+            const wastedDual = formatStorageDual(totalWastedBytes);
+            const wastedGbStr = (totalWastedBytes / (1024 * 1024 * 1024)).toFixed(2);
+            const wastedMbVal = totalWastedBytes / (1024 * 1024);
             const wastedMbStr = `${wastedMbVal >= 100 ? Math.round(wastedMbVal).toLocaleString() : wastedMbVal.toFixed(2)} MB recoverable across duplicates (${wastedGbStr} GB)`;
             const fileCountStr = `${(summary.total_files_scanned || 0).toLocaleString()} files analyzed`;
-            const clusterCountStr = `${(summary.total_duplicate_groups || 0).toLocaleString()} clusters`;
+            const activeClusterCount = exactSets + similarSets;
+            const clusterCountStr = `${activeClusterCount.toLocaleString()} duplicate sets (${(exactDupes + similarDupes).toLocaleString()} redundant copies)`;
 
             // Update Top Clean-up Hero (when visible)
             const heroGb = document.getElementById('heroWastedGb');
@@ -2971,31 +2991,11 @@
             // Update Smart Clean Recommendation Banner & Dual Recommendation Panels
             const smartHero = document.getElementById('smartCleanHero');
             if (smartHero) {
-                const hasWasted = wastedBytes > 0 || (allClusters && allClusters.length > 0);
+                const hasWasted = totalWastedBytes > 0;
                 if (hasWasted && currentNav !== 'TRASH' && currentNav !== 'WATCHER') {
                     smartHero.classList.remove('hidden');
                     const scGb = document.getElementById('smartCleanGb');
                     if (scGb) scGb.innerText = wastedDual.primaryVal + ' ' + wastedDual.primaryUnit;
-
-                    // Compute Exact vs Similar separation
-                    let exactBytes = 0;
-                    let exactDupes = 0;
-                    let exactSets = 0;
-                    let similarBytes = 0;
-                    let similarDupes = 0;
-                    let similarSets = 0;
-
-                    for (const c of allClusters) {
-                        if (c.match_type === 'EXACT_HASH') {
-                            exactSets++;
-                            exactBytes += (c.totalWastedBytes || 0);
-                            exactDupes += (c.duplicates ? c.duplicates.length : 0);
-                        } else {
-                            similarSets++;
-                            similarBytes += (c.totalWastedBytes || 0);
-                            similarDupes += (c.duplicates ? c.duplicates.length : 0);
-                        }
-                    }
 
                     const exactDual = formatStorageDual(exactBytes);
                     const exGb = document.getElementById('heroExactGb');
@@ -3022,8 +3022,7 @@
                     if (simSets) simSets.innerText = similarSets.toLocaleString();
 
                     // Update Before/After Storage Projection Gauge
-                    const totalWasteBytes = exactBytes + similarBytes;
-                    const curDual = formatStorageDual(totalWasteBytes);
+                    const curDual = formatStorageDual(totalWastedBytes);
                     const freedDual = formatStorageDual(exactBytes);
                     const remDual = formatStorageDual(similarBytes);
 
@@ -3034,12 +3033,36 @@
                     const projPost = document.getElementById('projectionPostGb');
                     if (projPost) projPost.innerText = `${remDual.primaryVal} ${remDual.primaryUnit}`;
 
-                    const cleanPct = totalWasteBytes > 0 ? (exactBytes / totalWasteBytes) * 100 : 0;
-                    const remPct = totalWasteBytes > 0 ? (similarBytes / totalWasteBytes) * 100 : 0;
+                    const cleanPct = totalWastedBytes > 0 ? (exactBytes / totalWastedBytes) * 100 : 0;
+                    const remPct = totalWastedBytes > 0 ? (similarBytes / totalWasteBytes) * 100 : 0;
                     const barClean = document.getElementById('projectionCleanBar');
                     if (barClean) barClean.style.width = cleanPct.toFixed(1) + '%';
                     const barRem = document.getElementById('projectionRemainingBar');
                     if (barRem) barRem.style.width = remPct.toFixed(1) + '%';
+                } else if (totalWastedBytes === 0) {
+                    const exGb = document.getElementById('heroExactGb');
+                    if (exGb) exGb.innerText = "0.00";
+                    const exUnit = document.getElementById('heroExactUnit');
+                    if (exUnit) exUnit.innerText = "GB";
+                    const exSubtext = document.getElementById('heroExactSubtext');
+                    if (exSubtext) exSubtext.innerText = "0.0 MB";
+                    const exCount = document.getElementById('heroExactCount');
+                    if (exCount) exCount.innerText = "0";
+                    const exSets = document.getElementById('heroExactSets');
+                    if (exSets) exSets.innerText = "0";
+
+                    const simGb = document.getElementById('heroSimilarGb');
+                    if (simGb) simGb.innerText = "0.00";
+                    const simUnit = document.getElementById('heroSimilarUnit');
+                    if (simUnit) simUnit.innerText = "GB";
+                    const simSubtext = document.getElementById('heroSimilarSubtext');
+                    if (simSubtext) simSubtext.innerText = "0.0 MB";
+                    const simCount = document.getElementById('heroSimilarCount');
+                    if (simCount) simCount.innerText = "0";
+                    const simSets = document.getElementById('heroSimilarSets');
+                    if (simSets) simSets.innerText = "0";
+
+                    smartHero.classList.add('hidden');
                 } else {
                     smartHero.classList.add('hidden');
                 }
@@ -5776,6 +5799,13 @@
                 currentSummary.wasted_bytes = Math.max(0, (currentSummary.wasted_bytes || 0) - totalFreedBytes);
                 currentSummary.wasted_mb = currentSummary.wasted_bytes / (1024 * 1024);
                 currentSummary.wasted_gb = currentSummary.wasted_bytes / (1024 * 1024 * 1024);
+
+                for (const c of allClusters) {
+                    c.items = (c.items || []).filter(i => !deletedSet.has(i.path));
+                    c.duplicates = (c.duplicates || []).filter(d => !deletedSet.has(d.path));
+                    c.totalWastedBytes = c.duplicates.reduce((acc, d) => acc + Math.round((d.size_mb || 0) * 1024 * 1024), 0);
+                }
+                allClusters = allClusters.filter(c => c.duplicates.length > 0);
 
                 loadSummaryState(currentSummary, `Deleted ${totalFreedCount} files (${mode}).`);
                 updateTopSelectionBar();

@@ -757,6 +757,83 @@ impl Database {
         Ok(())
     }
 
+    pub fn remove_duplicate_items(&self, paths: &[String]) -> Result<(usize, u64), EngineError> {
+        if paths.is_empty() {
+            return Ok((0, 0));
+        }
+        let mut conn = self.get_conn()?;
+        let tx = conn.transaction()?;
+
+        let mut removed_count = 0;
+        let mut freed_bytes = 0u64;
+
+        for path in paths {
+            let mut stmt = tx.prepare("SELECT cluster_id, size_bytes, action FROM duplicate_items WHERE path = ?1")?;
+            let rows: Vec<(i64, i64, String)> = stmt
+                .query_map(params![path], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+                .filter_map(|r| r.ok())
+                .collect();
+
+            for (_cluster_id, size, action) in rows {
+                if action == "DUPLICATE" {
+                    freed_bytes += size as u64;
+                    removed_count += 1;
+                }
+            }
+
+            tx.execute("DELETE FROM duplicate_items WHERE path = ?1", params![path])?;
+            tx.execute("DELETE FROM file_index WHERE path = ?1", params![path])?;
+        }
+
+        // Delete any clusters that now have NO duplicates remaining (only keeper or empty)
+        tx.execute(
+            "DELETE FROM duplicate_clusters WHERE id IN (
+                SELECT c.id FROM duplicate_clusters c
+                LEFT JOIN duplicate_items i ON c.id = i.cluster_id AND i.action = 'DUPLICATE'
+                GROUP BY c.id
+                HAVING COUNT(i.id) = 0
+            )",
+            [],
+        )?;
+
+        // Update all scan_runs: recalculate duplicate_groups and wasted_bytes from remaining items!
+        tx.execute(
+            "UPDATE scan_runs SET
+                duplicate_groups = (
+                    SELECT COUNT(DISTINCT c.id)
+                    FROM duplicate_clusters c
+                    JOIN duplicate_items i ON c.id = i.cluster_id
+                    WHERE c.run_id = scan_runs.run_id AND i.action = 'DUPLICATE'
+                ),
+                wasted_bytes = COALESCE((
+                    SELECT SUM(i.size_bytes)
+                    FROM duplicate_clusters c
+                    JOIN duplicate_items i ON c.id = i.cluster_id
+                    WHERE c.run_id = scan_runs.run_id AND i.action = 'DUPLICATE'
+                ), 0)
+            ",
+            [],
+        )?;
+
+        tx.commit()?;
+        Ok((removed_count, freed_bytes))
+    }
+
+    pub fn prune_missing_files(&self) -> Result<(usize, u64), EngineError> {
+        let paths: Vec<String> = {
+            let conn = self.get_conn()?;
+            let mut stmt = conn.prepare("SELECT DISTINCT path FROM duplicate_items WHERE action = 'DUPLICATE'")?;
+            let rows = stmt.query_map([], |row| row.get(0))?;
+            rows.filter_map(|r| r.ok()).collect()
+        };
+
+        let missing: Vec<String> = paths.into_iter().filter(|p| !Path::new(p).exists()).collect();
+        if missing.is_empty() {
+            return Ok((0, 0));
+        }
+        self.remove_duplicate_items(&missing)
+    }
+
     // -------------------------------------------------------------------------
     // File Index (Delta Deduplication Cache)
     // -------------------------------------------------------------------------

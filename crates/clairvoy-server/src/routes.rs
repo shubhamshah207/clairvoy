@@ -951,8 +951,31 @@ pub async fn handle_delete_execute(
             let size = p.metadata().map(|m| m.len()).unwrap_or(0);
             let success = if let Some(ref t_dir) = trash_dir {
                 let file_name = p.file_name().unwrap_or_default();
-                let dst = t_dir.join(file_name);
-                std::fs::rename(p, dst).is_ok()
+                let mut dst = t_dir.join(file_name);
+                if dst.exists() {
+                    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+                    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+                    use std::sync::atomic::{AtomicU64, Ordering};
+                    static TRASH_SEQ: AtomicU64 = AtomicU64::new(1);
+                    let seq = TRASH_SEQ.fetch_add(1, Ordering::Relaxed);
+                    let unique_name = if ext.is_empty() {
+                        format!("{}_{}", stem, seq)
+                    } else {
+                        format!("{}_{}.{}", stem, seq, ext)
+                    };
+                    dst = t_dir.join(unique_name);
+                }
+                match std::fs::rename(p, &dst) {
+                    Ok(_) => true,
+                    Err(_) => {
+                        // Fall back to copy + remove for cross-filesystem / NTFS links
+                        if std::fs::copy(p, &dst).is_ok() {
+                            std::fs::remove_file(p).is_ok()
+                        } else {
+                            false
+                        }
+                    }
+                }
             } else if is_hardlink {
                 if let Some(keeper_str) = keeper_map.get(path_str) {
                     let keeper = Path::new(keeper_str);
@@ -990,7 +1013,28 @@ pub async fn handle_delete_execute(
             summary.wasted_bytes = summary.wasted_bytes.saturating_sub(freed_bytes);
             summary.wasted_mb = (summary.wasted_bytes as f64) / (1024.0 * 1024.0);
             summary.wasted_gb = summary.wasted_mb / 1024.0;
+            let mut remaining_clusters = std::collections::HashSet::new();
+            let mut remaining_exact = 0;
+            for g in &summary.groups {
+                if g.action == clairvoy_core::models::ActionType::Duplicate {
+                    remaining_clusters.insert(g.group_id);
+                    if g.match_type == clairvoy_core::models::MatchType::ExactHash {
+                        remaining_exact += 1;
+                    }
+                }
+            }
+            summary.total_duplicate_groups = remaining_clusters.len();
+            summary.exact_duplicate_groups = remaining_exact;
         }
+        s.wasted_bytes = s.wasted_bytes.saturating_sub(freed_bytes);
+        s.wasted_mb = (s.wasted_bytes as f64) / (1024.0 * 1024.0);
+        s.wasted_gb = s.wasted_mb / 1024.0;
+    }
+
+    // Persist file deletions to SQLite database
+    if let Ok(db_guard) = state.db.lock() {
+        let deleted_vec: Vec<String> = deleted_paths.iter().cloned().collect();
+        let _ = db_guard.remove_duplicate_items(&deleted_vec);
     }
 
     Ok(Json(serde_json::json!({
@@ -1136,6 +1180,7 @@ pub fn auto_load_recent_run(state: &SharedScanState) {
 pub fn auto_load_recent_run_with_db(state: &SharedScanState, db_opt: Option<&Database>) {
     // 1. First check SQLite database if available
     if let Some(db) = db_opt {
+        let _ = db.prune_missing_files();
         if let Ok(runs) = db.list_scan_runs(1) {
             if let Some(latest) = runs.into_iter().next() {
                 if let Ok(Some(summary)) = db.get_scan_summary(&latest.run_id) {
@@ -1212,6 +1257,45 @@ pub fn auto_load_recent_run_with_db(state: &SharedScanState, db_opt: Option<&Dat
     }
 }
 
+pub async fn handle_maintenance_prune_missing(
+    State(state): State<ServerState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let (pruned_count, freed_bytes) = if let Ok(db_guard) = state.db.lock() {
+        db_guard.prune_missing_files().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "status": "error", "message": e.to_string() })),
+            )
+        })?
+    } else {
+        (0, 0)
+    };
+
+    if pruned_count > 0 {
+        let active_run_id = {
+            let s = state.scan_state.lock().unwrap();
+            s.run_id.clone()
+        };
+        if let Some(run_id) = active_run_id {
+            if let Ok(db_guard) = state.db.lock() {
+                if let Ok(Some(summary)) = db_guard.get_scan_summary(&run_id) {
+                    let mut s = state.scan_state.lock().unwrap();
+                    s.wasted_bytes = summary.wasted_bytes;
+                    s.wasted_mb = summary.wasted_mb;
+                    s.wasted_gb = summary.wasted_gb;
+                    s.summary = Some(summary);
+                }
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "pruned_files": pruned_count,
+        "freed_bytes": freed_bytes,
+    })))
+}
+
 pub fn build_router_with_state(state: SharedScanState) -> Router {
     let db = Arc::new(Mutex::new(
         Database::open_in_memory().unwrap(),
@@ -1261,6 +1345,7 @@ pub fn build_router_full(state: ServerState) -> Router {
         .route("/api/clusters/override-keeper", post(handle_override_keeper))
         .route("/api/delete/execute", post(handle_delete_execute))
         .route("/api/quarantine/execute", post(handle_quarantine_execute))
+        .route("/api/maintenance/prune-missing", post(handle_maintenance_prune_missing))
         .route("/api/reports/csv", get(handle_reports_csv))
         .route("/api/reports/delete-script", get(handle_delete_script))
         .layer(CorsLayer::permissive())
