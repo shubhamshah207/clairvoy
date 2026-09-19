@@ -526,3 +526,22 @@ async fn test_server_drive_watcher_integration() {
     assert!(html.contains("addCurrentFolderToWatcher"));
 }
 
+#[tokio::test]
+async fn test_server_clean_progress_modal_elements() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    let res = server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("cleanProgressModal"));
+    assert!(html.contains("cleanProgressBarFill"));
+    assert!(html.contains("cleanProgressPct"));
+    assert!(html.contains("cleanProgressCounts"));
+    assert!(html.contains("cleanProgressFreed"));
+    assert!(html.contains("cleanProgressCurrentFile"));
+    assert!(html.contains("openCleanProgressModal"));
+    assert!(html.contains("updateCleanProgressModal"));
+    assert!(html.contains("finishCleanProgressModal"));
+}
+
