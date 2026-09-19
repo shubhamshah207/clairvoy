@@ -122,18 +122,19 @@ All agents operating in this repository **MUST read this document** and **MUST m
 ## 4. Rust Workspace & Coexistence Guidelines
 
 ### Workspace Crates (`crates/`)
-- [`crates/clairvoy-core`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core): Canonical data models (`FileEntry`, `DuplicateRecord`, `ScanSummary`), plugin traits (`MatcherPlugin`, `KeeperStrategy`), typed errors (`EngineError`).
+- [`crates/clairvoy-core`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core): Canonical data models (`FileEntry`, `DuplicateRecord`, `ScanSummary`), plugin traits (`MatcherPlugin`, `KeeperStrategy`), typed errors (`EngineError`), and embedded SQLite persistence engine (`clairvoy_core::db::Database` with WAL mode at `~/.clairvoy/clairvoy.db`).
 - [`crates/clairvoy-scanner`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-scanner): Zero-copy bounded streaming filesystem crawler (`scan_roots`, `scan_filesystem`) with XXH3 4KB SIMD hashing.
 - [`crates/clairvoy-model`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-model): Pluggable vision model runtime, perceptual `dHash` backend, `models.toml` registry.
 - [`crates/clairvoy-plugins`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-plugins): Modular matchers (`ExactHashMatcherPlugin` with BLAKE3, `PhotoVisionMatcherPlugin`).
-- [`crates/clairvoy-engine`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-engine): Multi-tier `DeduplicationPipeline` orchestrator and `CompositeKeeperStrategy` rule engine.
-- [`crates/clairvoy-server`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-server): High-throughput Axum web server exposing `/api/scan`, `/api/runs`, `/api/status`.
-- [`crates/clairvoy-cli`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-cli): Native CLI executable `clairvoy-rs` (`scan`, `ui`).
+- [`crates/clairvoy-engine`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-engine): Multi-tier `DeduplicationPipeline` orchestrator, `CompositeKeeperStrategy` rule engine, and `AutonomousWatcher` background daemon.
+- [`crates/clairvoy-server`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-server): High-throughput Axum web server exposing full M3 API, SSE progress streaming, and directory navigation.
+- [`crates/clairvoy-cli`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-cli): Native CLI executable `clairvoy-rs` (`scan`, `ui` with optional `--no-daemon`).
 
-### Coexistence Invariants
-1. **Dual-Engine Model:** The pure Rust engine operates concurrently with the Python engine. Both produce compatible JSON report schemas (`ScanSummary`).
-2. **Memory Invariant:** Rust crawler strictly uses `flume::bounded(2048)` to guarantee $\le 50\text{MB}$ resident RAM across multi-million file workloads.
-3. **Verification Parity:** Changes must pass `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, and Python `pytest -v`.
+### Coexistence & Primacy Invariants
+1. **Rust Engine Primacy:** Pure Rust is the default and primary runtime; Python web server is deprecated and planned for removal.
+2. **Flag-Based Daemon:** The autonomous watcher daemon can be disabled via `--no-daemon`, while interactive on-the-fly scanning remains 100% available.
+3. **Memory Invariant:** Rust crawler strictly uses `flume::bounded(2048)` to guarantee $\le 50\text{MB}$ resident RAM across multi-million file workloads.
+4. **Verification Parity:** Changes must pass `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, and Python `pytest -v`.
 
 ---
 

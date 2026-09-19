@@ -513,7 +513,10 @@ Clairvoy features a dual-engine architecture where an ultra-high-performance pur
    - Canonical domain models: `FileEntry`, `DuplicateRecord`, `DuplicateCluster`, `ScanSummary`, `ImageCategory`, and `ScanStats`.
    - Plugin & strategy traits: `MatcherPlugin`, `KeeperStrategy`, `ActionHandler`.
    - Typed error hierarchies with `thiserror`: `EngineError`.
-   - Pydantic v2 compatibility: Implements custom serialization ensuring `None` fields serialize to `""` where required by Python schemas.
+   - **Embedded SQLite Persistence Engine (`clairvoy_core::db::Database`)**:
+     - Embedded zero-config SQLite database (`~/.clairvoy/clairvoy.db`) running in Write-Ahead Logging (`WAL`) mode with `PRAGMA synchronous = NORMAL;` and 64MB memory page caching.
+     - Normalized relational schema: `watched_paths`, `scan_runs`, `file_index`, `duplicate_clusters`, and `duplicate_items`.
+     - Sub-millisecond indexed queries replacing multi-megabyte CSV and JSON files, with atomic transactional rollbacks on keeper overrides and file deletions.
 
 2. **[`crates/clairvoy-scanner`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-scanner)**:
    - High-speed directory traversal using `jwalk` multi-threaded worker pools.
@@ -533,14 +536,23 @@ Clairvoy features a dual-engine architecture where an ultra-high-performance pur
 5. **[`crates/clairvoy-engine`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-engine)**:
    - `DeduplicationPipeline`: Multi-tier matcher execution pipeline with live progress reporting, short-circuit pruning, and sequential global `group_id` re-indexing.
    - `CompositeKeeperStrategy`: Deterministic scoring rule engine evaluating folder seniority, copy/duplicate naming patterns, and cross-platform path normalization.
+   - **`AutonomousWatcher` Background Daemon**:
+     - Real-time inotify monitoring via the `notify` crate with a 5-second sliding debounce quiet window.
+     - 30-minute periodic consistency sweep ensuring zero dropped filesystem events.
+     - Incremental delta deduplication skipping unchanged `(path, size, mtime)` files with zero disk seeks.
 
 6. **[`crates/clairvoy-server`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-server)**:
-   - High-throughput async Axum web server exposing `/`, `/api/status`, `/api/scan`, and `/api/runs`.
+   - High-throughput async Axum web server exposing full M3 SPA at `/`, `/api/status`, `/api/status/stream` (SSE), `/api/scan`, `/api/runs`, `/api/system/browse-directories`, and `/api/watch/paths`.
    - Shared atomic telemetry state (`SharedScanState`) managing scan phases, file indexing counters, and duration metrics.
+   - Static embedded single-page application (`include_str!("index.html")`) requiring zero asset extraction.
 
 7. **[`crates/clairvoy-cli`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-cli)**:
    - Native binary executable `clairvoy-rs` built with Clap derive parsing.
-   - Commands: `clairvoy-rs scan <paths...>` and `clairvoy-rs ui [--port <port>] [--host <host>]`.
+   - Commands: `clairvoy-rs scan <paths...>` and `clairvoy-rs ui [--port <port>] [--host <host>] [--no-daemon]`.
+   - Flag-based daemon decoupling: `--no-daemon` allows running purely in interactive on-the-fly scanning mode without background filesystem surveillance threads.
 
 ### 7.2. Empirical Performance & Benchmarks
 Empirical benchmarks comparing the pure Rust binary (`clairvoy-rs`) and the Python engine across real-world datasets are documented in [`docs/BENCHMARKS.md`](file:///home/shubhamshah207/clairvoy/docs/BENCHMARKS.md), highlighting up to 36x throughput gains, 97+ seconds saved on multi-thousand photo archives, and strict $\le 35\text{MB}$ RAM limits.
+
+### 7.3. Migration & Python Deprecation Notice
+The Python web server (`clairvoy/web/app.py`) is officially deprecated in favor of `crates/clairvoy-server`. All future web UI features, persistence layers, and daemon watchers are implemented in pure Rust.
