@@ -6,6 +6,8 @@ pub enum EngineError {
     Io(#[from] std::io::Error),
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error("Database error: {0}")]
+    Database(#[from] rusqlite::Error),
     #[error("Model inference error: {0}")]
     Model(String),
     #[error("Security error: {0}")]
