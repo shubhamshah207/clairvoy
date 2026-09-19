@@ -6,6 +6,8 @@ Local-first AI storage deduplication engine with pluggable matchers, keepers, an
 from __future__ import annotations
 
 import argparse
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -361,6 +363,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Identifier of a past scan run to load immediately",
     )
+    ui_parser.add_argument(
+        "--python",
+        action="store_true",
+        help="Force using Python uvicorn server instead of the default native Rust server",
+    )
 
     # --- Quarantine Command ---
     quarantine_parser = subparsers.add_parser(
@@ -500,7 +507,20 @@ def main(argv: list[str] | None = None) -> None:
 
     elif args.command == "ui":
         print_banner()
-        print(f"[*] Starting Clairvoy Web Server at http://{args.host}:{args.port} ...")
+        rust_binary = Path(__file__).resolve().parent.parent / "target" / "release" / "clairvoy-rs"
+        if not getattr(args, "python", False) and (rust_binary.is_file() or shutil.which("clairvoy-rs")):
+            binary_path = str(rust_binary) if rust_binary.is_file() else (shutil.which("clairvoy-rs") or "clairvoy-rs")
+            print(f"[*] Starting Clairvoy Default Rust Web Server at http://{args.host}:{args.port} ...")
+            print("[*] (Use --python flag to launch Python uvicorn server instead)")
+            print("[*] Press Ctrl+C to terminate.")
+            cmd = [binary_path, "ui", "--port", str(args.port), "--host", str(args.host)]
+            try:
+                subprocess.run(cmd)
+                sys.exit(0)
+            except KeyboardInterrupt:
+                sys.exit(0)
+
+        print(f"[*] Starting Clairvoy Python Web Server at http://{args.host}:{args.port} ...")
         print("[*] Press Ctrl+C to terminate.")
         try:
             import uvicorn

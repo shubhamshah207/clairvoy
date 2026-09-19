@@ -11,8 +11,10 @@ pub struct ScanPayload {
     pub paths: Vec<String>,
 }
 
+static INDEX_HTML: &str = include_str!("index.html");
+
 pub async fn handle_index() -> Html<&'static str> {
-    Html("<!DOCTYPE html><html><head><title>Clairvoy</title></head><body><h1>Clairvoy Pure Rust Studio</h1></body></html>")
+    Html(INDEX_HTML)
 }
 
 pub async fn handle_status(State(state): State<SharedScanState>) -> Json<AppScanState> {
