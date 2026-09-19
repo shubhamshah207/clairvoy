@@ -606,3 +606,45 @@ async fn test_server_full_scan_and_clean_left_nav_elements() {
     assert!(html.contains("id=\"catBtn_ALL\""));
     assert!(!html.contains("id=\"catBtn_ALL\"\n                        class=\"nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition bg-[#1a3860]"));
 }
+
+#[tokio::test]
+async fn test_server_trash_endpoints_and_lifecycle() {
+    let app = build_router();
+    let server = TestServer::new(app).unwrap();
+
+    // 1. Verify UI HTML elements
+    let res = server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("headerTrashBtn"));
+    assert!(html.contains("trashRecoveryBanner"));
+    assert!(html.contains("emptyTrashModal"));
+    assert!(html.contains("openEmptyTrashModal"));
+    assert!(html.contains("executeEmptyTrash"));
+    assert!(html.contains("loadTrashStatus"));
+
+    // 2. Setup a dummy trash file in local .clairvoy_trash
+    let trash_dir = std::path::PathBuf::from("./.clairvoy_trash");
+    let _ = std::fs::create_dir_all(&trash_dir);
+    let test_file = trash_dir.join("test_file_to_empty.txt");
+    std::fs::write(&test_file, b"test duplicate content to empty").unwrap();
+
+    // 3. Test GET /api/trash/status
+    let status_res = server.get("/api/trash/status").await;
+    assert_eq!(status_res.status_code(), 200);
+    let status_json: serde_json::Value = status_res.json();
+    assert!(status_json.get("items_count").unwrap().as_u64().unwrap() >= 1);
+    assert!(status_json.get("total_bytes").unwrap().as_u64().unwrap() > 0);
+
+    // 4. Test POST /api/trash/empty
+    let empty_res = server.post("/api/trash/empty").await;
+    assert_eq!(empty_res.status_code(), 200);
+    let empty_json: serde_json::Value = empty_res.json();
+    assert_eq!(
+        empty_json.get("status").unwrap().as_str().unwrap(),
+        "success"
+    );
+    assert!(empty_json.get("deleted_count").unwrap().as_u64().unwrap() >= 1);
+    assert!(!test_file.exists());
+    let _ = std::fs::remove_dir(&trash_dir);
+}

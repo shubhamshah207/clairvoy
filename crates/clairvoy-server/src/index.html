@@ -235,6 +235,14 @@
                     <span>⚡ Full Scan</span>
                 </button>
 
+                <!-- Header Safe Trash Pill (visible when trash has files) -->
+                <button onclick="openEmptyTrashModal()" id="headerTrashBtn"
+                        class="hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#2d1b1e] hover:bg-[#3d2428] text-[#f28b82] border border-[#f28b82]/40 font-semibold text-xs shadow-md transition-all active:scale-[0.98] cursor-pointer"
+                        title="Safe Trash Staging: Click to view or permanently empty">
+                    <span>🗑️ Trash:</span>
+                    <span id="headerTrashSize" class="font-mono font-bold text-white">0 GB</span>
+                </button>
+
                 <button onclick="toggleShortcutsModal()" class="flex items-center gap-1.5 bg-[#28292a] hover:bg-[#303134] text-[#c4c7c5] hover:text-white border border-[#3c4043] rounded-full px-3 py-1.5 text-xs transition cursor-pointer" title="Keyboard Shortcuts (?)">
                     <span>⌨️</span> <span class="hidden sm:inline">Shortcuts</span>
                     <kbd class="hidden md:inline px-1 py-0.2 bg-[#1e1f20] border border-white/10 rounded text-[10px] font-mono text-[#8e918f]">?</kbd>
@@ -451,9 +459,12 @@
                     <span>Clean up space</span>
                 </button>
                 <button onclick="switchNavSection('TRASH')" id="navBtn_TRASH"
-                        class="nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
-                    <span class="text-base">🗑️</span>
-                    <span>Trash & Audit</span>
+                        class="nav-rail-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span class="text-base">🗑️</span>
+                        <span class="truncate">Safe Trash</span>
+                    </div>
+                    <span id="navRailTrashBadge" class="hidden text-[10px] px-2 py-0.5 rounded-full bg-[#f28b82]/20 text-[#f28b82] font-mono">0 GB</span>
                 </button>
                 <button onclick="switchNavSection('WATCHER')" id="navBtn_WATCHER"
                         class="nav-rail-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-xs font-semibold transition hover:bg-[#28292a] text-[#c4c7c5]">
@@ -636,6 +647,29 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Safe Trash Staging Recovery Banner (shown when .clairvoy_trash has staged files) -->
+            <div id="trashRecoveryBanner" class="hidden mb-6 p-4 rounded-3xl bg-[#2d1b1e]/70 border border-[#f28b82]/40 backdrop-blur-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+                <div class="flex items-start sm:items-center gap-3.5">
+                    <div class="w-11 h-11 rounded-2xl bg-[#f28b82]/20 border border-[#f28b82]/40 text-[#f28b82] flex items-center justify-center text-2xl shrink-0">
+                        🗑️
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold text-white tracking-tight">Safe Trash Staging Active</span>
+                            <span id="trashBannerBadge" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#f28b82]/20 text-[#f28b82] border border-[#f28b82]/40 font-mono">0 GB</span>
+                        </div>
+                        <p class="text-xs text-[#c4c7c5] mt-0.5">
+                            <span id="trashBannerCount" class="font-semibold text-white">0 duplicate files</span> are safely staged in <code class="text-[11px] bg-[#131314] px-1.5 py-0.5 rounded text-[#f28b82]">.clairvoy_trash/</code>. Physical drive space is released once trash is emptied.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    <button onclick="openEmptyTrashModal()" class="m3-button-danger !py-2 !px-4 text-xs font-bold shadow-md shadow-[#f28b82]/30 flex items-center gap-1.5 cursor-pointer">
+                        <span>🗑️ Empty Trash (Reclaim Space)</span>
+                    </button>
+                </div>
+            </div>
 
             <!-- Dual Cleaning Recommendation Panels (100% Exact Clones vs Similarity Review) -->
             <section id="smartCleanHero" class="hidden mb-6 space-y-3">
@@ -1342,6 +1376,37 @@
         </div>
     </div>
 
+    <!-- Google Empty Safe Trash Confirmation Dialog -->
+    <div id="emptyTrashModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#1e1f20] border border-[#f28b82]/40 rounded-3xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-[#28292a]">
+                <div class="w-10 h-10 rounded-2xl bg-[#f28b82]/20 text-[#f28b82] flex items-center justify-center text-xl">🗑️</div>
+                <div>
+                    <h3 class="text-base font-bold text-white tracking-tight">Empty Safe Trash?</h3>
+                    <p class="text-xs text-[#8e918f]">Permanently release physical storage space</p>
+                </div>
+            </div>
+            <div class="space-y-3 mb-5 text-xs text-[#c4c7c5] leading-relaxed">
+                <p>
+                    You have <span id="emptyTrashModalCount" class="font-bold text-white">0 files</span> occupying
+                    <span id="emptyTrashModalSize" class="font-bold text-[#81c995]">0 GB</span> in <code class="bg-[#131314] px-1.5 py-0.5 rounded text-[#f28b82]">.clairvoy_trash/</code>.
+                </p>
+                <div class="p-3 rounded-xl bg-[#131314] border border-white/5 space-y-1">
+                    <div class="text-[10px] text-[#8e918f] font-mono break-all" id="emptyTrashModalDirs">.clairvoy_trash/</div>
+                </div>
+                <div class="p-3 rounded-xl bg-[#2d1b1e]/50 border border-[#f28b82]/20 text-[11px] text-[#f28b82]">
+                    ⚠️ This operation will permanently delete all files inside the trash staging folder from your disk. This action cannot be undone. Primary keeper files remain completely untouched.
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 pt-3 border-t border-[#28292a]">
+                <button onclick="closeEmptyTrashModal()" class="m3-button-secondary text-xs">Cancel</button>
+                <button onclick="executeEmptyTrash()" id="emptyTrashConfirmBtn" class="m3-button-danger text-xs font-bold flex items-center gap-1.5 shadow-md shadow-[#f28b82]/30">
+                    <span>🗑️ Permanently Delete & Free Space</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Quarantine Modal -->
     <div id="quarantineModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
         <div class="bg-[#1e1f20] border border-[#fdd663]/40 rounded-3xl max-w-md w-full p-6 shadow-2xl">
@@ -1684,6 +1749,7 @@
         async function initializeApp() {
             await loadPastRunsList();
             await refreshTelemetryData();
+            await loadTrashStatus();
             logActivityEvent('system', 'Clairvoy ambient telemetry initialized');
             try {
                 const res = await fetch('/api/status');
@@ -1764,6 +1830,7 @@
             } else {
                 if (e.key === 'Escape') {
                     closeTrashDialog();
+                    closeEmptyTrashModal();
                     closePermanentDeleteDialog();
                     closeQuarantineModal();
                     closeNewScanModal();
@@ -2587,6 +2654,7 @@
                 loadSummaryState(currentSummary, `Cleaned ${totalFreedCount} exact duplicates.`);
                 updateTopSelectionBar();
                 await refreshTelemetryData();
+                await loadTrashStatus();
             } catch (err) {
                 console.error("executeExactBatchClean error:", err);
                 closeCleanProgressModal();
@@ -4754,30 +4822,163 @@
             swapKeeperFromStudio();
         }
 
-        // Trash Section View
+        // --- Safe Trash & Storage Lifecycle Management ---
+        let currentTrashStatus = null;
+
+        async function loadTrashStatus() {
+            try {
+                const res = await fetch('/api/trash/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                currentTrashStatus = data;
+
+                const headerTrashBtn = document.getElementById('headerTrashBtn');
+                const headerTrashSize = document.getElementById('headerTrashSize');
+                const navRailTrashBadge = document.getElementById('navRailTrashBadge');
+                const banner = document.getElementById('trashRecoveryBanner');
+                const bannerBadge = document.getElementById('trashBannerBadge');
+                const bannerCount = document.getElementById('trashBannerCount');
+
+                const sizeGb = (data.total_gb || 0).toFixed(1);
+                const count = (data.items_count || 0).toLocaleString();
+
+                if (data.items_count > 0) {
+                    if (headerTrashBtn) {
+                        headerTrashBtn.classList.remove('hidden');
+                        if (headerTrashSize) headerTrashSize.innerText = `${sizeGb} GB`;
+                    }
+                    if (navRailTrashBadge) {
+                        navRailTrashBadge.classList.remove('hidden');
+                        navRailTrashBadge.innerText = `${sizeGb} GB`;
+                    }
+                    if (banner) {
+                        banner.classList.remove('hidden');
+                        if (bannerBadge) bannerBadge.innerText = `${sizeGb} GB (${count} files)`;
+                        if (bannerCount) bannerCount.innerText = `${count} duplicate files`;
+                    }
+                } else {
+                    if (headerTrashBtn) headerTrashBtn.classList.add('hidden');
+                    if (navRailTrashBadge) navRailTrashBadge.classList.add('hidden');
+                    if (banner) banner.classList.add('hidden');
+                }
+
+                if (currentNav === 'TRASH') {
+                    renderTrashSection();
+                }
+            } catch (e) {
+                console.error("Trash status fetch error:", e);
+            }
+        }
+
+        function openEmptyTrashModal() {
+            if (!currentTrashStatus || currentTrashStatus.items_count === 0) {
+                showToast("Safe Trash is currently empty.", "ℹ️");
+                return;
+            }
+            const modal = document.getElementById('emptyTrashModal');
+            if (!modal) return;
+            const countEl = document.getElementById('emptyTrashModalCount');
+            const sizeEl = document.getElementById('emptyTrashModalSize');
+            const dirsEl = document.getElementById('emptyTrashModalDirs');
+
+            if (countEl) countEl.innerText = `${currentTrashStatus.items_count.toLocaleString()} files`;
+            if (sizeEl) sizeEl.innerText = `${currentTrashStatus.total_gb.toFixed(2)} GB`;
+            if (dirsEl) dirsEl.innerText = (currentTrashStatus.trash_dirs || []).join('\n') || '.clairvoy_trash/';
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeEmptyTrashModal() {
+            const modal = document.getElementById('emptyTrashModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function executeEmptyTrash() {
+            const btn = document.getElementById('emptyTrashConfirmBtn');
+            if (btn) btn.disabled = true;
+
+            try {
+                showToast("Emptying Safe Trash and releasing disk blocks...", "⏳");
+                const res = await fetch('/api/trash/empty', { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Empty trash failed");
+
+                closeEmptyTrashModal();
+                showToast(`Emptied Safe Trash! Freed ${data.freed_gb.toFixed(2)} GB (${data.deleted_count.toLocaleString()} files permanently removed).`, "🎉");
+                logActivityEvent('trash', `Emptied trash: permanently removed ${data.deleted_count} files (${data.freed_gb.toFixed(2)} GB freed)`);
+
+                await loadTrashStatus();
+                await refreshTelemetryData();
+            } catch (e) {
+                alert("Empty Trash Error: " + e.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
         function renderTrashSection() {
             const gallery = document.getElementById('clustersGallery');
+            if (!gallery) return;
+
+            const count = currentTrashStatus ? (currentTrashStatus.items_count || 0) : 0;
+            const sizeGb = currentTrashStatus ? (currentTrashStatus.total_gb || 0).toFixed(2) : '0.00';
+            const dirs = currentTrashStatus && currentTrashStatus.trash_dirs && currentTrashStatus.trash_dirs.length > 0
+                ? currentTrashStatus.trash_dirs.join('<br>')
+                : '.clairvoy_trash/';
+
             gallery.innerHTML = `
-                <div class="m3-card p-8">
-                    <div class="flex items-center gap-3 mb-6">
-                        <div class="w-12 h-12 rounded-full bg-[#1a3860] text-[#8ab4f8] flex items-center justify-center text-2xl">🗑️</div>
-                        <div>
-                            <h3 class="text-xl font-bold text-white">Safe Trash & Audit History</h3>
-                            <p class="text-xs text-[#8e918f]">Restorable Soft Deletion & Audit Trail</p>
+                <div class="space-y-6">
+                    <!-- Hero Trash Card -->
+                    <div class="m3-card p-6 md:p-8 bg-gradient-to-br from-[#2d1b1e]/90 via-[#1e1f20] to-[#1e1f20] border border-[#f28b82]/40 shadow-xl">
+                        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                            <div class="flex items-start gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-[#f28b82]/20 border border-[#f28b82]/40 text-[#f28b82] flex items-center justify-center text-3xl shrink-0">
+                                    🗑️
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2.5">
+                                        <h3 class="text-xl font-bold text-white tracking-tight">Safe Trash & Storage Reclamation</h3>
+                                        <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-[#f28b82]/20 text-[#f28b82] border border-[#f28b82]/40">Staged</span>
+                                    </div>
+                                    <p class="text-xs text-[#c4c7c5] mt-1.5 leading-relaxed max-w-xl">
+                                        When you clean duplicate files, Clairvoy safely relocates them into protected <code class="text-[11px] bg-[#131314] px-1.5 py-0.5 rounded text-[#f28b82]">.clairvoy_trash/</code> directories so you never risk accidental data loss.
+                                        To release physical drive storage blocks back to your OS, empty the trash below.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 w-full md:w-auto">
+                                <button onclick="openEmptyTrashModal()" ${count === 0 ? 'disabled' : ''}
+                                        class="m3-button-danger !py-2.5 !px-5 text-xs font-bold shadow-lg shadow-[#f28b82]/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+                                    <span>🗑️ Empty Trash (Reclaim ${sizeGb} GB)</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Stats Strip -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-white/10 text-xs">
+                            <div class="p-3.5 rounded-2xl bg-[#131314]/60 border border-white/5">
+                                <div class="text-[11px] text-[#8e918f] uppercase font-bold tracking-wider">Staged File Count</div>
+                                <div class="text-xl font-bold text-white font-mono mt-1">${count.toLocaleString()} <span class="text-xs text-[#8e918f] font-normal">duplicate files</span></div>
+                            </div>
+                            <div class="p-3.5 rounded-2xl bg-[#131314]/60 border border-white/5">
+                                <div class="text-[11px] text-[#8e918f] uppercase font-bold tracking-wider">Reclaimable Space</div>
+                                <div class="text-xl font-bold text-[#81c995] font-mono mt-1">${sizeGb} <span class="text-xs text-[#8e918f] font-normal">GB</span></div>
+                            </div>
+                            <div class="p-3.5 rounded-2xl bg-[#131314]/60 border border-white/5">
+                                <div class="text-[11px] text-[#8e918f] uppercase font-bold tracking-wider">Trash Locations</div>
+                                <div class="text-xs text-[#c4c7c5] font-mono truncate mt-1" title="${dirs}">${dirs}</div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="space-y-4 text-sm text-[#c4c7c5]">
-                        <p>
-                            Clairvoy moves deleted files into <code class="text-xs bg-[#131314] px-2 py-0.5 rounded text-[#8ab4f8]">.clairvoy_trash/</code> with an immutable JSON manifest.
-                            Keeper files are mathematically protected by zero-clobber invariants.
-                        </p>
-                        <div class="bg-[#131314] rounded-2xl p-5 border border-[#3c4043] flex flex-wrap gap-4 items-center justify-between">
+                    <!-- Hardened Shell Scripts Card -->
+                    <div class="m3-card p-6 border border-[#3c4043] bg-[#1e1f20]">
+                        <div class="flex items-center justify-between flex-wrap gap-4">
                             <div>
-                                <div class="font-bold text-white text-xs">Hardened Deletion Scripts</div>
-                                <div class="text-xs text-[#8e918f] font-mono">Download a shell script to review and execute offline at your leisure.</div>
+                                <h4 class="font-bold text-white text-sm">Hardened Offline Deletion Scripts</h4>
+                                <p class="text-xs text-[#8e918f] mt-0.5">Download a standalone shell script to audit every single path and execute offline at your leisure.</p>
                             </div>
-                            <div class="flex gap-2">
+                            <div class="flex gap-2.5">
                                 <a href="/api/reports/delete-script?mode=trash" download class="m3-button-secondary text-xs">
                                     <span>Download Trash Script (.sh)</span>
                                 </a>
@@ -5764,6 +5965,7 @@
                 loadSummaryState(currentSummary, `Deleted ${totalFreedCount} files (${mode}).`);
                 updateTopSelectionBar();
                 await refreshTelemetryData();
+                await loadTrashStatus();
             } catch (e) {
                 console.error("executeConfirmedDelete error:", e);
                 closeCleanProgressModal();

@@ -1217,6 +1217,158 @@ pub async fn handle_delete_script(
         })
 }
 
+// -------------------------------------------------------------------------
+// Safe Trash Staging & Empty Lifecycle Endpoints
+// -------------------------------------------------------------------------
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrashStatusResponse {
+    pub items_count: usize,
+    pub total_bytes: u64,
+    pub total_mb: f64,
+    pub total_gb: f64,
+    pub trash_dirs: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrashEmptyResponse {
+    pub status: String,
+    pub deleted_count: usize,
+    pub freed_bytes: u64,
+    pub freed_gb: f64,
+}
+
+fn discover_trash_dirs(state: &ServerState) -> Vec<PathBuf> {
+    let mut dirs = HashSet::new();
+
+    // 1. Local working directory
+    let local = PathBuf::from("./.clairvoy_trash");
+    if local.is_dir() {
+        dirs.insert(local);
+    }
+
+    // 2. Scanned paths from active scan summary
+    if let Ok(guard) = state.scan_state.lock() {
+        if let Some(ref summary) = guard.summary {
+            for p in &summary.scanned_paths {
+                let candidate = PathBuf::from(p).join(".clairvoy_trash");
+                if candidate.is_dir() {
+                    dirs.insert(candidate);
+                }
+            }
+            if !summary.scanned_dir.is_empty() {
+                let candidate = PathBuf::from(&summary.scanned_dir).join(".clairvoy_trash");
+                if candidate.is_dir() {
+                    dirs.insert(candidate);
+                }
+            }
+        }
+    }
+
+    // 3. Watched paths registered in SQLite
+    if let Ok(db) = state.db.lock() {
+        if let Ok(watched) = db.list_watched_paths() {
+            for w in watched {
+                let candidate = PathBuf::from(&w.path).join(".clairvoy_trash");
+                if candidate.is_dir() {
+                    dirs.insert(candidate);
+                }
+            }
+        }
+    }
+
+    let mut result: Vec<PathBuf> = dirs.into_iter().collect();
+    result.sort();
+    result
+}
+
+pub async fn handle_trash_status(State(state): State<ServerState>) -> Json<TrashStatusResponse> {
+    tokio::task::spawn_blocking(move || {
+        let dirs = discover_trash_dirs(&state);
+        let mut total_count = 0;
+        let mut total_bytes = 0;
+        let mut trash_dirs_strs = Vec::new();
+
+        for d in &dirs {
+            trash_dirs_strs.push(d.to_string_lossy().to_string());
+            if let Ok(entries) = std::fs::read_dir(d) {
+                for entry in entries.flatten() {
+                    if let Ok(meta) = entry.metadata() {
+                        if meta.is_file() {
+                            total_count += 1;
+                            total_bytes += meta.len();
+                        }
+                    }
+                }
+            }
+        }
+
+        let total_mb = (total_bytes as f64) / (1024.0 * 1024.0);
+        let total_gb = total_mb / 1024.0;
+
+        Json(TrashStatusResponse {
+            items_count: total_count,
+            total_bytes,
+            total_mb,
+            total_gb,
+            trash_dirs: trash_dirs_strs,
+        })
+    })
+    .await
+    .unwrap_or_else(|_| {
+        Json(TrashStatusResponse {
+            items_count: 0,
+            total_bytes: 0,
+            total_mb: 0.0,
+            total_gb: 0.0,
+            trash_dirs: Vec::new(),
+        })
+    })
+}
+
+pub async fn handle_trash_empty(State(state): State<ServerState>) -> Json<TrashEmptyResponse> {
+    tokio::task::spawn_blocking(move || {
+        let dirs = discover_trash_dirs(&state);
+        let mut deleted_count = 0;
+        let mut freed_bytes = 0;
+
+        for d in dirs {
+            if let Ok(entries) = std::fs::read_dir(&d) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Ok(meta) = entry.metadata() {
+                        if meta.is_file() {
+                            let len = meta.len();
+                            if std::fs::remove_file(&path).is_ok() {
+                                deleted_count += 1;
+                                freed_bytes += len;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let freed_gb = (freed_bytes as f64) / (1024.0 * 1024.0 * 1024.0);
+
+        Json(TrashEmptyResponse {
+            status: "success".to_string(),
+            deleted_count,
+            freed_bytes,
+            freed_gb,
+        })
+    })
+    .await
+    .unwrap_or_else(|_| {
+        Json(TrashEmptyResponse {
+            status: "error".to_string(),
+            deleted_count: 0,
+            freed_bytes: 0,
+            freed_gb: 0.0,
+        })
+    })
+}
+
 pub fn auto_load_recent_run(state: &SharedScanState) {
     auto_load_recent_run_with_db(state, None);
 }
@@ -1403,6 +1555,8 @@ pub fn build_router_full(state: ServerState) -> Router {
         )
         .route("/api/delete/execute", post(handle_delete_execute))
         .route("/api/quarantine/execute", post(handle_quarantine_execute))
+        .route("/api/trash/status", get(handle_trash_status))
+        .route("/api/trash/empty", post(handle_trash_empty))
         .route(
             "/api/maintenance/prune-missing",
             post(handle_maintenance_prune_missing),
