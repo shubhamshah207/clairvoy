@@ -61,7 +61,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let db = Arc::new(Mutex::new(clairvoy_core::db::Database::open(None)?));
 
             let scan_state: clairvoy_server::SharedScanState = Default::default();
-            clairvoy_server::routes::auto_load_recent_run(&scan_state);
+            if let Ok(db_guard) = db.lock() {
+                clairvoy_server::routes::auto_load_recent_run_with_db(&scan_state, Some(&db_guard));
+            }
 
             let watcher = if no_daemon {
                 println!("[*] Autonomous watcher daemon disabled (--no-daemon). On-the-fly scanning remains 100% active.");

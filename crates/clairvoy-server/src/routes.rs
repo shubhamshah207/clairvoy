@@ -1084,6 +1084,41 @@ pub async fn handle_delete_script(
 }
 
 pub fn auto_load_recent_run(state: &SharedScanState) {
+    auto_load_recent_run_with_db(state, None);
+}
+
+pub fn auto_load_recent_run_with_db(state: &SharedScanState, db_opt: Option<&Database>) {
+    // 1. First check SQLite database if available
+    if let Some(db) = db_opt {
+        if let Ok(runs) = db.list_scan_runs(1) {
+            if let Some(latest) = runs.into_iter().next() {
+                if let Ok(Some(summary)) = db.get_scan_summary(&latest.run_id) {
+                    if let Ok(mut s) = state.lock() {
+                        let wasted_mb = summary.wasted_mb;
+                        let wasted_gb = summary.wasted_gb;
+                        s.status = "completed".to_string();
+                        s.stage = "Database scan run loaded".to_string();
+                        s.progress_pct = 100;
+                        s.files_indexed = summary.total_files_scanned;
+                        s.elapsed_seconds = summary.duration_seconds;
+                        s.run_id = Some(latest.run_id.clone());
+                        s.wasted_bytes = summary.wasted_bytes;
+                        s.wasted_mb = wasted_mb;
+                        s.wasted_gb = wasted_gb;
+                        s.message = format!(
+                            "Loaded latest scan ({} duplicate groups, {:.2} GB recoverable)",
+                            summary.total_duplicate_groups, wasted_gb
+                        );
+                        s.summary = Some(summary);
+                        s.error = None;
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to runs.json
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .map(PathBuf::from)
@@ -1103,11 +1138,17 @@ pub fn auto_load_recent_run(state: &SharedScanState) {
                                 serde_json::from_str::<clairvoy_core::models::ScanSummary>(&sc_content)
                             {
                                 if let Ok(mut s) = state.lock() {
+                                    let wasted_mb = summary.wasted_mb;
+                                    let wasted_gb = summary.wasted_gb;
                                     s.status = "completed".to_string();
                                     s.stage = "Scan summary loaded".to_string();
                                     s.progress_pct = 100;
                                     s.files_indexed = summary.total_files_scanned;
                                     s.elapsed_seconds = summary.duration_seconds;
+                                    s.run_id = r.get("run_id").and_then(|v| v.as_str()).map(|x| x.to_string());
+                                    s.wasted_bytes = summary.wasted_bytes;
+                                    s.wasted_mb = wasted_mb;
+                                    s.wasted_gb = wasted_gb;
                                     s.message = format!(
                                         "Loaded scan summary ({} duplicate groups, {:.2} GB recoverable)",
                                         summary.total_duplicate_groups, summary.wasted_gb
@@ -1127,7 +1168,7 @@ pub fn auto_load_recent_run(state: &SharedScanState) {
 
 pub fn build_router_with_state(state: SharedScanState) -> Router {
     let db = Arc::new(Mutex::new(
-        Database::open(None).unwrap_or_else(|_| Database::open_in_memory().unwrap()),
+        Database::open_in_memory().unwrap(),
     ));
     build_router_full(ServerState {
         scan_state: state,
@@ -1138,7 +1179,6 @@ pub fn build_router_with_state(state: SharedScanState) -> Router {
 
 pub fn build_router() -> Router {
     let state: SharedScanState = Default::default();
-    auto_load_recent_run(&state);
     build_router_with_state(state)
 }
 
