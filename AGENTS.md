@@ -136,6 +136,8 @@ To preserve agent instruction budgets, in-depth guidelines are organized into de
   - Details how to create custom Matcher, Keeper, and Action plugins, priority tiers, and dynamic registration.
 - **Testing & Verification Guide:** [`docs/TESTING.md`](file:///home/shubhamshah207/clairvoy/docs/TESTING.md)
   - Details test fixtures, execution options, and linter standards.
+- **Rust High-Performance Guidelines:** [`docs/RUST_GUIDELINES.md`](file:///home/shubhamshah207/clairvoy/docs/RUST_GUIDELINES.md)
+  - Details zero-copy memory patterns, bounded queue backpressure, SIMD hashing, Rayon/Tokio concurrency boundaries, and thiserror domain errors.
 - **Enterprise Security Policy:** [`SECURITY.md`](file:///home/shubhamshah207/clairvoy/SECURITY.md)
   - Details path traversal defenses, system root isolation, and sanitized shell generation.
 - **Automated Agent Guardrails:** [`scripts/agent_guard.py`](file:///home/shubhamshah207/clairvoy/scripts/agent_guard.py)

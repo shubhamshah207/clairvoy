@@ -9,7 +9,7 @@ import os
 import re
 import threading
 import urllib.request
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -292,6 +292,7 @@ class ClassifierEngine:
         image_paths: Iterable[str],
         num_workers: int = DEFAULT_NUM_WORKERS,
         use_neural: bool = True,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> dict[str, ImageCategory]:
         """
         High-throughput classification pipeline:
@@ -317,6 +318,9 @@ class ClassifierEngine:
             else:
                 ambiguous_paths.append(path)
 
+        if progress_callback:
+            progress_callback(len(results), len(paths_list))
+
         # Step 2: Tier 2 Neural inference for ambiguous images
         if ambiguous_paths:
             session = cls.get_session() if use_neural else None
@@ -328,10 +332,14 @@ class ClassifierEngine:
                     chunk_cats = cls._classify_neural_paths(chunk_paths, session)
                     for p, c in zip(chunk_paths, chunk_cats, strict=False):
                         results[p] = c
+                    if progress_callback:
+                        progress_callback(len(results), len(paths_list))
             else:
                 # Heuristic pixel fallback
                 for p in ambiguous_paths:
                     results[p] = cls._classify_heuristic_pixel_path(p)
+                if progress_callback:
+                    progress_callback(len(results), len(paths_list))
 
         return results
 

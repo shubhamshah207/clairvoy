@@ -345,6 +345,21 @@ def get_index_html() -> str:
                     </button>
                 </div>
 
+                <!-- Live Scan Mini-Indicator in Sidebar Rail -->
+                <div id="sideScanIndicator" class="hidden flex-shrink-0 w-full mb-2 p-2.5 rounded-2xl bg-[#1e2738] border border-[#8ab4f8]/40 shadow-sm">
+                    <div class="flex items-center justify-between text-[11px] font-semibold text-[#8ab4f8] mb-1.5">
+                        <span class="flex items-center gap-1.5">
+                            <span class="inline-block w-2 h-2 rounded-full bg-[#8ab4f8] animate-ping"></span>
+                            <span>Scan Active</span>
+                        </span>
+                        <span id="sideScanPct" class="font-mono text-white font-bold">0%</span>
+                    </div>
+                    <div class="w-full bg-[#131314] rounded-full h-1.5 overflow-hidden border border-[#3c4043]/60 mb-1">
+                        <div id="sideScanProgressBar" class="bg-gradient-to-r from-[#8ab4f8] to-[#81c995] h-full transition-all duration-300" style="width: 2%;"></div>
+                    </div>
+                    <div id="sideScanStage" class="text-[10px] text-[#c4c7c5] truncate">Indexing files...</div>
+                </div>
+
                 <!-- Session Run Selector (Google Workspace Run Picker) -->
                 <div class="flex-shrink-0 w-full mb-2">
                     <div class="p-2.5 rounded-2xl bg-[#28292a] border border-[#3c4043]/70 hover:border-[#8ab4f8]/40 transition shadow-inner">
@@ -564,6 +579,73 @@ def get_index_html() -> str:
 
         <!-- Main Workspace -->
         <main class="flex-1 min-w-0">
+
+            <!-- Live Scan Progress Banner (Appears when scan is actively indexing and matching) -->
+            <section id="scanProgressBanner" class="hidden mb-6 m3-card p-5 bg-gradient-to-br from-[#1b2332]/95 via-[#1e1f20] to-[#1e1f20] border border-[#8ab4f8]/50 shadow-2xl relative overflow-hidden">
+                <!-- Glowing ambient background -->
+                <div class="absolute -right-10 -top-10 w-40 h-40 bg-[#8ab4f8]/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div class="relative z-10 space-y-4">
+                    <!-- Top header row with pulsing scanner icon, stage, timer, and percentage -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-2xl bg-[#8ab4f8]/20 border border-[#8ab4f8]/40 flex items-center justify-center text-xl flex-shrink-0 relative">
+                                <span class="animate-spin text-base">⚡</span>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-sm font-bold text-white tracking-wide">Clairvoy Storage Deduplication Scan</h3>
+                                    <span id="scanStatusBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#8ab4f8]/25 text-[#8ab4f8] font-bold border border-[#8ab4f8]/30">RUNNING</span>
+                                </div>
+                                <p id="scanStageText" class="text-xs text-[#c4c7c5] mt-0.5 font-medium">Stage 1/3: Traversing & indexing filesystem tree...</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 self-end sm:self-auto">
+                            <div class="text-right">
+                                <div id="scanElapsedText" class="text-xs font-mono text-[#8ab4f8]">⏱️ 0.0s elapsed</div>
+                                <div id="scanFilesText" class="text-[10px] font-mono text-[#8e918f]">0 files indexed</div>
+                            </div>
+                            <div class="text-2xl font-bold font-mono text-white" id="scanProgressPctText">0%</div>
+                        </div>
+                    </div>
+
+                    <!-- M3 Gradient Animated Progress Bar -->
+                    <div class="space-y-1.5">
+                        <div class="w-full bg-[#131314] rounded-full h-3 overflow-hidden p-0.5 border border-[#3c4043] shadow-inner">
+                            <div id="scanProgressBarFill" class="bg-gradient-to-r from-[#8ab4f8] via-[#81c995] to-[#a8c7fa] h-full rounded-full transition-all duration-300 ease-out shadow-sm" style="width: 3%;"></div>
+                        </div>
+                        <div class="flex justify-between items-center text-[10px] font-mono text-[#8e918f]">
+                            <span id="scanStepMessage" class="truncate max-w-md text-[#c4c7c5]">Initializing deduplication engine...</span>
+                            <span id="scanTargetsCount" class="flex-shrink-0">1 target path</span>
+                        </div>
+                    </div>
+
+                    <!-- 3-Stage Visual Pipeline Stepper -->
+                    <div class="grid grid-cols-3 gap-2 pt-1 border-t border-white/5 text-xs">
+                        <div id="stepStage1" class="flex items-center gap-2 p-2 rounded-xl bg-white/10 border border-[#8ab4f8] transition-all">
+                            <span id="stepIcon1" class="w-5 h-5 rounded-full bg-[#8ab4f8] text-[#131314] font-bold flex items-center justify-center text-[10px]">1</span>
+                            <div class="min-w-0">
+                                <div class="font-bold text-white text-[11px] truncate">1. Index Files</div>
+                                <div class="text-[9px] text-[#8e918f] truncate">Metadata scan</div>
+                            </div>
+                        </div>
+                        <div id="stepStage2" class="flex items-center gap-2 p-2 rounded-xl bg-white/5 border border-transparent transition-all opacity-50">
+                            <span id="stepIcon2" class="w-5 h-5 rounded-full bg-[#3c4043] text-white font-bold flex items-center justify-center text-[10px]">2</span>
+                            <div class="min-w-0">
+                                <div class="font-bold text-white text-[11px] truncate">2. Match Tiers</div>
+                                <div class="text-[9px] text-[#8e918f] truncate">Exact, Visual & Content</div>
+                            </div>
+                        </div>
+                        <div id="stepStage3" class="flex items-center gap-2 p-2 rounded-xl bg-white/5 border border-transparent transition-all opacity-50">
+                            <span id="stepIcon3" class="w-5 h-5 rounded-full bg-[#3c4043] text-white font-bold flex items-center justify-center text-[10px]">3</span>
+                            <div class="min-w-0">
+                                <div class="font-bold text-white text-[11px] truncate">3. Keeper Scoring</div>
+                                <div class="text-[9px] text-[#8e918f] truncate">Designate duplicates</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             <!-- Google One Dedicated Clean-Up Section (Shown ONLY when Clean up tab is active) -->
             <section id="cleanupHeroCard" class="hidden m3-card p-6 mb-6 relative overflow-hidden">
@@ -1326,7 +1408,9 @@ def get_index_html() -> str:
                 if (state.status === "completed" && state.summary) {{
                     loadSummaryState(state.summary, state.message);
                 }} else if (state.status === "running") {{
-                    pollTimer = setInterval(pollScanStatus, 1000);
+                    updateScanProgressUI(state);
+                    if (pollTimer) clearInterval(pollTimer);
+                    pollTimer = setInterval(pollScanStatus, 800);
                 }}
             }} catch (e) {{
                 console.error("Initial status error:", e);
@@ -1569,22 +1653,38 @@ def get_index_html() -> str:
             const btn = document.getElementById('modalScanBtn');
             if (btn) btn.disabled = true;
 
+            const targetsArr = Array.from(scanTargets);
             closeNewScanModal();
+
+            // Immediately display live progress feedback
+            updateScanProgressUI({{
+                status: 'running',
+                stage: 'Initializing parallel scan...',
+                progress_pct: 3,
+                files_indexed: 0,
+                elapsed_seconds: 0.0,
+                target_paths: targetsArr,
+                message: `Starting parallel scan across ${{targetsArr.length}} directory tree(s)...`
+            }});
+            showToast("Storage scan started...", "▶");
 
             try {{
                 const res = await fetch('/api/scan', {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ paths: Array.from(scanTargets), enable_ml: true, threshold: threshold }})
+                    body: JSON.stringify({{ paths: targetsArr, enable_ml: true, threshold: threshold }})
                 }});
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || "Scan failed");
 
-                showToast("Storage scan started...", "▶");
                 if (pollTimer) clearInterval(pollTimer);
-                pollTimer = setInterval(pollScanStatus, 1000);
+                pollTimer = setInterval(pollScanStatus, 800);
             }} catch (e) {{
                 alert("Scan Error: " + e.message);
+                const banner = document.getElementById('scanProgressBanner');
+                if (banner) banner.classList.add('hidden');
+                const sideInd = document.getElementById('sideScanIndicator');
+                if (sideInd) sideInd.classList.add('hidden');
             }} finally {{
                 if (btn) btn.disabled = false;
             }}

@@ -291,6 +291,7 @@ class DeduplicationPipeline:
     def run_scan(
         self,
         progress_callback: Callable[[str, int, int], None] | None = None,
+        threshold: float | None = None,
     ) -> ScanSummary:
         """Executes the deduplication scan using chained matchers and keeper scoring."""
         t_start = time.time()
@@ -308,10 +309,26 @@ class DeduplicationPipeline:
         classification_map: dict[str, ImageCategory] = {}
         if media_files:
             print(f"[*] Pre-classifying {len(media_files):,} media items (EXIF & Content Type)...")
+            if progress_callback:
+                progress_callback(
+                    f"Classifying {len(media_files):,} media items",
+                    0,
+                    len(media_files),
+                )
+
+            def _classify_progress(cur: int, tot: int) -> None:
+                if progress_callback:
+                    progress_callback(
+                        f"Classifying media ({cur:,}/{tot:,})",
+                        cur,
+                        tot,
+                    )
+
             try:
                 classification_map = ClassifierEngine.classify_batch(
                     media_files,
                     num_workers=self.num_workers,
+                    progress_callback=_classify_progress,
                 )
                 print("    [✓] Media classification complete.\n")
             except Exception as exc:
@@ -351,6 +368,8 @@ class DeduplicationPipeline:
                 "start_cluster_id": next_cluster_id,
                 "num_workers": self.num_workers,
             }
+            if threshold is not None:
+                context["threshold"] = threshold
             clusters = matcher.find_duplicates(supported, all_files, context=context)
 
             for cluster in clusters:

@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -32,7 +33,6 @@ from clairvoy.core.models import ActionType
 from clairvoy.core.security import SecurityError, resolve_safe_path, resolve_safe_paths
 from clairvoy.engines.delete_engine import DeleteEngine
 from clairvoy.engines.quarantine import QuarantineEngine
-from clairvoy.engines.storage_engine import StorageEngine
 from clairvoy.engines.vision_engine import VisionEngine
 
 logger = logging.getLogger("clairvoy.web")
@@ -46,6 +46,13 @@ app = FastAPI(
 # Active scan state
 SCAN_STATE: dict[str, Any] = {
     "status": "idle",  # "idle" | "running" | "completed" | "failed"
+    "stage": "",
+    "progress_pct": 0,
+    "current_step": 0,
+    "total_steps": 0,
+    "files_indexed": 0,
+    "start_time": None,
+    "elapsed_seconds": 0.0,
     "target_paths": [],
     "target_dir": "",
     "message": "Ready to scan",
@@ -86,11 +93,15 @@ def load_initial_run(run_target: str | None = None) -> bool:
     if summary_data:
         with SCAN_LOCK:
             SCAN_STATE["status"] = "completed"
+            SCAN_STATE["stage"] = "Scan summary loaded"
+            SCAN_STATE["progress_pct"] = 100
             scanned = summary_data.get("scanned_paths") or [summary_data.get("scanned_dir", "")]
             SCAN_STATE["target_paths"] = scanned
             SCAN_STATE["target_dir"] = scanned[0] if scanned else ""
             groups_count = summary_data.get("total_duplicate_groups", 0)
             wasted_gb = summary_data.get("wasted_gb", 0.0)
+            SCAN_STATE["files_indexed"] = summary_data.get("total_files_scanned", 0)
+            SCAN_STATE["elapsed_seconds"] = summary_data.get("duration_seconds", 0.0)
             SCAN_STATE["message"] = (
                 f"Loaded scan summary ({groups_count:,} duplicate groups, {wasted_gb:.2f} GB recoverable)"
             )
@@ -216,23 +227,89 @@ def _generate_thumbnail_bytes(resolved_path_str: str) -> bytes:
 
 
 def _run_scan_worker(directories: list[str], enable_ml: bool, threshold: float):
-    try:
-        engine = StorageEngine(
-            paths=directories,
-            enable_ml=enable_ml,
-            ml_threshold=threshold,
-        )
-        summary = engine.run()
+    start_time = time.time()
+    with SCAN_LOCK:
+        SCAN_STATE["status"] = "running"
+        SCAN_STATE["stage"] = "Initializing deduplication engine"
+        SCAN_STATE["progress_pct"] = 4
+        SCAN_STATE["current_step"] = 0
+        SCAN_STATE["total_steps"] = 0
+        SCAN_STATE["files_indexed"] = 0
+        SCAN_STATE["start_time"] = start_time
+        SCAN_STATE["elapsed_seconds"] = 0.0
+        SCAN_STATE["message"] = f"Initializing scan across {len(directories)} directory path(s)..."
+        SCAN_STATE["summary"] = None
+        SCAN_STATE["error"] = None
+
+    def _pipeline_progress(msg: str, step: int, total: int):
         with SCAN_LOCK:
+            elapsed = round(time.time() - start_time, 1)
+            SCAN_STATE["elapsed_seconds"] = elapsed
+            if msg == "Scanning filesystem":
+                SCAN_STATE["stage"] = "Stage 1/3: Traversing & indexing directory tree"
+                SCAN_STATE["progress_pct"] = 8
+                SCAN_STATE["message"] = f"Traversing filesystem across {len(directories)} root path(s)..."
+            elif msg == "Filesystem indexed":
+                SCAN_STATE["stage"] = "Stage 1/3: Filesystem indexing complete"
+                SCAN_STATE["files_indexed"] = step
+                SCAN_STATE["progress_pct"] = 20
+                SCAN_STATE["message"] = f"Indexed {step:,} total files. Preparing classification & matchers..."
+            elif msg.startswith("Classifying"):
+                SCAN_STATE["stage"] = "Stage 1/3: Classifying media (EXIF & Content)"
+                pct = 20 + int((step / max(1, total)) * 10)
+                SCAN_STATE["progress_pct"] = min(30, max(20, pct))
+                SCAN_STATE["message"] = msg
+            elif msg.startswith("Running matcher:"):
+                matcher_name = msg.replace("Running matcher:", "").strip()
+                current_idx = step + 1
+                total_matchers = max(1, total)
+                SCAN_STATE["current_step"] = current_idx
+                SCAN_STATE["total_steps"] = total_matchers
+                pct = 30 + int((step / total_matchers) * 55)
+                SCAN_STATE["progress_pct"] = min(85, max(30, pct))
+                SCAN_STATE["stage"] = f"Stage 2/3: Matcher Tier {current_idx}/{total_matchers} ({matcher_name})"
+                SCAN_STATE["message"] = f"Evaluating candidates against {matcher_name}..."
+            elif msg == "Processing duplicate clusters":
+                SCAN_STATE["stage"] = "Stage 3/3: Keeper scoring & clustering"
+                SCAN_STATE["progress_pct"] = 90
+                SCAN_STATE["message"] = "Calculating seniority scoring and designating keeper files..."
+            else:
+                SCAN_STATE["message"] = msg
+
+    try:
+        from clairvoy.core.plugins import PluginRegistry, discover_plugins
+        from clairvoy.engines.pipeline import DeduplicationPipeline
+
+        registry = discover_plugins(PluginRegistry.get_instance())
+        if not enable_ml:
+            registry.disable_plugin("photo_vision")
+            registry.disable_plugin("video_matcher")
+
+        pipeline = DeduplicationPipeline(
+            paths=directories,
+            registry=registry,
+        )
+        summary = pipeline.run_scan(progress_callback=_pipeline_progress, threshold=threshold)
+
+        with SCAN_LOCK:
+            elapsed = round(time.time() - start_time, 2)
             SCAN_STATE["status"] = "completed"
+            SCAN_STATE["stage"] = "Scan completed successfully"
+            SCAN_STATE["progress_pct"] = 100
+            SCAN_STATE["files_indexed"] = summary.total_files_scanned
+            SCAN_STATE["elapsed_seconds"] = elapsed
             SCAN_STATE["message"] = (
-                f"Scan complete across {len(directories)} path(s). Found {summary.total_duplicate_groups} duplicate groups."
+                f"Scan complete across {len(directories)} path(s) in {elapsed}s. Found {summary.total_duplicate_groups} duplicate groups ({summary.wasted_gb:.2f} GB recoverable)."
             )
             SCAN_STATE["summary"] = summary.model_dump()
             SCAN_STATE["error"] = None
     except Exception as e:
+        logger.exception("Error during background scan: %s", e)
         with SCAN_LOCK:
+            elapsed = round(time.time() - start_time, 2)
             SCAN_STATE["status"] = "failed"
+            SCAN_STATE["stage"] = "Scan failed"
+            SCAN_STATE["elapsed_seconds"] = elapsed
             SCAN_STATE["message"] = f"Scan failed: {e!s}"
             SCAN_STATE["error"] = str(e)
 
@@ -314,7 +391,15 @@ async def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
     with SCAN_LOCK:
         if SCAN_STATE["status"] == "running":
             raise HTTPException(status_code=409, detail="A scan is already actively running.")
+        now = time.time()
         SCAN_STATE["status"] = "running"
+        SCAN_STATE["stage"] = "Initializing scan"
+        SCAN_STATE["progress_pct"] = 3
+        SCAN_STATE["current_step"] = 0
+        SCAN_STATE["total_steps"] = 0
+        SCAN_STATE["files_indexed"] = 0
+        SCAN_STATE["start_time"] = now
+        SCAN_STATE["elapsed_seconds"] = 0.0
         SCAN_STATE["target_paths"] = [str(d) for d in resolved_dirs]
         SCAN_STATE["target_dir"] = str(resolved_dirs[0])
         SCAN_STATE["message"] = f"Initializing parallel scan across {len(resolved_dirs)} directory tree(s)..."
@@ -338,7 +423,10 @@ async def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
 async def get_scan_status():
     """Returns the live state and summary of the background scan."""
     with SCAN_LOCK:
-        return SCAN_STATE
+        state = dict(SCAN_STATE)
+        if state.get("status") == "running" and state.get("start_time"):
+            state["elapsed_seconds"] = round(time.time() - state["start_time"], 1)
+        return state
 
 
 def _run_native_folder_picker() -> str | None:
@@ -524,11 +612,15 @@ async def load_run(req: LoadRunRequest):
 
     with SCAN_LOCK:
         SCAN_STATE["status"] = "completed"
+        SCAN_STATE["stage"] = "Scan summary loaded"
+        SCAN_STATE["progress_pct"] = 100
         scanned = summary_data.get("scanned_paths") or [summary_data.get("scanned_dir", "")]
         SCAN_STATE["target_paths"] = scanned
         SCAN_STATE["target_dir"] = scanned[0] if scanned else ""
         groups_count = summary_data.get("total_duplicate_groups", 0)
         wasted_gb = summary_data.get("wasted_gb", 0.0)
+        SCAN_STATE["files_indexed"] = summary_data.get("total_files_scanned", 0)
+        SCAN_STATE["elapsed_seconds"] = summary_data.get("duration_seconds", 0.0)
         SCAN_STATE["message"] = (
             f"Loaded scan summary ({groups_count:,} duplicate groups, {wasted_gb:.2f} GB recoverable)"
         )
