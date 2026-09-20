@@ -76,43 +76,38 @@ Processes tens of thousands of files across storage volumes in seconds with SIMD
 
 ## 🏛️ System Architecture
 
+<p align="center">
+  <img src="docs/assets/diagrams/architecture.svg" alt="Clairvoy Multi-Tier Architecture & Pipeline Flow" width="98%">
+</p>
+
+<details>
+  <summary><b>🔍 View Interactive Mermaid Flowchart & Data Flow (Click to expand)</b></summary>
+  <br>
+
+```mermaid
+graph TD
+    classDef client fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef engine fill:#0f172a,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef tier1 fill:#1e293b,stroke:#34d399,stroke-width:2px,color:#f8fafc;
+    classDef tier2 fill:#1e293b,stroke:#c084fc,stroke-width:2px,color:#f8fafc;
+    classDef action fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+
+    CLI["CLI (clairvoy-rs)"]:::client --> Pipe["DeduplicationPipeline"]:::engine
+    Web["Web UI (Axum)"]:::client --> Pipe
+    Watcher["AutonomousWatcher (SQLite WAL)"]:::client --> Pipe
+
+    Pipe --> T1["Tier 1: ExactHashMatcher (BLAKE3 SIMD)"]:::tier1
+    T1 -- "Prune Exact" --> T2["Tier 2: PhotoVisionMatcher (Perceptual dHash)"]:::tier2
+
+    T1 --> Keeper["CompositeKeeperStrategy (Scoring)"]:::engine
+    T2 --> Keeper
+
+    Keeper --> Trash["Safe Trash (.clairvoy_trash)"]:::action
+    Keeper --> Hardlink["Zero-Space Hardlinks"]:::action
+    Keeper --> Delete["Permanent Delete (Enforces KEEPER)"]:::action
 ```
-+---------------------------------------------------------------------------------------------------+
-|                                          CLAIRVOY ENGINE                                          |
-+---------------------------------------------------------------------------------------------------+
-|   +-------------------+          +---------------------+            +-----------------+           |
-|   | CLI: clairvoy-rs  |          | Web: Axum Server    |            | Custom Plugins  |           |
-|   | crates/clairvoy-cli|         | crates/clairvoy-server|          | clairvoy-plugins|           |
-|   +---------+---------+          +----------+----------+            +--------+--------+           |
-|             |                               |                                |                    |
-|             +-------------------------+     |     +--------------------------+                    |
-|                                       v     v     v                                               |
-|                            +---------------------------+                                          |
-|                            |   DeduplicationPipeline   |                                          |
-|                            |  crates/clairvoy-engine   |                                          |
-|                            +-------------+-------------+                                          |
-|                                          |                                                        |
-|             +----------------------------+----------------------------+                           |
-|             v                                                         v                           |
-|  [Tier 1: ExactHashMatcher]                              [Tier 2: PhotoVisionMatcher]             |
-|  Parallel BLAKE3 SIMD Hash                               Perceptual dHash & Model Registry        |
-|  (crates/clairvoy-plugins)                               (crates/clairvoy-plugins & model)        |
-|             +----------------------------+----------------------------+                           |
-|                                          |                                                        |
-|                                          v                                                        |
-|                            +---------------------------+                                          |
-|                            |  CompositeKeeperStrategy  |                                          |
-|                            |  (Scoring & Seniority)    |                                          |
-|                            +-------------+-------------+                                          |
-|                                          |                                                        |
-|                                          v                                                        |
-|                 +------------------------+-----------------------+                                |
-|                 v                        v                       v                                |
-|       [Action: Safe Trash]      [Action: Hardlink]      [Action: Perm Delete]                     |
-|       .clairvoy_trash/          Zero-space hardlinking  Direct safe unlinking                     |
-|       Rollback manifest         Cross-mount fallback    Enforces KEEPER safety                    |
-+---------------------------------------------------------------------------------------------------+
-```
+
+</details>
 
 ### Workspace Crates
 

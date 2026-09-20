@@ -171,9 +171,9 @@
       <text x="20" y="30" font-size="13" font-weight="700" fill="#818cf8">🧩 Dynamic PluginRegistry</text>
       <text x="20" y="48" font-size="11" font-weight="500" fill="#94a3b8">Loads built-in &amp; custom user plugins</text>
       <rect x="20" y="60" width="248" height="60" rx="8" fill="#1e293b" />
-      <text x="30" y="78" font-size="10" fill="#cbd5e1" class="font-mono">~/.clairvoy/plugins/*.py</text>
-      <text x="30" y="96" font-size="10" fill="#cbd5e1" class="font-mono">entry_points: clairvoy.plugins</text>
-      <text x="30" y="112" font-size="9" fill="#818cf8" class="font-mono">Registry.discover() &amp; auto-order</text>
+      <text x="30" y="78" font-size="10" fill="#cbd5e1" class="font-mono">clairvoy_core::traits::MatcherPlugin</text>
+      <text x="30" y="96" font-size="10" fill="#cbd5e1" class="font-mono">clairvoy_core::traits::KeeperStrategy</text>
+      <text x="30" y="112" font-size="9" fill="#818cf8" class="font-mono">DeduplicationPipeline::builder()</text>
       <text x="20" y="142" font-size="11" fill="#94a3b8">• <tspan font-weight="600" fill="#f8fafc">Chain of Responsibility:</tspan> Ordered</text>
       <text x="28" y="158" font-size="11" fill="#94a3b8">by priority (10 → 20 → 30 → 40)</text>
       <text x="20" y="178" font-size="11" fill="#94a3b8">• Short-circuits already-matched files</text>
@@ -307,22 +307,22 @@
         <text x="16" y="90" font-size="11" fill="#d1fae5">• <tspan font-weight="700" fill="#ffffff">Zero Path Breakage:</tspan> All existing paths &amp; apps continue working!</text>
         <text x="16" y="108" font-size="11" fill="#d1fae5">• Uses atomic temporary link swap (crash-safe)</text>
         <rect x="16" y="118" width="372" height="26" rx="6" fill="#022c22" />
-        <text x="24" y="135" font-size="10" fill="#34d399" class="font-mono">os.link(keeper, temp) → os.replace(temp, dupe)</text>
+        <text x="24" y="135" font-size="10" fill="#34d399" class="font-mono">std::fs::hard_link(keeper, temp) → rename(temp, dupe)</text>
       </g>
 
-      <!-- Action B: Quarantine -->
+      <!-- Action B: Safe Trash -->
       <g transform="translate(18, 230)">
         <rect width="404" height="155" rx="10" fill="#4c0519" fill-opacity="0.3" stroke="#f43f5e" stroke-width="1.2" />
         <rect x="14" y="12" width="140" height="22" rx="11" fill="#f43f5e" />
-        <text x="84" y="27" font-size="10" font-weight="800" fill="#4c0519" text-anchor="middle" class="font-mono">--action quarantine</text>
+        <text x="84" y="27" font-size="10" font-weight="800" fill="#4c0519" text-anchor="middle" class="font-mono">--mode trash</text>
         <text x="166" y="28" font-size="12" font-weight="700" fill="#fecdd3">Reversible Isolation + Manifest</text>
 
-        <text x="16" y="54" font-size="11" fill="#ffe4e6">• Non-clobbering atomic isolation directory</text>
-        <text x="16" y="72" font-size="11" fill="#ffe4e6">• Generates JSON cryptographic rollback manifest with SHA-256</text>
+        <text x="16" y="54" font-size="11" fill="#ffe4e6">• Non-clobbering atomic isolation in .clairvoy_trash/</text>
+        <text x="16" y="72" font-size="11" fill="#ffe4e6">• Generates JSON cryptographic rollback manifest with BLAKE3</text>
         <text x="16" y="90" font-size="11" fill="#ffe4e6">• Preserves directory hierarchy, permissions, and timestamps</text>
-        <text x="16" y="108" font-size="11" fill="#ffe4e6">• Instant 1-click reversal:</text>
+        <text x="16" y="108" font-size="11" fill="#ffe4e6">• Instant 1-click Web UI / CLI recovery:</text>
         <rect x="16" y="118" width="372" height="26" rx="6" fill="#1f0208" />
-        <text x="24" y="135" font-size="10" fill="#fb7185" class="font-mono">clairvoy restore ~/.clairvoy/quarantine/manifest.json</text>
+        <text x="24" y="135" font-size="10" fill="#fb7185" class="font-mono">POST /api/trash/empty or Web UI Recovery Banner</text>
       </g>
     </g>
   </g>
