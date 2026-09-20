@@ -77,7 +77,9 @@ Processes tens of thousands of files across storage volumes in seconds with SIMD
 ## 🏛️ System Architecture
 
 <p align="center">
-  <img src="docs/assets/diagrams/architecture.svg" alt="Clairvoy Multi-Tier Architecture & Pipeline Flow" width="98%">
+  <a href="docs/assets/diagrams/architecture.svg">
+    <img src="docs/assets/diagrams/architecture.png" alt="Clairvoy Multi-Tier Architecture & Pipeline Flow" width="98%">
+  </a>
 </p>
 
 <details>
