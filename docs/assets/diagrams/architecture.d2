@@ -1,0 +1,110 @@
+direction: right
+
+title: "Clairvoy System Architecture & Processing Pipeline" {
+  near: top-center
+  shape: text
+  style.font-size: 24
+  style.bold: true
+}
+
+# 1. Ingestion Layer
+stage_input: "1. STORAGE INGESTION" {
+  style.fill: "#1e293b"
+  style.stroke: "#38bdf8"
+  style.stroke-width: 2
+  style.border-radius: 12
+  style.font-color: "#f8fafc"
+
+  crawler: "⚡ Bounded Streaming Crawler\n(jwalk + flume channel)\n• Memory ceiling: ≤ 50 MB RAM\n• Multi-million file capacity" {
+    style.fill: "#0f172a"
+    style.stroke: "#0284c7"
+    style.font-color: "#e0f2fe"
+  }
+
+  sources: "📁 Scanned Volumes\n• ~/Pictures\n• ~/Downloads\n• External SSDs" {
+    shape: cylinder
+    style.fill: "#0f172a"
+    style.stroke: "#38bdf8"
+    style.font-color: "#e0f2fe"
+  }
+
+  sources -> crawler: "Bounded Stream"
+}
+
+# 2. Detection Layer
+stage_matchers: "2. MULTI-TIER DETECTION" {
+  style.fill: "#1e293b"
+  style.stroke: "#a855f7"
+  style.stroke-width: 2
+  style.border-radius: 12
+  style.font-color: "#f8fafc"
+
+  tier1: "Tier 1: BLAKE3 SIMD Hash\n• Exact byte deduplication\n• 8x faster than SHA-256\n• Parallel Merkle tree" {
+    style.fill: "#0f172a"
+    style.stroke: "#34d399"
+    style.font-color: "#ecfdf5"
+  }
+
+  tier2: "Tier 2: Perceptual AI Vision\n• 64-bit dHash & Model Registry\n• Edited, resized & burst photos\n• Short-circuits exact matches" {
+    style.fill: "#0f172a"
+    style.stroke: "#c084fc"
+    style.font-color: "#faf5ff"
+  }
+
+  tier1 -> tier2: "Prune exact\nPass similar"
+}
+
+# 3. Decision Layer
+stage_keeper: "3. KEEPER SELECTION" {
+  style.fill: "#1e293b"
+  style.stroke: "#fbbf24"
+  style.stroke-width: 2
+  style.border-radius: 12
+  style.font-color: "#f8fafc"
+
+  keeper_engine: "🧠 Composite Keeper Strategy\n• Seniority & path heuristics\n• Resolution & format scoring\n• Strict: KEEPER NEVER UNLINKED" {
+    style.fill: "#0f172a"
+    style.stroke: "#f59e0b"
+    style.font-color: "#fef3c7"
+  }
+}
+
+# 4. Storage Actions Layer
+stage_actions: "4. SAFE STORAGE ACTIONS" {
+  style.fill: "#1e293b"
+  style.stroke: "#10b981"
+  style.stroke-width: 2
+  style.border-radius: 12
+  style.font-color: "#f8fafc"
+
+  trash: "📦 Safe Trash (.clairvoy_trash/)\n• Isolated with rollback manifest\n• Instant 1-click restore" {
+    style.fill: "#0f172a"
+    style.stroke: "#10b981"
+    style.font-color: "#ecfdf5"
+  }
+
+  hardlink: "🔗 Zero-Space Hardlink\n• Atomic inode replacement\n• 100% space freed\n• Zero broken file paths" {
+    style.fill: "#0f172a"
+    style.stroke: "#10b981"
+    style.font-color: "#ecfdf5"
+  }
+}
+
+# Background Surveillance
+watcher: "👁️ Autonomous Watcher Daemon (Background inotify + SQLite WAL)" {
+  style.fill: "#0f172a"
+  style.stroke: "#6366f1"
+  style.stroke-dash: 4
+  style.border-radius: 10
+  style.font-color: "#e0e7ff"
+}
+
+# Pipeline Dataflow Connections
+stage_input.crawler -> stage_matchers.tier1: "Candidate Files"
+stage_matchers.tier1 -> stage_keeper.keeper_engine: "Exact Clusters"
+stage_matchers.tier2 -> stage_keeper.keeper_engine: "Visual Clusters"
+stage_keeper.keeper_engine -> stage_actions.trash: "Soft Prune"
+stage_keeper.keeper_engine -> stage_actions.hardlink: "Zero-Space Prune"
+
+watcher -> stage_input.sources: "Monitors changes"
+watcher -> stage_keeper.keeper_engine: "Persists to ~/.clairvoy/clairvoy.db"

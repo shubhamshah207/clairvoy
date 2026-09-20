@@ -39,13 +39,13 @@ To maximize visual impact while retaining native maintainability, use a **two-ti
 
 ---
 
-## 2. Project-Level Generator Script Pattern
+## 2. Declarative D2 & Vector Generator Workflow
 
-Every project using rich diagrams should maintain an automated generator in `scripts/`:
+Projects use modern declarative D2 (`architecture.d2`) or SVG scripts to compile diagrams without heavy runtime dependencies:
 
 ```bash
-# Run the diagram generator script
-python scripts/generate_architecture_diagram.py
+# Compile declarative D2 architecture to dark-theme vector SVG
+d2 --theme 200 docs/assets/diagrams/architecture.d2 docs/assets/diagrams/architecture.svg
 ```
 
 ### Generator Script Responsibilities
