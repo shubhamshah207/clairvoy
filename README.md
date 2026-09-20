@@ -1,17 +1,22 @@
+<a id="readme-top"></a>
+
 # Clairvoy 👁️
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.78+-orange.svg)](https://www.rust-lang.org/)
-[![Workspace Tests](https://img.shields.io/badge/cargo%20test-passing-brightgreen.svg)]()
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
-[![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg)]()
+[![Workspace Tests](https://img.shields.io/badge/cargo%20test-passing-brightgreen.svg)](docs/TESTING.md)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](docs/ARCHITECTURE.md)
+[![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg)](docs/TESTING.md)
 
 > **Clairvoy** (*from Clairvoyance — clear perception*) is an ultra-fast, 100% offline, privacy-first media deduplication and storage optimization engine built in pure Rust.
 > It unifies lightning-fast parallel BLAKE3 SIMD hashing, perceptual AI vision matching, an autonomous background surveillance daemon with SQLite WAL persistence, and a premier Google Suite web interface.
 
 <p align="center">
-  <img src="docs/assets/screenshots/dashboard_preview.png" alt="Clairvoy Web Studio Dashboard" width="92%">
+  <img src="docs/assets/screenshots/dashboard_preview.png" alt="Clairvoy Web Studio Dashboard in Dark Mode" width="92%">
 </p>
+
+> [!NOTE]
+> Clairvoy is 100% local-first: zero unauthenticated cloud API calls, zero telemetry tracking, and strict $\le 50\text{MB}$ RAM backpressure guarantees across multi-million file workloads.
 
 ---
 
@@ -162,8 +167,18 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo build --workspace --release
 ```
 
+<p align="right">(<a href="#readme-top">back to top ↑</a>)</p>
+
+---
+
+## 🤝 Contributing & Community
+
+Contributions are welcome! Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) for local setup, test invariants, and coding standards. For security vulnerabilities, consult [`SECURITY.md`](SECURITY.md).
+
 ---
 
 ## 📄 License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
+
+<p align="right">(<a href="#readme-top">back to top ↑</a>)</p>
