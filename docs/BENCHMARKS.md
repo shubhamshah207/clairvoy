@@ -128,6 +128,6 @@ Rust streams [`FileEntry`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-
 
 To ensure seamless drop-in interoperability, the output of both engines was evaluated using the canonical report schema:
 
-- **JSON Schema:** [`ScanSummary`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/models.rs#L44-L62) produced by `clairvoy-rs` deserializes into Python's Pydantic v2 [`ScanSummary`](file:///home/shubhamshah207/clairvoy/clairvoy/core/models.py) with zero schema validation errors.
+- **JSON Schema:** [`ScanSummary`](file:///home/shubhamshah207/clairvoy/crates/clairvoy-core/src/models.rs#L44-L62) produced by `clairvoy-rs` strictly conforms to the canonical JSON schema specification with zero validation errors across all serialized manifests.
 - **Cluster Parity:** Every cluster ID, keeper path, duplicate candidate list, and wasted byte total matched between both engines across all test runs.
 - **Safe Quarantining:** Quarantine actions generated identical shell and manifest outputs.

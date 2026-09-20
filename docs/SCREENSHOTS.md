@@ -24,28 +24,13 @@ docs/
 
 ---
 
-## ⚡ Generating & Updating Screenshots
-
-### Automated Generation via Script
-Run the automated screenshot script from the repository root:
-
-```bash
-python scripts/capture_screenshots.py
-```
-
-This script will:
-1. Render a clean vector SVG of the terminal execution (`cli_execution.svg`) using `rich`.
-2. Verify existing high-resolution Web UI screenshots or attempt automated headless browser capture via Playwright.
-
----
-
 ## 🌐 Capturing Web UI Screenshots Manually
 
-If you update the Web UI and want to capture new screenshots from your local desktop browser:
+To capture new screenshots from your local desktop browser:
 
 ```bash
-# 1. Launch the Web UI server
-clairvoy ui --port 8000
+# 1. Launch the pure Rust Web UI server
+cargo run --bin clairvoy-rs -- ui --port 8000
 
 # 2. Open http://localhost:8000 in your browser (Chrome, Safari, or Edge)
 # 3. Enter a scan path, run a deduplication scan, and open the visual diff modal
@@ -57,15 +42,12 @@ clairvoy ui --port 8000
 
 ---
 
-## 🧪 Automated Integrity Testing
+## 🧪 Workspace Verification
 
-Documentation integrity is enforced by unit tests:
+All repository tests and verification are executed via Cargo:
 
 ```bash
-pytest tests/test_docs_integrity.py -v
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-This test guarantees that:
-- Every image referenced in `README.md` exists on disk and is non-empty.
-- All relative markdown links resolve to valid files.
-- `README.md` does not exceed GitHub's 500 KiB truncation limit.
